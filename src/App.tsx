@@ -13,6 +13,7 @@ import AITutor from "./pages/AITutor";
 import Flashcards from "./pages/Flashcards";
 import Quizzes from "./pages/Quizzes";
 import Focus from "./pages/Focus";
+import Achievements from "./pages/Achievements";
 import Plan from "./pages/Plan";
 import Social from "./pages/Social";
 import Profile from "./pages/Profile";
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/flashcards" element={<AppLayout><Flashcards /></AppLayout>} />
             <Route path="/quizzes" element={<AppLayout><Quizzes /></AppLayout>} />
             <Route path="/focus" element={<AppLayout><Focus /></AppLayout>} />
+            <Route path="/achievements" element={<AppLayout><Achievements /></AppLayout>} />
             <Route path="/plan" element={<AppLayout><Plan /></AppLayout>} />
             <Route path="/social" element={<AppLayout><Social /></AppLayout>} />
             <Route path="/profile" element={<AppLayout><Profile /></AppLayout>} />

@@ -11,6 +11,7 @@ import NoteCard from '@/components/notes/NoteCard';
 import SocraticTutor from '@/components/notes/SocraticTutor';
 import AISummaryDialog from '@/components/notes/AISummaryDialog';
 import FileUpload from '@/components/notes/FileUpload';
+import NoteViewerDialog from '@/components/notes/NoteViewerDialog';
 import { Plus, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { streamAIChat } from '@/lib/ai';
 
@@ -52,6 +53,7 @@ const SmartNotes = () => {
   const [generatingQuiz, setGeneratingQuiz] = useState<string | null>(null);
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
   const [originalFilename, setOriginalFilename] = useState<string | null>(null);
+  const [showViewer, setShowViewer] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -436,6 +438,10 @@ const SmartNotes = () => {
                   }}
                   onGenerateFlashcards={() => handleGenerateFlashcards(note)}
                   onGenerateQuiz={() => handleGenerateQuiz(note)}
+                  onViewContent={() => {
+                    setSelectedNote(note);
+                    setShowViewer(true);
+                  }}
                   courseName={getCourseName(note.course_id)}
                 />
               </div>
@@ -451,6 +457,15 @@ const SmartNotes = () => {
           onOpenChange={setShowSummary}
           note={selectedNote}
           onUpdateSummary={handleUpdateSummary}
+        />
+      )}
+
+      {/* Note Viewer Dialog */}
+      {selectedNote && (
+        <NoteViewerDialog
+          open={showViewer}
+          onOpenChange={setShowViewer}
+          note={selectedNote}
         />
       )}
     </div>

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, User, School, GraduationCap, Save, Sparkles } from 'lucide-react';
+import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight } from 'lucide-react';
 
 const STUDY_PERSONAS = [
   { id: 'chill', name: 'Chill Bro', emoji: '😎', description: 'Relaxed and encouraging' },
@@ -23,10 +24,13 @@ const Profile = () => {
   const [gradeLevel, setGradeLevel] = useState('');
   const [studyPersona, setStudyPersona] = useState('chill');
   const [saving, setSaving] = useState(false);
+  const [achievementCount, setAchievementCount] = useState(0);
+  const [totalXP, setTotalXP] = useState(0);
 
   useEffect(() => {
     if (user) {
       fetchProfile();
+      fetchAchievementStats();
     }
   }, [user]);
 
@@ -42,7 +46,17 @@ const Profile = () => {
       setSchoolName(data.school_name || '');
       setGradeLevel(data.grade_level || '');
       setStudyPersona(data.study_persona || 'chill');
+      setTotalXP(data.total_xp || 0);
     }
+  };
+
+  const fetchAchievementStats = async () => {
+    const { count } = await supabase
+      .from('user_achievements')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user?.id);
+    
+    setAchievementCount(count || 0);
   };
 
   const handleSave = async () => {
@@ -105,6 +119,28 @@ const Profile = () => {
           {fullName ? fullName.charAt(0).toUpperCase() : '👤'}
         </div>
         <p className="text-muted-foreground text-sm mt-3">{user?.email}</p>
+        <p className="text-primary font-semibold">{totalXP} XP</p>
+      </motion.div>
+
+      {/* Achievements Link */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <Link to="/achievements">
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 flex items-center justify-between hover:bg-amber-500/20 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-amber-500" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Achievements</p>
+                <p className="text-sm text-muted-foreground">{achievementCount} unlocked</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </div>
+        </Link>
       </motion.div>
 
       {/* Profile Form */}
