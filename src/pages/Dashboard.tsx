@@ -5,9 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import CourseCard from '@/components/dashboard/CourseCard';
 import AddCourseDialog from '@/components/dashboard/AddCourseDialog';
-import StatsCard from '@/components/dashboard/StatsCard';
 import StreakCard from '@/components/dashboard/StreakCard';
-import { BookOpen, Clock, Brain, Zap, Settings } from 'lucide-react';
+import StudyProgressWidget from '@/components/dashboard/StudyProgressWidget';
+import { Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface Course {
@@ -40,7 +40,6 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
-      // Fetch profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('full_name, total_xp, current_streak, longest_streak')
@@ -51,7 +50,6 @@ const Dashboard = () => {
         setProfile(profileData);
       }
 
-      // Fetch courses
       const { data: coursesData } = await supabase
         .from('courses')
         .select('*')
@@ -160,37 +158,8 @@ const Dashboard = () => {
         totalXP={profile?.total_xp || 0}
       />
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <StatsCard
-          icon={BookOpen}
-          label="Courses"
-          value={courses.length}
-          color="#8B5CF6"
-          index={0}
-        />
-        <StatsCard
-          icon={Clock}
-          label="Study Hours"
-          value="0h"
-          color="#0EA5E9"
-          index={1}
-        />
-        <StatsCard
-          icon={Brain}
-          label="Cards Reviewed"
-          value={0}
-          color="#10B981"
-          index={2}
-        />
-        <StatsCard
-          icon={Zap}
-          label="Quizzes Taken"
-          value={0}
-          color="#F59E0B"
-          index={3}
-        />
-      </div>
+      {/* Study Progress Widget */}
+      <StudyProgressWidget />
 
       {/* Courses Section */}
       <section>

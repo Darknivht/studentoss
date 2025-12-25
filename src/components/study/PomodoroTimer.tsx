@@ -46,21 +46,60 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
     setIsRunning(false);
     
     if (sessionType === 'focus' && user) {
-      // Save completed focus session
       try {
+        // Save completed focus session
         await supabase.from('pomodoro_sessions').insert({
           user_id: user.id,
           course_id: courseId || null,
           duration_minutes: 25,
           session_type: 'focus',
         });
+
+        // Update streak and XP
+        const today = new Date().toISOString().split('T')[0];
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('current_streak, longest_streak, last_study_date, total_xp')
+          .eq('user_id', user.id)
+          .single();
+
+        if (profile) {
+          const lastDate = profile.last_study_date;
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+          let newStreak = profile.current_streak || 0;
+          
+          // If last study was yesterday, increment streak
+          // If last study was today, keep streak
+          // Otherwise, reset to 1
+          if (lastDate === yesterdayStr) {
+            newStreak += 1;
+          } else if (lastDate !== today) {
+            newStreak = 1;
+          }
+
+          const newLongest = Math.max(newStreak, profile.longest_streak || 0);
+          const newXP = (profile.total_xp || 0) + 25; // 25 XP per session
+
+          await supabase
+            .from('profiles')
+            .update({
+              current_streak: newStreak,
+              longest_streak: newLongest,
+              last_study_date: today,
+              total_xp: newXP,
+            })
+            .eq('user_id', user.id);
+        }
         
         setCompletedPomodoros((prev) => prev + 1);
         onSessionComplete?.();
         
         toast({
           title: 'Great work! 🎉',
-          description: 'Focus session completed! Time for a break.',
+          description: '+25 XP earned! Time for a break.',
         });
       } catch (error) {
         console.error('Failed to save session:', error);

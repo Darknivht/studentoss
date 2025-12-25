@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import NoteCard from '@/components/notes/NoteCard';
 import SocraticTutor from '@/components/notes/SocraticTutor';
 import AISummaryDialog from '@/components/notes/AISummaryDialog';
+import FileUpload from '@/components/notes/FileUpload';
 import { Plus, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { streamAIChat } from '@/lib/ai';
 
@@ -21,6 +22,8 @@ interface Note {
   source_type: string;
   created_at: string;
   course_id: string | null;
+  file_url?: string | null;
+  original_filename?: string | null;
 }
 
 interface Course {
@@ -47,6 +50,8 @@ const SmartNotes = () => {
   const [showSummary, setShowSummary] = useState(false);
   const [generatingFlashcards, setGeneratingFlashcards] = useState<string | null>(null);
   const [generatingQuiz, setGeneratingQuiz] = useState<string | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+  const [originalFilename, setOriginalFilename] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -105,8 +110,10 @@ const SmartNotes = () => {
           user_id: user?.id,
           title: newTitle.trim(),
           content: newContent.trim(),
-          source_type: 'text',
+          source_type: uploadedFileUrl ? 'file' : 'text',
           course_id: selectedCourseId === 'none' ? null : selectedCourseId,
+          file_url: uploadedFileUrl,
+          original_filename: originalFilename,
         })
         .select()
         .single();
@@ -117,6 +124,8 @@ const SmartNotes = () => {
       setNewTitle('');
       setNewContent('');
       setSelectedCourseId('none');
+      setUploadedFileUrl(null);
+      setOriginalFilename(null);
       setShowCreate(false);
       toast({
         title: 'Note created! 📝',
@@ -130,6 +139,15 @@ const SmartNotes = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleFileContent = (content: string, filename: string, fileUrl: string) => {
+    setNewContent(content);
+    setUploadedFileUrl(fileUrl);
+    setOriginalFilename(filename);
+    if (!newTitle) {
+      setNewTitle(filename.replace(/\.[^/.]+$/, ''));
     }
   };
 
@@ -295,6 +313,15 @@ const SmartNotes = () => {
                   </SelectContent>
                 </Select>
               )}
+
+              {/* File Upload */}
+              <FileUpload
+                onFileContent={handleFileContent}
+                userId={user?.id || ''}
+                disabled={saving}
+              />
+
+              <div className="text-center text-xs text-muted-foreground">or</div>
               
               <Textarea
                 placeholder="Paste or type your notes here... You can paste lecture notes, textbook content, or any study material."

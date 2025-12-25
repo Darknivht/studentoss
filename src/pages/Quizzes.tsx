@@ -4,14 +4,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle, XCircle, Trophy, BookOpen, Sparkles } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ArrowLeft, CheckCircle, XCircle, Trophy, BookOpen, Sparkles, Loader2 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { streamAIChat } from '@/lib/ai';
 
 interface QuizAttempt {
   id: string;
   score: number;
   total_questions: number;
   completed_at: string;
+  note_id?: string;
 }
 
 interface QuizQuestion {
@@ -24,24 +26,37 @@ interface QuizQuestion {
 const Quizzes = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<QuizQuestion[] | null>(null);
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
   const [quizComplete, setQuizComplete] = useState(false);
+  const [currentNoteId, setCurrentNoteId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) fetchAttempts();
+    if (user) {
+      fetchAttempts();
+      
+      // Check for noteId in URL params
+      const noteId = searchParams.get('noteId');
+      if (noteId) {
+        generateQuizFromNote(noteId);
+        searchParams.delete('noteId');
+        setSearchParams(searchParams);
+      }
+    }
   }, [user]);
 
   const fetchAttempts = async () => {
     try {
       const { data, error } = await supabase
         .from('quiz_attempts')
-        .select('id, score, total_questions, completed_at')
+        .select('id, score, total_questions, completed_at, note_id')
         .eq('user_id', user?.id)
         .order('completed_at', { ascending: false })
         .limit(10);
@@ -52,6 +67,73 @@ const Quizzes = () => {
       console.error('Error fetching attempts:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateQuizFromNote = async (noteId: string) => {
+    setGenerating(true);
+    setCurrentNoteId(noteId);
+
+    try {
+      // Fetch the note content
+      const { data: note, error } = await supabase
+        .from('notes')
+        .select('content')
+        .eq('id', noteId)
+        .single();
+
+      if (error || !note?.content) {
+        throw new Error('Note not found');
+      }
+
+      let fullResponse = '';
+      await streamAIChat({
+        messages: [],
+        mode: 'quiz',
+        content: note.content,
+        onDelta: (chunk) => {
+          fullResponse += chunk;
+        },
+        onDone: () => {
+          try {
+            // Parse the quiz JSON from the response
+            const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```/);
+            let quizData: QuizQuestion[];
+            
+            if (jsonMatch) {
+              quizData = JSON.parse(jsonMatch[1]);
+            } else {
+              // Try parsing the whole response as JSON
+              quizData = JSON.parse(fullResponse);
+            }
+
+            if (Array.isArray(quizData) && quizData.length > 0) {
+              setActiveQuiz(quizData);
+            } else {
+              throw new Error('Invalid quiz format');
+            }
+          } catch (e) {
+            console.error('Failed to parse quiz:', e, fullResponse);
+            toast({
+              title: 'Error',
+              description: 'Failed to generate quiz. Please try again.',
+              variant: 'destructive',
+            });
+          }
+          setGenerating(false);
+        },
+        onError: (err) => {
+          toast({ title: 'Error', description: err, variant: 'destructive' });
+          setGenerating(false);
+        },
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load note for quiz.',
+        variant: 'destructive',
+      });
+      setGenerating(false);
     }
   };
 
@@ -71,16 +153,15 @@ const Quizzes = () => {
       setSelected(null);
       setShowResult(false);
     } else {
-      // Quiz complete
       setQuizComplete(true);
       
-      // Save attempt
       try {
         await supabase.from('quiz_attempts').insert([{
           user_id: user!.id,
           score,
           total_questions: activeQuiz!.length,
           quiz_data: JSON.parse(JSON.stringify(activeQuiz)),
+          note_id: currentNoteId,
         }]);
         fetchAttempts();
       } catch (error) {
@@ -96,7 +177,22 @@ const Quizzes = () => {
     setShowResult(false);
     setScore(0);
     setQuizComplete(false);
+    setCurrentNoteId(null);
   };
+
+  if (generating) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[70vh] space-y-4">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+        <h2 className="text-xl font-display font-semibold text-foreground">
+          Generating Quiz...
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          AI is creating questions from your notes
+        </p>
+      </div>
+    );
+  }
 
   if (activeQuiz && !quizComplete) {
     const q = activeQuiz[currentQ];
@@ -113,7 +209,6 @@ const Quizzes = () => {
           </span>
         </header>
 
-        {/* Progress Bar */}
         <div className="h-2 bg-muted rounded-full overflow-hidden">
           <motion.div
             className="h-full gradient-primary"
@@ -247,7 +342,6 @@ const Quizzes = () => {
         </p>
       </motion.header>
 
-      {/* Generate Quiz CTA */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -265,7 +359,6 @@ const Quizzes = () => {
         </Link>
       </motion.div>
 
-      {/* Recent Attempts */}
       <section>
         <h2 className="text-lg font-display font-semibold mb-4">Recent Attempts</h2>
         
