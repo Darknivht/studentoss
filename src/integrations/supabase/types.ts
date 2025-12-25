@@ -82,6 +82,66 @@ export type Database = {
         }
         Relationships: []
       }
+      flashcards: {
+        Row: {
+          back: string
+          course_id: string | null
+          created_at: string
+          ease_factor: number
+          front: string
+          id: string
+          interval_days: number
+          next_review: string
+          note_id: string | null
+          repetitions: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          back: string
+          course_id?: string | null
+          created_at?: string
+          ease_factor?: number
+          front: string
+          id?: string
+          interval_days?: number
+          next_review?: string
+          note_id?: string | null
+          repetitions?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          back?: string
+          course_id?: string | null
+          created_at?: string
+          ease_factor?: number
+          front?: string
+          id?: string
+          interval_days?: number
+          next_review?: string
+          note_id?: string | null
+          repetitions?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcards_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flashcards_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           content: string | null
@@ -122,6 +182,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "notes_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pomodoro_sessions: {
+        Row: {
+          completed_at: string
+          course_id: string | null
+          created_at: string
+          duration_minutes: number
+          id: string
+          session_type: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          course_id?: string | null
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          session_type?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          course_id?: string | null
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          session_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pomodoro_sessions_course_id_fkey"
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
@@ -182,6 +280,54 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      quiz_attempts: {
+        Row: {
+          completed_at: string
+          course_id: string | null
+          id: string
+          note_id: string | null
+          quiz_data: Json
+          score: number
+          total_questions: number
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          course_id?: string | null
+          id?: string
+          note_id?: string | null
+          quiz_data: Json
+          score: number
+          total_questions: number
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          course_id?: string | null
+          id?: string
+          note_id?: string | null
+          quiz_data?: Json
+          score?: number
+          total_questions?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_attempts_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

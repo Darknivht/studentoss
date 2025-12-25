@@ -6,10 +6,12 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import NoteCard from '@/components/notes/NoteCard';
 import SocraticTutor from '@/components/notes/SocraticTutor';
 import AISummaryDialog from '@/components/notes/AISummaryDialog';
-import { Plus, FileText, Brain, Sparkles, ArrowLeft } from 'lucide-react';
+import { Plus, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { streamAIChat } from '@/lib/ai';
 
 interface Note {
   id: string;
@@ -18,24 +20,38 @@ interface Note {
   summary: string | null;
   source_type: string;
   created_at: string;
+  course_id: string | null;
+}
+
+interface Course {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
 }
 
 const SmartNotes = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [notes, setNotes] = useState<Note[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('none');
+  const [filterCourseId, setFilterCourseId] = useState<string>('all');
   const [saving, setSaving] = useState(false);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [showTutor, setShowTutor] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [generatingFlashcards, setGeneratingFlashcards] = useState<string | null>(null);
+  const [generatingQuiz, setGeneratingQuiz] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchNotes();
+      fetchCourses();
     }
   }, [user]);
 
@@ -53,6 +69,21 @@ const SmartNotes = () => {
       console.error('Error fetching notes:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCourses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('courses')
+        .select('id, name, icon, color')
+        .eq('user_id', user?.id)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setCourses(data || []);
+    } catch (error) {
+      console.error('Error fetching courses:', error);
     }
   };
 
@@ -75,6 +106,7 @@ const SmartNotes = () => {
           title: newTitle.trim(),
           content: newContent.trim(),
           source_type: 'text',
+          course_id: selectedCourseId === 'none' ? null : selectedCourseId,
         })
         .select()
         .single();
@@ -84,6 +116,7 @@ const SmartNotes = () => {
       setNotes([data, ...notes]);
       setNewTitle('');
       setNewContent('');
+      setSelectedCourseId('none');
       setShowCreate(false);
       toast({
         title: 'Note created! 📝',
@@ -114,6 +147,86 @@ const SmartNotes = () => {
   const handleUpdateSummary = (noteId: string, summary: string) => {
     setNotes(notes.map((n) => (n.id === noteId ? { ...n, summary } : n)));
   };
+
+  const handleGenerateFlashcards = async (note: Note) => {
+    if (!note.content) return;
+    
+    setGeneratingFlashcards(note.id);
+    try {
+      let fullResponse = '';
+      await streamAIChat({
+        messages: [],
+        mode: 'flashcards',
+        content: note.content,
+        onDelta: (chunk) => {
+          fullResponse += chunk;
+        },
+        onDone: async () => {
+          try {
+            const parsed = JSON.parse(fullResponse);
+            const flashcardsData = parsed.flashcards || [];
+            
+            const flashcardsToInsert = flashcardsData.map((fc: { front: string; back: string }) => ({
+              user_id: user!.id,
+              note_id: note.id,
+              course_id: note.course_id,
+              front: fc.front,
+              back: fc.back,
+            }));
+
+            if (flashcardsToInsert.length > 0) {
+              await supabase.from('flashcards').insert(flashcardsToInsert);
+            }
+
+            toast({
+              title: `Created ${flashcardsData.length} flashcards! 🎴`,
+              description: 'Go to Flashcards to start studying.',
+            });
+          } catch (e) {
+            console.error('Failed to parse flashcards:', e);
+            toast({ title: 'Error', description: 'Failed to generate flashcards.', variant: 'destructive' });
+          }
+          setGeneratingFlashcards(null);
+        },
+        onError: (err) => {
+          toast({ title: 'Error', description: err, variant: 'destructive' });
+          setGeneratingFlashcards(null);
+        },
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate flashcards.',
+        variant: 'destructive',
+      });
+      setGeneratingFlashcards(null);
+    }
+  };
+
+  const handleGenerateQuiz = async (note: Note) => {
+    if (!note.content) return;
+    
+    setGeneratingQuiz(note.id);
+    toast({
+      title: 'Generating quiz...',
+      description: 'This will take a few seconds.',
+    });
+    
+    // Navigate to quiz page - quiz generation happens there
+    window.location.href = `/quizzes?noteId=${note.id}`;
+  };
+
+  const getCourseName = (courseId: string | null) => {
+    if (!courseId) return undefined;
+    const course = courses.find((c) => c.id === courseId);
+    return course ? `${course.icon} ${course.name}` : undefined;
+  };
+
+  const filteredNotes = filterCourseId === 'all' 
+    ? notes 
+    : filterCourseId === 'none'
+    ? notes.filter((n) => !n.course_id)
+    : notes.filter((n) => n.course_id === filterCourseId);
 
   if (showTutor && selectedNote) {
     return (
@@ -166,6 +279,23 @@ const SmartNotes = () => {
                 onChange={(e) => setNewTitle(e.target.value)}
                 className="text-lg font-medium"
               />
+              
+              {courses.length > 0 && (
+                <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a course (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No course</SelectItem>
+                    {courses.map((course) => (
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.icon} {course.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              
               <Textarea
                 placeholder="Paste or type your notes here... You can paste lecture notes, textbook content, or any study material."
                 value={newContent}
@@ -204,11 +334,29 @@ const SmartNotes = () => {
           <div>
             <h3 className="font-semibold">AI-Powered Learning</h3>
             <p className="text-sm opacity-90">
-              Click any note to get summaries, explanations, or study with the Socratic tutor
+              Generate summaries, flashcards, quizzes, or study with the Socratic tutor
             </p>
           </div>
         </div>
       </motion.div>
+
+      {/* Course Filter */}
+      {courses.length > 0 && (
+        <Select value={filterCourseId} onValueChange={setFilterCourseId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Filter by course" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All notes</SelectItem>
+            <SelectItem value="none">Uncategorized</SelectItem>
+            {courses.map((course) => (
+              <SelectItem key={course.id} value={course.id}>
+                {course.icon} {course.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Notes List */}
       <section>
@@ -220,7 +368,7 @@ const SmartNotes = () => {
               <div key={i} className="h-24 rounded-2xl bg-muted animate-pulse" />
             ))}
           </div>
-        ) : notes.length === 0 ? (
+        ) : filteredNotes.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -240,21 +388,30 @@ const SmartNotes = () => {
           </motion.div>
         ) : (
           <div className="space-y-3">
-            {notes.map((note, index) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                index={index}
-                onDelete={handleDeleteNote}
-                onSummarize={() => {
-                  setSelectedNote(note);
-                  setShowSummary(true);
-                }}
-                onTutor={() => {
-                  setSelectedNote(note);
-                  setShowTutor(true);
-                }}
-              />
+            {filteredNotes.map((note, index) => (
+              <div key={note.id} className="relative">
+                {(generatingFlashcards === note.id || generatingQuiz === note.id) && (
+                  <div className="absolute inset-0 bg-background/80 rounded-2xl flex items-center justify-center z-10">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                )}
+                <NoteCard
+                  note={note}
+                  index={index}
+                  onDelete={handleDeleteNote}
+                  onSummarize={() => {
+                    setSelectedNote(note);
+                    setShowSummary(true);
+                  }}
+                  onTutor={() => {
+                    setSelectedNote(note);
+                    setShowTutor(true);
+                  }}
+                  onGenerateFlashcards={() => handleGenerateFlashcards(note)}
+                  onGenerateQuiz={() => handleGenerateQuiz(note)}
+                  courseName={getCourseName(note.course_id)}
+                />
+              </div>
             ))}
           </div>
         )}
