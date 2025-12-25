@@ -3,10 +3,6 @@ import { motion } from 'framer-motion';
 import { Upload, FileText, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface FileUploadProps {
   onFileContent: (content: string, filename: string, fileUrl: string) => void;
@@ -101,28 +97,60 @@ const FileUpload = ({ onFileContent, userId, disabled }: FileUploadProps) => {
 
   const extractPDFText = async (file: File): Promise<string> => {
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const text = await file.text();
       
-      let fullText = '';
+      // Simple PDF text extraction - look for text between stream objects
+      const textContent: string[] = [];
       
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        fullText += pageText + '\n\n';
+      // Extract text from PDF by looking for readable strings
+      const matches = text.match(/\(([^)]+)\)/g);
+      if (matches) {
+        matches.forEach(match => {
+          const cleaned = match.slice(1, -1)
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '')
+            .replace(/\\t/g, ' ')
+            .replace(/\\\(/g, '(')
+            .replace(/\\\)/g, ')')
+            .replace(/\\\\/g, '\\');
+          
+          // Filter out binary/encoded content
+          if (cleaned.length > 0 && !/^[\x00-\x1f\x80-\xff]+$/.test(cleaned)) {
+            textContent.push(cleaned);
+          }
+        });
+      }
+      
+      // Also try to find BT...ET blocks (text objects in PDF)
+      const btBlocks = text.match(/BT[\s\S]*?ET/g);
+      if (btBlocks) {
+        btBlocks.forEach(block => {
+          const tjMatches = block.match(/\(([^)]*)\)\s*Tj/g);
+          if (tjMatches) {
+            tjMatches.forEach(tj => {
+              const content = tj.match(/\(([^)]*)\)/)?.[1];
+              if (content && content.length > 0) {
+                textContent.push(content);
+              }
+            });
+          }
+        });
       }
 
-      if (fullText.trim().length < 50) {
-        return `[PDF: ${file.name}]\n\nThis PDF appears to contain primarily images or scanned content. Text extraction found limited readable content. Please consider using a PDF with selectable text, or manually copy the content.`;
+      const extractedText = textContent
+        .filter(t => t.trim().length > 1)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (extractedText.length < 50) {
+        return `[PDF: ${file.name}]\n\nThis PDF appears to contain primarily images or scanned content. For best results with AI features, please copy and paste the text content manually, or use a text-based PDF.`;
       }
 
-      return fullText.trim();
+      return extractedText;
     } catch (error) {
       console.error('PDF extraction error:', error);
-      return `[PDF: ${file.name}] - Could not extract text. The file may be corrupted or password protected.`;
+      return `[PDF: ${file.name}] - Could not extract text. Please copy and paste the content manually for AI features to work.`;
     }
   };
 
