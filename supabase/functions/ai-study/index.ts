@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, content } = await req.json();
+    const { messages, mode, content, imageBase64 } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -89,6 +89,166 @@ Create flashcards in this exact JSON format:
 - Make questions clear and answers concise
 - Only return valid JSON, no other text.`;
         userMessages = [{ role: "user", content: `Create flashcards from:\n\n${content}` }];
+        break;
+
+      case "math_solver":
+        systemPrompt = `You are an expert math tutor. When given a math problem:
+1. Identify what type of problem it is
+2. Explain each step of the solution clearly
+3. Show all work with proper mathematical notation
+4. Provide the final answer clearly marked
+5. Give a brief tip for solving similar problems
+
+Use LaTeX notation for math expressions (wrap in $ for inline, $$ for display).
+Be thorough but clear. Make it educational!`;
+        if (imageBase64) {
+          userMessages = [{
+            role: "user",
+            content: [
+              { type: "text", text: "Solve this math problem step by step. Show all work and explain each step clearly." },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
+            ]
+          }];
+        } else {
+          userMessages = [{ role: "user", content: `Solve this math problem step by step:\n\n${content}` }];
+        }
+        break;
+
+      case "ocr_latex":
+        systemPrompt = `You are an expert at converting handwritten or printed mathematical expressions into clean LaTeX.
+When given an image of math:
+1. Identify all mathematical symbols accurately
+2. Convert to proper LaTeX notation
+3. Format complex expressions properly with appropriate LaTeX environments
+4. Provide both inline ($...$) and display ($$...$$) versions when appropriate
+5. If there are multiple expressions, number them
+
+Output clean, compilable LaTeX that renders beautifully.`;
+        if (imageBase64) {
+          userMessages = [{
+            role: "user",
+            content: [
+              { type: "text", text: "Convert this handwritten/printed math into clean LaTeX code. Provide the LaTeX expressions clearly formatted." },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
+            ]
+          }];
+        } else {
+          userMessages = [{ role: "user", content: `Convert this math expression to LaTeX:\n\n${content}` }];
+        }
+        break;
+
+      case "diagram_interpreter":
+        systemPrompt = `You are an expert at explaining scientific diagrams from biology, physics, chemistry, and other STEM subjects.
+When analyzing a diagram:
+1. Identify what the diagram represents
+2. Explain each labeled component and its function
+3. Describe the relationships and processes shown
+4. Connect it to key concepts students should know
+5. Provide memory tips for exams
+
+Be thorough but student-friendly. Use bullet points for clarity.`;
+        if (imageBase64) {
+          userMessages = [{
+            role: "user",
+            content: [
+              { type: "text", text: "Explain this scientific diagram in detail. What does it show? What are the key components and processes?" },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
+            ]
+          }];
+        } else {
+          userMessages = [{ role: "user", content: `Explain this diagram:\n\n${content}` }];
+        }
+        break;
+
+      case "code_debugger":
+        systemPrompt = `You are an expert programmer and debugging specialist.
+When analyzing code:
+1. Identify any bugs, errors, or issues
+2. Explain WHY the problem occurs
+3. Provide the corrected code with explanations
+4. Suggest improvements for better code quality
+5. Point out any security concerns or best practices
+
+Format your response with:
+- 🐛 **Issues Found**: List of problems
+- 💡 **Explanation**: Why these are problems
+- ✅ **Fixed Code**: Corrected version with comments
+- 📝 **Tips**: Additional suggestions
+
+Be educational - help the student learn, not just copy.`;
+        userMessages = [{ role: "user", content: `Debug and fix this code:\n\n\`\`\`\n${content}\n\`\`\`` }];
+        break;
+
+      case "translator":
+        systemPrompt = `You are a multilingual expert who helps students with language learning and translation.
+When translating:
+1. Provide accurate translation to the requested language (or detect and translate to English if not specified)
+2. Explain key vocabulary and grammar points
+3. Note any idioms or cultural context
+4. Provide pronunciation tips where helpful
+5. Give example sentences for key terms
+
+Be educational and help students learn the language, not just translate.`;
+        userMessages = [{ role: "user", content: `Translate and explain:\n\n${content}` }];
+        break;
+
+      case "youtube_summary":
+        systemPrompt = `You are an expert at summarizing educational video content.
+When given a YouTube URL or transcript:
+1. Create a comprehensive summary of key points
+2. List main topics covered with timestamps if available
+3. Extract actionable takeaways
+4. Note any important definitions or concepts
+5. Suggest related topics for further study
+
+Format as:
+📺 **Video Summary**
+📌 **Key Points** (bullet list)
+💡 **Main Takeaways**
+📚 **Study Notes**
+🔗 **Related Topics**`;
+        userMessages = [{ role: "user", content: `Summarize this YouTube video content:\n\n${content}` }];
+        break;
+
+      case "book_scanner":
+        systemPrompt = `You are an expert at extracting and organizing educational content from textbook pages.
+When analyzing a textbook page image:
+1. Extract all key definitions
+2. Identify important terms and concepts
+3. Note any formulas or equations (in LaTeX)
+4. Summarize the main ideas
+5. Create study-ready notes
+
+Format as:
+📖 **Topic**: [Main topic]
+📝 **Definitions**: [Term: Definition format]
+🔑 **Key Concepts**: [Bullet points]
+📐 **Formulas**: [LaTeX formatted]
+💡 **Summary**: [Brief overview]`;
+        if (imageBase64) {
+          userMessages = [{
+            role: "user",
+            content: [
+              { type: "text", text: "Extract all definitions, key terms, formulas, and concepts from this textbook page. Create organized study notes." },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
+            ]
+          }];
+        } else {
+          userMessages = [{ role: "user", content: `Extract key information from:\n\n${content}` }];
+        }
+        break;
+
+      case "transcribe_audio":
+        systemPrompt = `You are organizing and cleaning up lecture transcriptions.
+When given a transcription:
+1. Clean up any transcription errors
+2. Add proper punctuation and formatting
+3. Organize into logical sections with headings
+4. Highlight key points and definitions
+5. Create a summary at the end
+
+Format as clean, study-ready notes that are easy to review.`;
+        userMessages = [{ role: "user", content: `Clean up and organize this lecture transcription:\n\n${content}` }];
         break;
 
       default:
