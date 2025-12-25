@@ -168,6 +168,28 @@ const SmartNotes = () => {
     setNotes(notes.map((n) => (n.id === noteId ? { ...n, summary } : n)));
   };
 
+  const extractJsonFromAI = (raw: string) => {
+    // Try fenced JSON first
+    const fence = raw.match(/```json\s*([\s\S]*?)\s*```/i);
+    if (fence?.[1]) return fence[1].trim();
+
+    // Otherwise try to slice the first JSON object/array out of the stream
+    const trimmed = raw.trim();
+    const objStart = trimmed.indexOf('{');
+    const objEnd = trimmed.lastIndexOf('}');
+    if (objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
+      return trimmed.slice(objStart, objEnd + 1);
+    }
+
+    const arrStart = trimmed.indexOf('[');
+    const arrEnd = trimmed.lastIndexOf(']');
+    if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
+      return trimmed.slice(arrStart, arrEnd + 1);
+    }
+
+    return trimmed;
+  };
+
   const handleGenerateFlashcards = async (note: Note) => {
     if (!note.content) return;
     
@@ -181,33 +203,42 @@ const SmartNotes = () => {
         onDelta: (chunk) => {
           fullResponse += chunk;
         },
-        onDone: async () => {
-          try {
-            const parsed = JSON.parse(fullResponse);
-            const flashcardsData = parsed.flashcards || [];
-            
-            const flashcardsToInsert = flashcardsData.map((fc: { front: string; back: string }) => ({
-              user_id: user!.id,
-              note_id: note.id,
-              course_id: note.course_id,
-              front: fc.front,
-              back: fc.back,
-            }));
+         onDone: async () => {
+           try {
+             const jsonStr = extractJsonFromAI(fullResponse);
+             const parsed = JSON.parse(jsonStr);
+             const flashcardsData = Array.isArray(parsed)
+               ? parsed
+               : (parsed.flashcards || []);
+             
+             const flashcardsToInsert = flashcardsData
+               .filter((fc: any) => fc?.front && fc?.back)
+               .map((fc: { front: string; back: string }) => ({
+                 user_id: user!.id,
+                 note_id: note.id,
+                 course_id: note.course_id,
+                 front: fc.front,
+                 back: fc.back,
+               }));
 
-            if (flashcardsToInsert.length > 0) {
-              await supabase.from('flashcards').insert(flashcardsToInsert);
-            }
+             if (flashcardsToInsert.length > 0) {
+               await supabase.from('flashcards').insert(flashcardsToInsert);
+             }
 
-            toast({
-              title: `Created ${flashcardsData.length} flashcards! 🎴`,
-              description: 'Go to Flashcards to start studying.',
-            });
-          } catch (e) {
-            console.error('Failed to parse flashcards:', e);
-            toast({ title: 'Error', description: 'Failed to generate flashcards.', variant: 'destructive' });
-          }
-          setGeneratingFlashcards(null);
-        },
+             toast({
+               title: `Created ${flashcardsToInsert.length} flashcards! 🎴`,
+               description: 'Go to Flashcards to start studying.',
+             });
+           } catch (e) {
+             console.error('Failed to parse/insert flashcards:', e, fullResponse);
+             toast({
+               title: 'Error',
+               description: 'AI response was not valid flashcard JSON. Please try again.',
+               variant: 'destructive',
+             });
+           }
+           setGeneratingFlashcards(null);
+         },
         onError: (err) => {
           toast({ title: 'Error', description: err, variant: 'destructive' });
           setGeneratingFlashcards(null);
