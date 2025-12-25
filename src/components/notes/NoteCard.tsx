@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { FileText, Sparkles, Brain, Trash2, MoreVertical, BookOpen, Layers } from 'lucide-react';
+import { FileText, Sparkles, Brain, Trash2, MoreVertical, BookOpen, Layers, Eye } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,8 @@ interface Note {
   source_type: string;
   created_at: string;
   course_id?: string | null;
+  file_url?: string | null;
+  original_filename?: string | null;
 }
 
 interface NoteCardProps {
@@ -26,6 +28,7 @@ interface NoteCardProps {
   onTutor: () => void;
   onGenerateFlashcards?: () => void;
   onGenerateQuiz?: () => void;
+  onViewContent?: () => void;
   courseName?: string;
 }
 
@@ -37,6 +40,7 @@ const NoteCard = ({
   onTutor,
   onGenerateFlashcards,
   onGenerateQuiz,
+  onViewContent,
   courseName 
 }: NoteCardProps) => {
   const preview = note.content?.slice(0, 120) + (note.content && note.content.length > 120 ? '...' : '');
@@ -105,6 +109,12 @@ const NoteCard = ({
             <MoreVertical size={16} className="text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onViewContent && (
+              <DropdownMenuItem onClick={onViewContent}>
+                <Eye className="w-4 h-4 mr-2" />
+                View Full Content
+              </DropdownMenuItem>
+            )}
             {onGenerateFlashcards && (
               <DropdownMenuItem onClick={onGenerateFlashcards}>
                 <Layers className="w-4 h-4 mr-2" />

@@ -1,8 +1,12 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, FileText, File, X, Loader2 } from 'lucide-react';
+import { Upload, FileText, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface FileUploadProps {
   onFileContent: (content: string, filename: string, fileUrl: string) => void;
@@ -58,7 +62,6 @@ const FileUpload = ({ onFileContent, userId, disabled }: FileUploadProps) => {
       if (file.type === 'text/plain') {
         content = await file.text();
       } else if (file.type === 'application/pdf') {
-        // For PDF, we'll extract text on the server or use a simple approach
         content = await extractPDFText(file);
       } else if (
         file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
@@ -77,10 +80,6 @@ const FileUpload = ({ onFileContent, userId, disabled }: FileUploadProps) => {
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('note-files')
-        .getPublicUrl(filePath);
 
       onFileContent(content, file.name, filePath);
 
@@ -101,40 +100,29 @@ const FileUpload = ({ onFileContent, userId, disabled }: FileUploadProps) => {
   };
 
   const extractPDFText = async (file: File): Promise<string> => {
-    // Simple approach: read as text (works for text-based PDFs)
-    // For complex PDFs, you'd use pdf.js or server-side processing
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      let text = '';
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       
-      // Basic text extraction from PDF binary
-      const decoder = new TextDecoder('utf-8', { fatal: false });
-      const rawText = decoder.decode(uint8Array);
+      let fullText = '';
       
-      // Extract text between stream markers (simplified)
-      const streamMatches = rawText.match(/stream[\s\S]*?endstream/g);
-      if (streamMatches) {
-        for (const match of streamMatches) {
-          const cleaned = match
-            .replace(/stream|endstream/g, '')
-            .replace(/[^\x20-\x7E\n\r]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-          if (cleaned.length > 10) {
-            text += cleaned + '\n';
-          }
-        }
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        fullText += pageText + '\n\n';
       }
 
-      // If no text extracted, return a placeholder
-      if (text.length < 50) {
-        return `[PDF Content from: ${file.name}]\n\nThis PDF contains images or complex formatting. The raw text extraction found limited content. Consider copying the text manually for better results.`;
+      if (fullText.trim().length < 50) {
+        return `[PDF: ${file.name}]\n\nThis PDF appears to contain primarily images or scanned content. Text extraction found limited readable content. Please consider using a PDF with selectable text, or manually copy the content.`;
       }
 
-      return text.trim();
-    } catch {
-      return `[PDF: ${file.name}] - Could not extract text automatically.`;
+      return fullText.trim();
+    } catch (error) {
+      console.error('PDF extraction error:', error);
+      return `[PDF: ${file.name}] - Could not extract text. The file may be corrupted or password protected.`;
     }
   };
 
