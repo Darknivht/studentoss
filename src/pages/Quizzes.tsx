@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle, XCircle, Trophy, BookOpen, Sparkles, Loader2 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { streamAIChat } from '@/lib/ai';
+import { updateCourseProgress } from '@/hooks/useCourseProgress';
+import { runAchievementCheck } from '@/hooks/useAchievements';
 
 interface QuizAttempt {
   id: string;
@@ -156,13 +158,36 @@ const Quizzes = () => {
       setQuizComplete(true);
       
       try {
+        // Fetch the note to get course_id
+        let courseId: string | null = null;
+        if (currentNoteId) {
+          const { data: noteData } = await supabase
+            .from('notes')
+            .select('course_id')
+            .eq('id', currentNoteId)
+            .maybeSingle();
+          courseId = noteData?.course_id || null;
+        }
+        
         await supabase.from('quiz_attempts').insert([{
           user_id: user!.id,
           score,
           total_questions: activeQuiz!.length,
           quiz_data: JSON.parse(JSON.stringify(activeQuiz)),
           note_id: currentNoteId,
+          course_id: courseId,
         }]);
+        
+        // Update course progress if there's a course
+        if (courseId && user?.id) {
+          updateCourseProgress(user.id, courseId);
+        }
+        
+        // Check for achievements
+        if (user?.id) {
+          runAchievementCheck(user.id);
+        }
+        
         fetchAttempts();
       } catch (error) {
         console.error('Failed to save quiz:', error);
