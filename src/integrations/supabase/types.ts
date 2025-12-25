@@ -147,6 +147,7 @@ export type Database = {
           content: string | null
           course_id: string | null
           created_at: string | null
+          file_url: string | null
           id: string
           original_filename: string | null
           source_type: string | null
@@ -159,6 +160,7 @@ export type Database = {
           content?: string | null
           course_id?: string | null
           created_at?: string | null
+          file_url?: string | null
           id?: string
           original_filename?: string | null
           source_type?: string | null
@@ -171,6 +173,7 @@ export type Database = {
           content?: string | null
           course_id?: string | null
           created_at?: string | null
+          file_url?: string | null
           id?: string
           original_filename?: string | null
           source_type?: string | null

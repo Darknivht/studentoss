@@ -61,15 +61,19 @@ Remember: Your goal is to help them THINK, not just memorize answers.`;
         break;
 
       case "quiz":
-        systemPrompt = `You are a quiz master creating engaging practice questions.
-Based on the study content provided:
-1. Generate 5 multiple-choice questions
-2. Each question should have 4 options (A, B, C, D)
-3. Mark the correct answer
-4. Include a brief explanation for each answer
-5. Vary difficulty from easy to challenging
-Format as clean markdown.`;
-        userMessages = [{ role: "user", content: `Create a quiz from these notes:\n\n${content}` }];
+        systemPrompt = `You are a quiz generator. Create exactly 5 multiple-choice questions from the study content.
+Return ONLY valid JSON array in this exact format (no markdown, no explanation):
+[
+  {
+    "question": "Question text here?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correct": 0,
+    "explanation": "Brief explanation of why this answer is correct."
+  }
+]
+The "correct" field is the index (0-3) of the correct option.
+Make questions progressively harder. Include a mix of conceptual and application questions.`;
+        userMessages = [{ role: "user", content: `Create a quiz from:\n\n${content}` }];
         break;
 
       case "flashcards":
