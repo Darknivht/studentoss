@@ -6,6 +6,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { updateCourseProgress } from '@/hooks/useCourseProgress';
+import { runAchievementCheck } from '@/hooks/useAchievements';
 
 interface Flashcard {
   id: string;
@@ -109,6 +111,20 @@ const Flashcards = () => {
           title: 'Session complete! 🎉',
           description: `You reviewed ${dueCards.length} cards.`,
         });
+        
+        // Update course progress for all unique courses in reviewed cards
+        if (user?.id) {
+          const courseIds = new Set(dueCards.map(c => c.course_id).filter(Boolean));
+          for (const courseId of courseIds) {
+            if (courseId) {
+              updateCourseProgress(user.id, courseId);
+            }
+          }
+          
+          // Check for achievements
+          runAchievementCheck(user.id);
+        }
+        
         fetchFlashcards();
       }
     } catch (error) {

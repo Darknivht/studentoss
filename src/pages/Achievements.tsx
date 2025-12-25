@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Trophy, Lock, CheckCircle } from 'lucide-react';
+import { fetchUserStats, checkAndUnlockAchievements } from '@/hooks/useAchievements';
 
 interface Achievement {
   id: string;
@@ -55,94 +56,38 @@ const Achievements = () => {
         .select('achievement_id, unlocked_at')
         .eq('user_id', user?.id);
 
-      // Fetch user stats
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('current_streak, total_xp')
-        .eq('user_id', user?.id)
-        .single();
-
-      const { count: notesCount } = await supabase
-        .from('notes')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user?.id);
-
-      const { count: quizzesCount } = await supabase
-        .from('quiz_attempts')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user?.id);
-
-      const { count: focusCount } = await supabase
-        .from('pomodoro_sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user?.id)
-        .eq('session_type', 'focus');
-
-      // Get total flashcard reviews (sum of repetitions)
-      const { data: flashcards } = await supabase
-        .from('flashcards')
-        .select('repetitions')
-        .eq('user_id', user?.id);
-
-      const flashcardsReviewed = flashcards?.reduce((sum, fc) => sum + (fc.repetitions || 0), 0) || 0;
+      // Fetch user stats using the shared utility
+      const userStats = await fetchUserStats(user!.id);
 
       setAchievements(achievementsData || []);
       setUserAchievements(userAchievementsData || []);
-      setStats({
-        notes_count: notesCount || 0,
-        quizzes_count: quizzesCount || 0,
-        flashcards_reviewed: flashcardsReviewed,
-        streak: profile?.current_streak || 0,
-        focus_sessions: focusCount || 0,
-        total_xp: profile?.total_xp || 0,
-      });
+      setStats(userStats);
 
-      // Check for new achievements to unlock
-      await checkAndUnlockAchievements(achievementsData || [], userAchievementsData || []);
+      // Check for new achievements to unlock using the shared utility
+      const { newlyUnlocked, totalXpAwarded } = await checkAndUnlockAchievements(
+        user!.id,
+        userStats
+      );
+
+      if (newlyUnlocked.length > 0) {
+        toast({
+          title: `🎉 Achievement Unlocked!`,
+          description: `${newlyUnlocked.map((a) => a.name).join(', ')} (+${totalXpAwarded} XP)`,
+        });
+        
+        // Refresh data to show updated achievements
+        const { data: refreshedAchievements } = await supabase
+          .from('user_achievements')
+          .select('achievement_id, unlocked_at')
+          .eq('user_id', user?.id);
+        
+        setUserAchievements(refreshedAchievements || []);
+        setStats((prev) => ({ ...prev, total_xp: prev.total_xp + totalXpAwarded }));
+      }
     } catch (error) {
       console.error('Error fetching achievements:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const checkAndUnlockAchievements = async (
-    allAchievements: Achievement[],
-    unlockedAchievements: UserAchievement[]
-  ) => {
-    const unlockedIds = unlockedAchievements.map((ua) => ua.achievement_id);
-    const newlyUnlocked: Achievement[] = [];
-
-    for (const achievement of allAchievements) {
-      if (unlockedIds.includes(achievement.id)) continue;
-
-      const currentValue = stats[achievement.requirement_type as keyof typeof stats] || 0;
-      if (currentValue >= achievement.requirement_value) {
-        try {
-          await supabase.from('user_achievements').insert({
-            user_id: user!.id,
-            achievement_id: achievement.id,
-          });
-
-          // Award XP
-          await supabase
-            .from('profiles')
-            .update({ total_xp: stats.total_xp + achievement.xp_reward })
-            .eq('user_id', user!.id);
-
-          newlyUnlocked.push(achievement);
-        } catch (error) {
-          // Achievement might already exist
-        }
-      }
-    }
-
-    if (newlyUnlocked.length > 0) {
-      toast({
-        title: `🎉 Achievement Unlocked!`,
-        description: `${newlyUnlocked.map((a) => a.name).join(', ')} (+${newlyUnlocked.reduce((sum, a) => sum + a.xp_reward, 0)} XP)`,
-      });
-      fetchData(); // Refresh
     }
   };
 
@@ -196,7 +141,7 @@ const Achievements = () => {
         <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
           <div
             className="h-full bg-white transition-all"
-            style={{ width: `${(unlockedCount / totalCount) * 100}%` }}
+            style={{ width: `${totalCount > 0 ? (unlockedCount / totalCount) * 100 : 0}%` }}
           />
         </div>
       </motion.div>

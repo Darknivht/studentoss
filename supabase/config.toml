@@ -1,1 +1,10 @@
 project_id = "aubastwqendcpwwbusgs"
+
+[functions.ai-study]
+verify_jwt = true
+
+[functions.extract-pdf-text]
+verify_jwt = true
+
+[functions.extract-pdf-text-ocr]
+verify_jwt = true

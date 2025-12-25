@@ -14,6 +14,8 @@ import FileUpload from '@/components/notes/FileUpload';
 import NoteViewerDialog from '@/components/notes/NoteViewerDialog';
 import { Plus, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { streamAIChat } from '@/lib/ai';
+import { updateCourseProgress } from '@/hooks/useCourseProgress';
+import { runAchievementCheck } from '@/hooks/useAchievements';
 
 interface Note {
   id: string;
@@ -129,6 +131,17 @@ const SmartNotes = () => {
       setUploadedFileUrl(null);
       setOriginalFilename(null);
       setShowCreate(false);
+      
+      // Update course progress if note is associated with a course
+      if (data.course_id && user?.id) {
+        updateCourseProgress(user.id, data.course_id);
+      }
+      
+      // Check for achievements
+      if (user?.id) {
+        runAchievementCheck(user.id);
+      }
+      
       toast({
         title: 'Note created! 📝',
         description: 'Your note has been saved.',
@@ -223,6 +236,11 @@ const SmartNotes = () => {
 
              if (flashcardsToInsert.length > 0) {
                await supabase.from('flashcards').insert(flashcardsToInsert);
+               
+               // Update course progress if note has a course
+               if (note.course_id && user?.id) {
+                 updateCourseProgress(user.id, note.course_id);
+               }
              }
 
              toast({
