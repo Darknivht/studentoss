@@ -9,6 +9,10 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Study from "./pages/Study";
 import SmartNotes from "./pages/SmartNotes";
+import AITutor from "./pages/AITutor";
+import Flashcards from "./pages/Flashcards";
+import Quizzes from "./pages/Quizzes";
+import Focus from "./pages/Focus";
 import Plan from "./pages/Plan";
 import Social from "./pages/Social";
 import Profile from "./pages/Profile";
@@ -28,6 +32,10 @@ const App = () => (
             <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
             <Route path="/study" element={<AppLayout><Study /></AppLayout>} />
             <Route path="/notes" element={<AppLayout><SmartNotes /></AppLayout>} />
+            <Route path="/tutor" element={<AppLayout><AITutor /></AppLayout>} />
+            <Route path="/flashcards" element={<AppLayout><Flashcards /></AppLayout>} />
+            <Route path="/quizzes" element={<AppLayout><Quizzes /></AppLayout>} />
+            <Route path="/focus" element={<AppLayout><Focus /></AppLayout>} />
             <Route path="/plan" element={<AppLayout><Plan /></AppLayout>} />
             <Route path="/social" element={<AppLayout><Social /></AppLayout>} />
             <Route path="/profile" element={<AppLayout><Profile /></AppLayout>} />

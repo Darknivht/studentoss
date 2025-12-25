@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { BookOpen, Brain, FileText, Sparkles, Mic, Calculator } from 'lucide-react';
+import { BookOpen, Brain, FileText, Sparkles, Timer, Calculator } from 'lucide-react';
 
 const studyTools = [
-  { icon: FileText, label: 'Smart Notes', description: 'Upload & AI summaries', color: '#8B5CF6', path: '/notes', soon: false },
-  { icon: Brain, label: 'AI Tutor', description: 'Socratic learning', color: '#0EA5E9', path: '/notes', soon: false },
-  { icon: Sparkles, label: 'Flashcards', description: 'Study with cards', color: '#10B981', path: null, soon: true },
-  { icon: BookOpen, label: 'Quizzes', description: 'Test yourself', color: '#F59E0B', path: null, soon: true },
-  { icon: Mic, label: 'Voice Mode', description: 'Talk to learn', color: '#EC4899', path: null, soon: true },
+  { icon: FileText, label: 'Smart Notes', description: 'Upload & AI summaries', color: '#8B5CF6', path: '/notes' },
+  { icon: Brain, label: 'AI Tutor', description: 'Socratic learning', color: '#0EA5E9', path: '/tutor' },
+  { icon: Sparkles, label: 'Flashcards', description: 'Spaced repetition', color: '#10B981', path: '/flashcards' },
+  { icon: BookOpen, label: 'Quizzes', description: 'Test yourself', color: '#F59E0B', path: '/quizzes' },
+  { icon: Timer, label: 'Focus Timer', description: 'Pomodoro sessions', color: '#EC4899', path: '/focus' },
   { icon: Calculator, label: 'Math Solver', description: 'Solve equations', color: '#14B8A6', path: null, soon: true },
 ];
 

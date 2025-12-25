@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion';
-import { FileText, Sparkles, Brain, Trash2, MoreVertical } from 'lucide-react';
+import { FileText, Sparkles, Brain, Trash2, MoreVertical, BookOpen, Layers } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 interface Note {
@@ -14,6 +15,7 @@ interface Note {
   summary: string | null;
   source_type: string;
   created_at: string;
+  course_id?: string | null;
 }
 
 interface NoteCardProps {
@@ -22,9 +24,21 @@ interface NoteCardProps {
   onDelete: (id: string) => void;
   onSummarize: () => void;
   onTutor: () => void;
+  onGenerateFlashcards?: () => void;
+  onGenerateQuiz?: () => void;
+  courseName?: string;
 }
 
-const NoteCard = ({ note, index, onDelete, onSummarize, onTutor }: NoteCardProps) => {
+const NoteCard = ({ 
+  note, 
+  index, 
+  onDelete, 
+  onSummarize, 
+  onTutor,
+  onGenerateFlashcards,
+  onGenerateQuiz,
+  courseName 
+}: NoteCardProps) => {
   const preview = note.content?.slice(0, 120) + (note.content && note.content.length > 120 ? '...' : '');
   const createdAt = new Date(note.created_at).toLocaleDateString('en-US', {
     month: 'short',
@@ -44,7 +58,14 @@ const NoteCard = ({ note, index, onDelete, onSummarize, onTutor }: NoteCardProps
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
               <FileText size={16} className="text-primary" />
             </div>
-            <h3 className="font-semibold text-foreground truncate">{note.title}</h3>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-foreground truncate">{note.title}</h3>
+              {courseName && (
+                <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                  {courseName}
+                </span>
+              )}
+            </div>
           </div>
           
           <p className="text-sm text-muted-foreground line-clamp-2 ml-10 mb-3">
@@ -58,7 +79,7 @@ const NoteCard = ({ note, index, onDelete, onSummarize, onTutor }: NoteCardProps
             </div>
           )}
 
-          <div className="flex items-center gap-2 ml-10">
+          <div className="flex items-center gap-2 ml-10 flex-wrap">
             <span className="text-xs text-muted-foreground">{createdAt}</span>
             <span className="text-muted-foreground/30">•</span>
             <button
@@ -66,7 +87,7 @@ const NoteCard = ({ note, index, onDelete, onSummarize, onTutor }: NoteCardProps
               className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
             >
               <Sparkles size={12} />
-              {note.summary ? 'Update Summary' : 'Summarize'}
+              {note.summary ? 'Update' : 'Summarize'}
             </button>
             <span className="text-muted-foreground/30">•</span>
             <button
@@ -74,7 +95,7 @@ const NoteCard = ({ note, index, onDelete, onSummarize, onTutor }: NoteCardProps
               className="text-xs text-secondary hover:text-secondary/80 font-medium flex items-center gap-1 transition-colors"
             >
               <Brain size={12} />
-              Tutor Mode
+              Tutor
             </button>
           </div>
         </div>
@@ -84,6 +105,19 @@ const NoteCard = ({ note, index, onDelete, onSummarize, onTutor }: NoteCardProps
             <MoreVertical size={16} className="text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onGenerateFlashcards && (
+              <DropdownMenuItem onClick={onGenerateFlashcards}>
+                <Layers className="w-4 h-4 mr-2" />
+                Generate Flashcards
+              </DropdownMenuItem>
+            )}
+            {onGenerateQuiz && (
+              <DropdownMenuItem onClick={onGenerateQuiz}>
+                <BookOpen className="w-4 h-4 mr-2" />
+                Generate Quiz
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onDelete(note.id)}
               className="text-destructive focus:text-destructive"
