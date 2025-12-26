@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // Configure worker using Vite ?url import for reliable bundling
@@ -10,9 +10,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 interface PDFViewerProps {
   fileUrl: string;
   className?: string;
+  onRetry?: () => void;
 }
 
-const PDFViewer = ({ fileUrl, className = '' }: PDFViewerProps) => {
+const PDFViewer = ({ fileUrl, className = '', onRetry }: PDFViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -20,31 +21,37 @@ const PDFViewer = ({ fileUrl, className = '' }: PDFViewerProps) => {
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const loadPdf = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const loadingTask = pdfjsLib.getDocument(fileUrl);
+      const pdf = await loadingTask.promise;
+      setPdfDoc(pdf);
+      setTotalPages(pdf.numPages);
+      setCurrentPage(1);
+    } catch (err) {
+      console.error('PDF load error:', err);
+      setError('Failed to load PDF document');
+    } finally {
+      setLoading(false);
+    }
+  }, [fileUrl]);
 
   // Load PDF document
   useEffect(() => {
-    const loadPdf = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const loadingTask = pdfjsLib.getDocument(fileUrl);
-        const pdf = await loadingTask.promise;
-        setPdfDoc(pdf);
-        setTotalPages(pdf.numPages);
-        setCurrentPage(1);
-      } catch (err) {
-        console.error('PDF load error:', err);
-        setError('Failed to load PDF document');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (fileUrl) {
       loadPdf();
     }
-  }, [fileUrl]);
+  }, [fileUrl, retryCount, loadPdf]);
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    onRetry?.();
+  };
 
   // Render current page
   useEffect(() => {
@@ -105,8 +112,12 @@ const PDFViewer = ({ fileUrl, className = '' }: PDFViewerProps) => {
 
   if (error) {
     return (
-      <div className={`flex items-center justify-center p-8 text-destructive ${className}`}>
-        {error}
+      <div className={`flex flex-col items-center justify-center p-8 ${className}`}>
+        <p className="text-destructive mb-4">{error}</p>
+        <Button variant="outline" onClick={handleRetry} className="gap-2">
+          <RefreshCw className="w-4 h-4" />
+          Retry Loading
+        </Button>
       </div>
     );
   }

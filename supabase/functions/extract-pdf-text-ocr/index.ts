@@ -120,14 +120,17 @@ serve(async (req) => {
                 
 Instructions:
 - Extract every piece of readable text from all pages
-- Maintain the logical reading order
+- Maintain the logical reading order and structure
 - Preserve paragraph breaks where appropriate
-- If there are tables, format them as readable text
+- Format the text with proper headings, bullet points, and sections
+- If there are tables, format them as readable markdown tables
 - If there are images with text, extract that text too
+- Clean up any OCR artifacts or garbled text
+- Add proper spacing between sections
+- Use markdown formatting where appropriate (headings, lists, bold for key terms)
 - Do not add any commentary or explanation, just output the extracted text
-- If the document appears to be empty or unreadable, say "No readable text found in this document."
 
-Output only the extracted text, nothing else.`
+Output the well-formatted, clean extracted text:`
               },
               {
                 type: "image_url",

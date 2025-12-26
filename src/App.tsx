@@ -20,6 +20,7 @@ import Social from "./pages/Social";
 import Career from "./pages/Career";
 import Safety from "./pages/Safety";
 import Profile from "./pages/Profile";
+import CoursePage from "./pages/CoursePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
+            <Route path="/course/:courseId" element={<AppLayout><CoursePage /></AppLayout>} />
             <Route path="/study" element={<AppLayout><Study /></AppLayout>} />
             <Route path="/notes" element={<AppLayout><SmartNotes /></AppLayout>} />
             <Route path="/tutor" element={<AppLayout><AITutor /></AppLayout>} />

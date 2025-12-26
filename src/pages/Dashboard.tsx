@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +29,7 @@ interface Profile {
 const Dashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -182,7 +184,7 @@ const Dashboard = () => {
               color={course.color}
               progress={course.progress}
               onDelete={handleDeleteCourse}
-              onClick={() => {}}
+              onClick={() => navigate(`/course/${course.id}`)}
               index={index}
             />
           ))}
