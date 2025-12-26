@@ -17,6 +17,7 @@ interface Friend {
   status: string;
   profile: {
     display_name: string;
+    username: string | null;
     full_name: string;
     avatar_url: string | null;
     current_streak: number;
@@ -57,10 +58,17 @@ const FriendsList = () => {
         f.user_id === user.id ? f.friend_id : f.user_id
       );
 
+      if (userIds.length === 0) {
+        setFriends([]);
+        setPendingRequests([]);
+        setLoading(false);
+        return;
+      }
+
       // Fetch profiles for those users
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('user_id, display_name, full_name, avatar_url, current_streak, total_xp')
+        .select('user_id, display_name, username, full_name, avatar_url, current_streak, total_xp')
         .in('user_id', userIds);
 
       const profileMap = new Map(profiles?.map(p => [p.user_id, p]));
@@ -72,6 +80,7 @@ const FriendsList = () => {
           ...f,
           profile: profile || {
             display_name: 'Unknown',
+            username: null,
             full_name: 'Unknown User',
             avatar_url: null,
             current_streak: 0,
@@ -96,14 +105,22 @@ const FriendsList = () => {
     
     setSearching(true);
     try {
+      // Search by username, display_name, or full_name
       const { data } = await supabase
         .from('profiles')
-        .select('user_id, display_name, full_name, avatar_url')
-        .or(`display_name.ilike.%${searchQuery}%,full_name.ilike.%${searchQuery}%`)
+        .select('user_id, display_name, username, full_name, avatar_url')
+        .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%,full_name.ilike.%${searchQuery}%`)
         .neq('user_id', user.id)
         .limit(10);
 
-      setSearchResults(data || []);
+      // Filter out existing friends and pending requests
+      const existingIds = new Set([
+        ...friends.map(f => f.user_id === user.id ? f.friend_id : f.user_id),
+        ...pendingRequests.map(f => f.user_id === user.id ? f.friend_id : f.user_id),
+      ]);
+
+      const filtered = (data || []).filter(p => !existingIds.has(p.user_id));
+      setSearchResults(filtered);
     } catch (error) {
       console.error('Search failed:', error);
     } finally {
@@ -115,6 +132,18 @@ const FriendsList = () => {
     if (!user) return;
 
     try {
+      // Check if request already exists
+      const { data: existing } = await supabase
+        .from('friendships')
+        .select('id')
+        .or(`and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`)
+        .maybeSingle();
+
+      if (existing) {
+        toast({ title: 'Request already exists', variant: 'destructive' });
+        return;
+      }
+
       await supabase.from('friendships').insert({
         user_id: user.id,
         friend_id: friendId,
@@ -177,7 +206,7 @@ const FriendsList = () => {
       <div className="space-y-3">
         <div className="flex gap-2">
           <Input
-            placeholder="Search by name..."
+            placeholder="Search by username or name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
@@ -199,13 +228,16 @@ const FriendsList = () => {
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={result.avatar_url || undefined} />
                   <AvatarFallback>
-                    {(result.display_name || result.full_name)?.[0]?.toUpperCase()}
+                    {(result.username || result.display_name || result.full_name)?.[0]?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <p className="font-medium">
-                    {result.display_name || result.full_name}
+                    {result.display_name || result.full_name || 'User'}
                   </p>
+                  {result.username && (
+                    <p className="text-xs text-primary">@{result.username}</p>
+                  )}
                 </div>
                 <Button
                   size="sm"
@@ -237,13 +269,16 @@ const FriendsList = () => {
               <Avatar className="h-10 w-10">
                 <AvatarImage src={request.profile.avatar_url || undefined} />
                 <AvatarFallback>
-                  {request.profile.display_name?.[0]?.toUpperCase()}
+                  {(request.profile.username || request.profile.display_name)?.[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1">
                 <p className="font-medium">
                   {request.profile.display_name || request.profile.full_name}
                 </p>
+                {request.profile.username && (
+                  <p className="text-xs text-primary">@{request.profile.username}</p>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button
@@ -278,7 +313,7 @@ const FriendsList = () => {
           <div className="text-center py-8 text-muted-foreground">
             <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p>No friends yet</p>
-            <p className="text-sm">Search for classmates to add!</p>
+            <p className="text-sm">Search for users to add!</p>
           </div>
         ) : (
           friends.map((friend) => (
@@ -291,7 +326,7 @@ const FriendsList = () => {
               <Avatar className="h-10 w-10">
                 <AvatarImage src={friend.profile.avatar_url || undefined} />
                 <AvatarFallback>
-                  {friend.profile.display_name?.[0]?.toUpperCase()}
+                  {(friend.profile.username || friend.profile.display_name)?.[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1">
@@ -299,6 +334,9 @@ const FriendsList = () => {
                   {friend.profile.display_name || friend.profile.full_name}
                 </p>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {friend.profile.username && (
+                    <span className="text-primary">@{friend.profile.username}</span>
+                  )}
                   <span className="flex items-center gap-1">
                     <Flame className="w-3 h-3 text-orange-500" />
                     {friend.profile.current_streak} day streak

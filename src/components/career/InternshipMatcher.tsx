@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { streamAIChat } from '@/lib/ai';
-import { Briefcase, MapPin, DollarSign, GraduationCap, ExternalLink, Sparkles, RefreshCw } from 'lucide-react';
+import { Briefcase, MapPin, GraduationCap, ExternalLink, Sparkles, RefreshCw } from 'lucide-react';
 
 interface Internship {
   title: string;
@@ -152,8 +152,11 @@ Make them realistic entry-level positions that match the student's coursework.`;
         <div className="space-y-3">
           <h4 className="font-medium text-foreground flex items-center gap-2">
             <GraduationCap className="w-5 h-5 text-primary" />
-            Recommended Internships
+            AI-Suggested Internships
           </h4>
+          <p className="text-xs text-muted-foreground">
+            These are AI-generated suggestions based on your courses. Search for real opportunities on job boards.
+          </p>
 
           {internships.map((internship, index) => (
             <motion.div
@@ -168,9 +171,6 @@ Make them realistic entry-level positions that match the student's coursework.`;
                     <h5 className="font-semibold text-foreground">{internship.title}</h5>
                     <p className="text-sm text-primary">{internship.company}</p>
                   </div>
-                  <Button size="sm" variant="ghost">
-                    <ExternalLink className="w-4 h-4" />
-                  </Button>
                 </div>
 
                 <p className="text-sm text-muted-foreground mb-3">

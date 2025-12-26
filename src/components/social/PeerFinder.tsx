@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Globe, Search, UserPlus, Star, BookOpen, Trophy } from 'lucide-react';
+import { Globe, Search, UserPlus, BookOpen, Trophy } from 'lucide-react';
 
 interface PeerProfile {
   user_id: string;
   display_name: string | null;
+  username: string | null;
   school_name: string | null;
   grade_level: string | null;
   study_persona: string | null;
@@ -32,14 +33,12 @@ const PeerFinder = () => {
 
   const fetchPeers = async () => {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .select('user_id, display_name, school_name, grade_level, study_persona, total_xp')
+        .select('user_id, display_name, username, school_name, grade_level, study_persona, total_xp')
         .neq('user_id', user?.id || '')
         .order('total_xp', { ascending: false })
         .limit(20);
-
-      const { data, error } = await query;
 
       if (error) throw error;
       setPeers(data || []);
@@ -51,25 +50,33 @@ const PeerFinder = () => {
   };
 
   const sendFriendRequest = async (peerId: string) => {
+    if (!user) return;
+
     try {
+      // Check if request already exists
+      const { data: existing } = await supabase
+        .from('friendships')
+        .select('id')
+        .or(`and(user_id.eq.${user.id},friend_id.eq.${peerId}),and(user_id.eq.${peerId},friend_id.eq.${user.id})`)
+        .maybeSingle();
+
+      if (existing) {
+        toast({ title: 'Request already sent!', variant: 'destructive' });
+        return;
+      }
+
       const { error } = await supabase.from('friendships').insert({
-        user_id: user?.id,
+        user_id: user.id,
         friend_id: peerId,
         status: 'pending',
       });
 
-      if (error) {
-        if (error.code === '23505') {
-          toast({ title: 'Request already sent!', variant: 'destructive' });
-        } else {
-          throw error;
-        }
-      } else {
-        toast({
-          title: '✅ Friend Request Sent!',
-          description: 'Waiting for them to accept.',
-        });
-      }
+      if (error) throw error;
+
+      toast({
+        title: 'Friend Request Sent!',
+        description: 'Waiting for them to accept.',
+      });
     } catch (error) {
       console.error('Error sending request:', error);
       toast({ title: 'Failed to send request', variant: 'destructive' });
@@ -80,6 +87,7 @@ const PeerFinder = () => {
     const matchesSearch =
       !searchTerm ||
       peer.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      peer.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       peer.school_name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesGrade = filterGrade === 'all' || peer.grade_level === filterGrade;
@@ -116,7 +124,7 @@ const PeerFinder = () => {
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name or school..."
+              placeholder="Search by username or name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -155,13 +163,16 @@ const PeerFinder = () => {
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                       <span className="text-lg">
-                        {peer.display_name?.[0]?.toUpperCase() || '?'}
+                        {(peer.username || peer.display_name)?.[0]?.toUpperCase() || '?'}
                       </span>
                     </div>
                     <div>
                       <h4 className="font-medium text-foreground">
-                        {peer.display_name || 'Anonymous Student'}
+                        {peer.display_name || 'Student'}
                       </h4>
+                      {peer.username && (
+                        <p className="text-xs text-primary">@{peer.username}</p>
+                      )}
                       <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
                         {peer.school_name && (
                           <span className="flex items-center gap-1">
@@ -169,22 +180,11 @@ const PeerFinder = () => {
                             {peer.school_name}
                           </span>
                         )}
-                        {peer.grade_level && (
-                          <span className="px-2 py-0.5 bg-muted rounded-full">
-                            {peer.grade_level}
-                          </span>
-                        )}
                         <span className="flex items-center gap-1 text-primary">
                           <Trophy className="w-3 h-3" />
                           {peer.total_xp || 0} XP
                         </span>
                       </div>
-                      {peer.study_persona && (
-                        <span className="inline-flex items-center gap-1 mt-1 text-xs text-accent">
-                          <Star className="w-3 h-3" />
-                          {peer.study_persona}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <Button

@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 interface LeaderboardEntry {
   user_id: string;
   display_name: string;
+  username: string | null;
   avatar_url: string | null;
   xp_earned: number;
   current_streak: number;
@@ -23,9 +24,7 @@ const Leaderboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      fetchLeaderboards();
-    }
+    fetchLeaderboards();
   }, [user]);
 
   const getWeekStart = () => {
@@ -39,29 +38,32 @@ const Leaderboard = () => {
 
   const fetchLeaderboards = async () => {
     try {
-      // Fetch weekly XP with profiles
+      // Fetch all profiles for leaderboard
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, display_name, username, full_name, avatar_url, total_xp, current_streak')
+        .order('total_xp', { ascending: false })
+        .limit(50);
+
+      if (profilesError) throw profilesError;
+
+      // Fetch weekly XP
       const weekStart = getWeekStart();
       const { data: weeklyData } = await supabase
         .from('weekly_xp')
         .select('user_id, xp_earned')
         .eq('week_start', weekStart)
-        .order('xp_earned', { ascending: false })
-        .limit(50);
+        .order('xp_earned', { ascending: false });
 
-      // Fetch all profiles for leaderboard
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, full_name, avatar_url, total_xp, current_streak')
-        .order('total_xp', { ascending: false })
-        .limit(50);
-
-      if (profiles) {
+      if (profiles && profiles.length > 0) {
         // Create weekly leaderboard
         const weeklyMap = new Map(weeklyData?.map(w => [w.user_id, w.xp_earned]) || []);
+        
         const weekly = profiles
-          .map((p, idx) => ({
+          .map((p) => ({
             user_id: p.user_id,
-            display_name: p.display_name || p.full_name || 'Student',
+            display_name: p.username || p.display_name || p.full_name || 'Student',
+            username: p.username,
             avatar_url: p.avatar_url,
             xp_earned: weeklyMap.get(p.user_id) || 0,
             current_streak: p.current_streak || 0,
@@ -76,7 +78,8 @@ const Leaderboard = () => {
         // Create all-time leaderboard
         const allTime = profiles.map((p, idx) => ({
           user_id: p.user_id,
-          display_name: p.display_name || p.full_name || 'Student',
+          display_name: p.username || p.display_name || p.full_name || 'Student',
+          username: p.username,
           avatar_url: p.avatar_url,
           xp_earned: 0,
           current_streak: p.current_streak || 0,
@@ -123,7 +126,7 @@ const Leaderboard = () => {
       {entries.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
           <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>No rankings yet this week</p>
+          <p>No rankings yet</p>
           <p className="text-sm">Start studying to climb the leaderboard!</p>
         </div>
       ) : (
@@ -152,6 +155,9 @@ const Leaderboard = () => {
                 )}
               </p>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {entry.username && (
+                  <span className="text-primary">@{entry.username}</span>
+                )}
                 <span className="flex items-center gap-1">
                   <Flame className="w-3 h-3 text-orange-500" />
                   {entry.current_streak} day streak
