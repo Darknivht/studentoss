@@ -100,8 +100,8 @@ serve(async (req) => {
       base64Content += btoa(String.fromCharCode.apply(null, Array.from(chunk)));
     }
 
-    // Use Lovable AI (Gemini) for OCR
-    const aiResponse = await fetch("https://ai.lovable.dev/api/chat", {
+    // Use Lovable AI Gateway for OCR
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
