@@ -199,6 +199,85 @@ export type Database = {
         }
         Relationships: []
       }
+      group_resources: {
+        Row: {
+          created_at: string | null
+          group_id: string
+          id: string
+          resource_id: string
+          resource_type: string
+          shared_by: string
+        }
+        Insert: {
+          created_at?: string | null
+          group_id: string
+          id?: string
+          resource_id: string
+          resource_type: string
+          shared_by: string
+        }
+        Update: {
+          created_at?: string | null
+          group_id?: string
+          id?: string
+          resource_id?: string
+          resource_type?: string
+          shared_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_resources_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          group_id: string | null
+          id: string
+          is_read: boolean | null
+          message_type: string | null
+          recipient_id: string | null
+          sender_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          is_read?: boolean | null
+          message_type?: string | null
+          recipient_id?: string | null
+          sender_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          is_read?: boolean | null
+          message_type?: string | null
+          recipient_id?: string | null
+          sender_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           content: string | null
@@ -295,13 +374,16 @@ export type Database = {
           created_at: string | null
           current_streak: number | null
           display_name: string | null
+          flashcards_generated_today: number | null
           full_name: string | null
           grade_level: string | null
           id: string
           is_under_14: boolean | null
           last_study_date: string | null
           longest_streak: number | null
+          notes_today: number | null
           parent_email: string | null
+          quizzes_today: number | null
           school_name: string | null
           study_persona: string | null
           subscription_expires_at: string | null
@@ -318,13 +400,16 @@ export type Database = {
           created_at?: string | null
           current_streak?: number | null
           display_name?: string | null
+          flashcards_generated_today?: number | null
           full_name?: string | null
           grade_level?: string | null
           id?: string
           is_under_14?: boolean | null
           last_study_date?: string | null
           longest_streak?: number | null
+          notes_today?: number | null
           parent_email?: string | null
+          quizzes_today?: number | null
           school_name?: string | null
           study_persona?: string | null
           subscription_expires_at?: string | null
@@ -341,13 +426,16 @@ export type Database = {
           created_at?: string | null
           current_streak?: number | null
           display_name?: string | null
+          flashcards_generated_today?: number | null
           full_name?: string | null
           grade_level?: string | null
           id?: string
           is_under_14?: boolean | null
           last_study_date?: string | null
           longest_streak?: number | null
+          notes_today?: number | null
           parent_email?: string | null
+          quizzes_today?: number | null
           school_name?: string | null
           study_persona?: string | null
           subscription_expires_at?: string | null

@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight, AtSign, AlertCircle } from 'lucide-react';
+import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight, AtSign, AlertCircle, Crown } from 'lucide-react';
+import StreakCalendar from '@/components/study/StreakCalendar';
 
 const STUDY_PERSONAS = [
   { id: 'chill', name: 'Chill Bro', emoji: '😎', description: 'Relaxed and encouraging' },
@@ -191,22 +192,37 @@ const Profile = () => {
       </motion.div>
 
       {/* Subscription Badge */}
+      <Link to="/upgrade">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-3 rounded-xl border cursor-pointer ${subscriptionTier === 'pro' ? 'bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-amber-500/30' : 'bg-muted border-border hover:bg-muted/80'}`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${subscriptionTier === 'pro' ? 'bg-amber-500/20' : 'bg-primary/10'}`}>
+                <Crown className={`w-5 h-5 ${subscriptionTier === 'pro' ? 'text-amber-500' : 'text-primary'}`} />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">{subscriptionTier === 'pro' ? 'Pro Member' : 'Free Tier'}</p>
+                <p className="text-xs text-muted-foreground">{subscriptionTier === 'pro' ? 'Unlimited access' : 'Limited features'}</p>
+              </div>
+            </div>
+            {subscriptionTier !== 'pro' && (
+              <Button size="sm" className="gradient-primary text-primary-foreground">
+                Upgrade
+              </Button>
+            )}
+          </div>
+        </motion.div>
+      </Link>
+
+      {/* Streak Calendar */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`p-3 rounded-xl border ${subscriptionTier === 'pro' ? 'bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-amber-500/30' : 'bg-muted border-border'}`}
       >
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium text-foreground">{subscriptionTier === 'pro' ? 'Pro Member' : 'Free Tier'}</p>
-            <p className="text-xs text-muted-foreground">{subscriptionTier === 'pro' ? 'Unlimited AI access' : 'Limited AI calls per day'}</p>
-          </div>
-          {subscriptionTier !== 'pro' && (
-            <Button size="sm" className="gradient-primary text-primary-foreground">
-              Upgrade
-            </Button>
-          )}
-        </div>
+        <StreakCalendar />
       </motion.div>
 
       {/* Profile Form */}
