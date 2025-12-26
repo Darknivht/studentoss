@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, RotateCcw, Coffee, Brain, CheckCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Play, Pause, RotateCcw, Coffee, Brain, CheckCircle, Lock, Shield } from 'lucide-react';
+import FocusModeOverlay from '@/components/focus/FocusModeOverlay';
 
 interface PomodoroTimerProps {
   courseId?: string;
@@ -26,6 +28,8 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
   const [timeLeft, setTimeLeft] = useState(DURATIONS.focus);
   const [isRunning, setIsRunning] = useState(false);
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
+  const [focusModeEnabled, setFocusModeEnabled] = useState(false);
+  const [isFocusModeActive, setIsFocusModeActive] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -121,19 +125,47 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
   };
 
   const toggleTimer = () => {
-    setIsRunning(!isRunning);
+    const newIsRunning = !isRunning;
+    setIsRunning(newIsRunning);
+    
+    // Activate focus mode when starting a focus session
+    if (newIsRunning && sessionType === 'focus' && focusModeEnabled) {
+      setIsFocusModeActive(true);
+    }
   };
 
   const resetTimer = () => {
     setIsRunning(false);
     setTimeLeft(DURATIONS[sessionType]);
+    setIsFocusModeActive(false);
   };
 
   const switchSession = (type: SessionType) => {
     setIsRunning(false);
     setSessionType(type);
     setTimeLeft(DURATIONS[type]);
+    setIsFocusModeActive(false);
   };
+
+  const handleEmergencyExit = useCallback(() => {
+    setIsRunning(false);
+    setIsFocusModeActive(false);
+    setTimeLeft(DURATIONS[sessionType]);
+    toast({
+      title: 'Focus Mode Ended',
+      description: 'Session progress was not saved.',
+      variant: 'destructive',
+    });
+  }, [sessionType, toast]);
+
+  // Deactivate focus mode when session ends or switches to break
+  useEffect(() => {
+    if (sessionType !== 'focus' || !isRunning) {
+      if (isFocusModeActive && sessionType !== 'focus') {
+        setIsFocusModeActive(false);
+      }
+    }
+  }, [sessionType, isRunning, isFocusModeActive]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -152,11 +184,17 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-6 rounded-3xl bg-card border border-border shadow-lg"
-    >
+    <>
+      <FocusModeOverlay
+        isActive={isFocusModeActive}
+        timeLeft={formatTime(timeLeft)}
+        onEmergencyExit={handleEmergencyExit}
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-6 rounded-3xl bg-card border border-border shadow-lg"
+      >
       {/* Session Type Tabs */}
       <div className="flex gap-2 mb-6">
         {(['focus', 'short_break', 'long_break'] as const).map((type) => (
@@ -266,7 +304,33 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
       <p className="text-center text-xs text-muted-foreground mt-2">
         {completedPomodoros} sessions completed today
       </p>
+
+      {/* Focus Mode Toggle */}
+      <div className="mt-6 pt-4 border-t border-border">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" />
+            <div>
+              <p className="text-sm font-medium text-foreground">Focus Mode</p>
+              <p className="text-xs text-muted-foreground">
+                Dims screen & blocks navigation
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={focusModeEnabled}
+            onCheckedChange={setFocusModeEnabled}
+          />
+        </div>
+        {focusModeEnabled && (
+          <p className="text-xs text-primary mt-2 flex items-center gap-1">
+            <Lock className="w-3 h-3" />
+            Focus mode will activate when you start
+          </p>
+        )}
+      </div>
     </motion.div>
+    </>
   );
 };
 
