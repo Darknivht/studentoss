@@ -7,9 +7,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FileText, Download, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FileText, Download, Loader2, RefreshCw, Sparkles, Eye, Type } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import DocumentViewer from '@/components/documents/DocumentViewer';
 
 interface Note {
   id: string;
@@ -33,6 +35,7 @@ const NoteViewerDialog = ({ open, onOpenChange, note, onContentUpdated }: NoteVi
   const [reextracting, setReextracting] = useState(false);
   const [ocrExtracting, setOcrExtracting] = useState(false);
   const [localContent, setLocalContent] = useState<string | null>(note.content);
+  const [activeTab, setActiveTab] = useState<string>('preview');
 
   useEffect(() => {
     setLocalContent(note.content);
@@ -92,7 +95,6 @@ const NoteViewerDialog = ({ open, onOpenChange, note, onContentUpdated }: NoteVi
 
       const newContent = payload.text || '';
       
-      // Update the note in the database
       const { error: updateError } = await supabase
         .from('notes')
         .update({ content: newContent })
@@ -154,7 +156,6 @@ const NoteViewerDialog = ({ open, onOpenChange, note, onContentUpdated }: NoteVi
 
       const newContent = payload.text || '';
       
-      // Update the note in the database
       const { error: updateError } = await supabase
         .from('notes')
         .update({ content: newContent })
@@ -182,11 +183,13 @@ const NoteViewerDialog = ({ open, onOpenChange, note, onContentUpdated }: NoteVi
   };
 
   const isPdf = note.original_filename?.toLowerCase().endsWith('.pdf');
+  const isDocx = note.original_filename?.toLowerCase().endsWith('.docx') || note.original_filename?.toLowerCase().endsWith('.doc');
+  const canPreview = isPdf || isDocx;
   const isProcessing = reextracting || ocrExtracting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
+      <DialogContent className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
@@ -195,7 +198,7 @@ const NoteViewerDialog = ({ open, onOpenChange, note, onContentUpdated }: NoteVi
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* File Info */}
+          {/* File Info & Actions */}
           {note.original_filename && (
             <div className="flex items-center justify-between p-3 rounded-lg bg-muted gap-2 flex-wrap">
               <div className="flex items-center gap-2">
@@ -243,20 +246,59 @@ const NoteViewerDialog = ({ open, onOpenChange, note, onContentUpdated }: NoteVi
             </div>
           )}
 
-          {/* Content */}
-          <ScrollArea className="h-[50vh] rounded-lg border border-border p-4">
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              {localContent ? (
-                <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
-                  {localContent}
-                </pre>
-              ) : (
-                <p className="text-muted-foreground text-center py-8">
-                  No text content available
-                </p>
-              )}
-            </div>
-          </ScrollArea>
+          {/* Content with Tabs for Preview/Text */}
+          {canPreview && fileUrl ? (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="preview" className="flex items-center gap-2">
+                  <Eye className="w-4 h-4" />
+                  Document Preview
+                </TabsTrigger>
+                <TabsTrigger value="text" className="flex items-center gap-2">
+                  <Type className="w-4 h-4" />
+                  Extracted Text
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="preview" className="mt-4">
+                <DocumentViewer 
+                  fileUrl={fileUrl} 
+                  filename={note.original_filename || ''} 
+                  className="max-h-[55vh]"
+                />
+              </TabsContent>
+              
+              <TabsContent value="text" className="mt-4">
+                <ScrollArea className="h-[55vh] rounded-lg border border-border p-4">
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    {localContent ? (
+                      <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
+                        {localContent}
+                      </pre>
+                    ) : (
+                      <p className="text-muted-foreground text-center py-8">
+                        No text content extracted yet. Try the Re-extract or OCR buttons.
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <ScrollArea className="h-[50vh] rounded-lg border border-border p-4">
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                {localContent ? (
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
+                    {localContent}
+                  </pre>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">
+                    No text content available
+                  </p>
+                )}
+              </div>
+            </ScrollArea>
+          )}
 
           {/* Metadata */}
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
