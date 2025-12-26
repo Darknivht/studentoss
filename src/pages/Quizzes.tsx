@@ -1,14 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle, XCircle, Trophy, BookOpen, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Trophy, BookOpen, Sparkles, Loader2, History } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { streamAIChat } from '@/lib/ai';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
+import { useActivityTracking } from '@/hooks/useActivityTracking';
+import { QuizHistory } from '@/components/quiz/QuizHistory';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface QuizAttempt {
   id: string;
@@ -39,6 +42,9 @@ const Quizzes = () => {
   const [score, setScore] = useState(0);
   const [quizComplete, setQuizComplete] = useState(false);
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(null);
+  const [userAnswers, setUserAnswers] = useState<number[]>([]);
+  const { startTracking, stopTracking } = useActivityTracking({ activityType: 'quiz' });
+  const quizStartTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -111,6 +117,8 @@ const Quizzes = () => {
 
             if (Array.isArray(quizData) && quizData.length > 0) {
               setActiveQuiz(quizData);
+              setUserAnswers([]);
+              startTracking(); // Start activity tracking when quiz begins
             } else {
               throw new Error('Invalid quiz format');
             }
@@ -143,6 +151,7 @@ const Quizzes = () => {
     if (showResult) return;
     setSelected(index);
     setShowResult(true);
+    setUserAnswers(prev => [...prev, index]);
 
     if (index === activeQuiz![currentQ].correct) {
       setScore((s) => s + 1);
@@ -156,6 +165,7 @@ const Quizzes = () => {
       setShowResult(false);
     } else {
       setQuizComplete(true);
+      stopTracking(); // Stop activity tracking when quiz ends
       
       try {
         // Fetch the note to get course_id
@@ -169,11 +179,20 @@ const Quizzes = () => {
           courseId = noteData?.course_id || null;
         }
         
+        // Build quiz data with user answers for review
+        const quizDataWithAnswers = activeQuiz!.map((q, idx) => ({
+          question: q.question,
+          options: q.options,
+          correctAnswer: q.correct,
+          userAnswer: userAnswers[idx],
+          explanation: q.explanation,
+        }));
+        
         await supabase.from('quiz_attempts').insert([{
           user_id: user!.id,
           score,
           total_questions: activeQuiz!.length,
-          quiz_data: JSON.parse(JSON.stringify(activeQuiz)),
+          quiz_data: { questions: quizDataWithAnswers },
           note_id: currentNoteId,
           course_id: courseId,
         }]);
@@ -196,6 +215,7 @@ const Quizzes = () => {
   };
 
   const exitQuiz = () => {
+    stopTracking(); // Stop tracking if user exits early
     setActiveQuiz(null);
     setCurrentQ(0);
     setSelected(null);
@@ -203,6 +223,7 @@ const Quizzes = () => {
     setScore(0);
     setQuizComplete(false);
     setCurrentNoteId(null);
+    setUserAnswers([]);
   };
 
   if (generating) {
@@ -367,66 +388,85 @@ const Quizzes = () => {
         </p>
       </motion.header>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="p-6 rounded-3xl gradient-primary text-primary-foreground"
-      >
-        <h3 className="text-lg font-semibold mb-2">Ready to test yourself?</h3>
-        <p className="text-sm opacity-90 mb-4">
-          Generate quizzes from your notes to reinforce learning
-        </p>
-        <Link to="/notes">
-          <Button className="bg-white/20 hover:bg-white/30 text-white">
-            <Sparkles className="w-4 h-4 mr-2" />
-            Go to Notes
-          </Button>
-        </Link>
-      </motion.div>
+      <Tabs defaultValue="start" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="start" className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Start Quiz
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <History className="w-4 h-4" />
+            History
+          </TabsTrigger>
+        </TabsList>
 
-      <section>
-        <h2 className="text-lg font-display font-semibold mb-4">Recent Attempts</h2>
-        
-        {attempts.length === 0 ? (
+        <TabsContent value="start" className="mt-6 space-y-6">
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-12"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-6 rounded-3xl gradient-primary text-primary-foreground"
           >
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-              <BookOpen className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="font-semibold text-lg mb-2">No quizzes yet</h3>
-            <p className="text-muted-foreground text-sm">
-              Take your first quiz from your notes
+            <h3 className="text-lg font-semibold mb-2">Ready to test yourself?</h3>
+            <p className="text-sm opacity-90 mb-4">
+              Generate quizzes from your notes to reinforce learning
             </p>
+            <Link to="/notes">
+              <Button className="bg-white/20 hover:bg-white/30 text-white">
+                <Sparkles className="w-4 h-4 mr-2" />
+                Go to Notes
+              </Button>
+            </Link>
           </motion.div>
-        ) : (
-          <div className="space-y-3">
-            {attempts.map((attempt, i) => (
+
+          <section>
+            <h2 className="text-lg font-display font-semibold mb-4">Recent Attempts</h2>
+            
+            {attempts.length === 0 ? (
               <motion.div
-                key={attempt.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="p-4 rounded-2xl bg-card border border-border flex items-center justify-between"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center py-12"
               >
-                <div>
-                  <p className="font-medium text-foreground">
-                    Score: {attempt.score}/{attempt.total_questions}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(attempt.completed_at).toLocaleDateString()}
-                  </p>
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                  <BookOpen className="w-8 h-8 text-primary" />
                 </div>
-                <div className="text-2xl font-bold gradient-text">
-                  {Math.round((attempt.score / attempt.total_questions) * 100)}%
-                </div>
+                <h3 className="font-semibold text-lg mb-2">No quizzes yet</h3>
+                <p className="text-muted-foreground text-sm">
+                  Take your first quiz from your notes
+                </p>
               </motion.div>
-            ))}
-          </div>
-        )}
-      </section>
+            ) : (
+              <div className="space-y-3">
+                {attempts.map((attempt, i) => (
+                  <motion.div
+                    key={attempt.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="p-4 rounded-2xl bg-card border border-border flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">
+                        Score: {attempt.score}/{attempt.total_questions}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(attempt.completed_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-2xl font-bold gradient-text">
+                      {Math.round((attempt.score / attempt.total_questions) * 100)}%
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </section>
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-6">
+          <QuizHistory />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
