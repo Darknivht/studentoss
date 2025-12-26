@@ -91,14 +91,15 @@ serve(async (req) => {
 
     const fileBuffer = await fileResponse.arrayBuffer();
     
-    // Convert to base64 in chunks to avoid stack overflow
+    // Convert to base64 properly using standard encoding
     const uint8Array = new Uint8Array(fileBuffer);
-    const chunkSize = 32768; // 32KB chunks
-    let base64Content = '';
+    let binaryString = '';
+    const chunkSize = 8192;
     for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.slice(i, Math.min(i + chunkSize, uint8Array.length));
-      base64Content += btoa(String.fromCharCode.apply(null, Array.from(chunk)));
+      const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+      binaryString += String.fromCharCode.apply(null, Array.from(chunk));
     }
+    const base64Content = btoa(binaryString);
 
     // Use Lovable AI Gateway for OCR
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
