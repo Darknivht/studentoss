@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import * as pdfjs from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +12,69 @@ type ReqBody = {
   path: string;
   filename?: string;
 };
+
+// Simple PDF text extraction without pdfjs-dist (which requires workers)
+// This uses a basic approach to extract text from PDF content streams
+function extractTextFromPDF(bytes: Uint8Array): string {
+  const decoder = new TextDecoder("latin1");
+  const content = decoder.decode(bytes);
+  
+  const textParts: string[] = [];
+  
+  // Extract text from BT...ET blocks (text objects)
+  const textBlockRegex = /BT\s*([\s\S]*?)\s*ET/g;
+  let match;
+  
+  while ((match = textBlockRegex.exec(content)) !== null) {
+    const block = match[1];
+    
+    // Extract text from Tj operator (show text)
+    const tjRegex = /\(([^)]*)\)\s*Tj/g;
+    let tjMatch;
+    while ((tjMatch = tjRegex.exec(block)) !== null) {
+      const text = tjMatch[1]
+        .replace(/\\n/g, "\n")
+        .replace(/\\r/g, "\r")
+        .replace(/\\t/g, "\t")
+        .replace(/\\\(/g, "(")
+        .replace(/\\\)/g, ")")
+        .replace(/\\\\/g, "\\");
+      if (text.trim()) textParts.push(text);
+    }
+    
+    // Extract text from TJ operator (show text with positioning)
+    const tjArrayRegex = /\[(.*?)\]\s*TJ/g;
+    let tjArrayMatch;
+    while ((tjArrayMatch = tjArrayRegex.exec(block)) !== null) {
+      const arrayContent = tjArrayMatch[1];
+      const stringRegex = /\(([^)]*)\)/g;
+      let strMatch;
+      while ((strMatch = stringRegex.exec(arrayContent)) !== null) {
+        const text = strMatch[1]
+          .replace(/\\n/g, "\n")
+          .replace(/\\r/g, "\r")
+          .replace(/\\t/g, "\t")
+          .replace(/\\\(/g, "(")
+          .replace(/\\\)/g, ")")
+          .replace(/\\\\/g, "\\");
+        if (text.trim()) textParts.push(text);
+      }
+    }
+  }
+  
+  // Also try to extract from stream content
+  const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
+  while ((match = streamRegex.exec(content)) !== null) {
+    const streamContent = match[1];
+    // Look for readable ASCII text sequences
+    const readableText = streamContent.match(/[A-Za-z0-9\s.,!?;:'"()-]{10,}/g);
+    if (readableText) {
+      textParts.push(...readableText.filter(t => t.trim().length > 10));
+    }
+  }
+  
+  return textParts.join(" ").replace(/\s+/g, " ").trim();
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -73,6 +135,7 @@ serve(async (req) => {
       .download(path);
 
     if (downloadError || !fileData) {
+      console.error("Download error:", downloadError);
       return new Response(JSON.stringify({ error: "Failed to download file" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -82,31 +145,16 @@ serve(async (req) => {
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
-    // pdfjs worker isn't available in this environment; run in-process.
-    // @ts-ignore - types differ between runtimes
-    const loadingTask = pdfjs.getDocument({ data: bytes, disableWorker: true });
-    const pdf = await loadingTask.promise;
+    console.log("Extracting text from PDF, size:", bytes.length);
+    
+    // Use simple text extraction
+    let text = extractTextFromPDF(bytes);
 
-    const maxPages = Math.min(pdf.numPages ?? 0, 50);
-    let text = "";
-
-    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const content = await page.getTextContent();
-      // @ts-ignore
-      const pageText = (content.items ?? [])
-        // @ts-ignore
-        .map((it) => (typeof it?.str === "string" ? it.str : ""))
-        .filter(Boolean)
-        .join(" ");
-      if (pageText.trim()) text += pageText + "\n\n";
-    }
-
-    text = text.replace(/\s+/g, " ").trim();
+    console.log("Extracted text length:", text.length);
 
     if (text.length < 80) {
       const name = filename ? ` (${filename})` : "";
-      text = `This PDF${name} appears to be scanned, image-based, or has protected/embedded text, so text extraction returned little content.\n\nTip: export it as a text-based PDF or upload a DOCX/TXT for best AI results.`;
+      text = `This PDF${name} appears to be scanned, image-based, or has protected/embedded text, so text extraction returned little content.\n\nTip: Use the OCR option for scanned PDFs, or export it as a text-based PDF or upload a DOCX/TXT for best AI results.`;
     }
 
     return new Response(JSON.stringify({ text }), {
