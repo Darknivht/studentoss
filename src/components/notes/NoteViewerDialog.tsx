@@ -505,35 +505,36 @@ const NoteViewerDialog = ({
           </div>
 
           {/* Quick Actions Sidebar */}
-          <div className="space-y-4 lg:border-l lg:pl-4 border-border">
-            <div>
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                Quick Actions
-              </h3>
-              <div className="space-y-2">
-                {quickActions.map((action) => (
-                  <button
-                    key={action.label}
-                    onClick={action.onClick}
-                    disabled={action.disabled}
-                    className={`w-full p-3 rounded-lg text-left transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${action.color} border border-transparent hover:border-border/50`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {action.loading ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <action.icon className="w-5 h-5" />
-                      )}
-                      <div>
-                        <p className="font-medium text-sm">{action.label}</p>
-                        <p className="text-xs opacity-70">{action.description}</p>
+          <ScrollArea className="lg:border-l lg:pl-4 border-border max-h-[70vh] lg:max-h-none">
+            <div className="space-y-4 pr-2">
+              <div>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  Quick Actions
+                </h3>
+                <div className="space-y-2">
+                  {quickActions.map((action) => (
+                    <button
+                      key={action.label}
+                      onClick={action.onClick}
+                      disabled={action.disabled}
+                      className={`w-full p-3 rounded-lg text-left transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${action.color} border border-transparent hover:border-border/50`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {action.loading ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <action.icon className="w-5 h-5" />
+                        )}
+                        <div>
+                          <p className="font-medium text-sm">{action.label}</p>
+                          <p className="text-xs opacity-70">{action.description}</p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
             {/* Utility Actions */}
             <div>
@@ -555,15 +556,16 @@ const NoteViewerDialog = ({
               </div>
             </div>
 
-            {/* Tip */}
-            {!hasContent && (
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  <strong>Tip:</strong> Extract text from your document first to enable AI features.
-                </p>
-              </div>
-            )}
-          </div>
+              {/* Tip */}
+              {!hasContent && (
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    <strong>Tip:</strong> Extract text from your document first to enable AI features.
+                  </p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </div>
       </DialogContent>
     </Dialog>
