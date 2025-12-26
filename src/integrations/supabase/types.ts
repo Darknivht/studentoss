@@ -289,6 +289,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          ai_calls_reset_at: string | null
+          ai_calls_today: number | null
           avatar_url: string | null
           created_at: string | null
           current_streak: number | null
@@ -302,11 +304,16 @@ export type Database = {
           parent_email: string | null
           school_name: string | null
           study_persona: string | null
+          subscription_expires_at: string | null
+          subscription_tier: string | null
           total_xp: number | null
           updated_at: string | null
           user_id: string
+          username: string | null
         }
         Insert: {
+          ai_calls_reset_at?: string | null
+          ai_calls_today?: number | null
           avatar_url?: string | null
           created_at?: string | null
           current_streak?: number | null
@@ -320,11 +327,16 @@ export type Database = {
           parent_email?: string | null
           school_name?: string | null
           study_persona?: string | null
+          subscription_expires_at?: string | null
+          subscription_tier?: string | null
           total_xp?: number | null
           updated_at?: string | null
           user_id: string
+          username?: string | null
         }
         Update: {
+          ai_calls_reset_at?: string | null
+          ai_calls_today?: number | null
           avatar_url?: string | null
           created_at?: string | null
           current_streak?: number | null
@@ -338,9 +350,12 @@ export type Database = {
           parent_email?: string | null
           school_name?: string | null
           study_persona?: string | null
+          subscription_expires_at?: string | null
+          subscription_tier?: string | null
           total_xp?: number | null
           updated_at?: string | null
           user_id?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -444,6 +459,107 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      study_group_members: {
+        Row: {
+          group_id: string
+          id: string
+          joined_at: string | null
+          role: string | null
+          user_id: string
+        }
+        Insert: {
+          group_id: string
+          id?: string
+          joined_at?: string | null
+          role?: string | null
+          user_id: string
+        }
+        Update: {
+          group_id?: string
+          id?: string
+          joined_at?: string | null
+          role?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_groups: {
+        Row: {
+          created_at: string | null
+          creator_id: string
+          description: string | null
+          id: string
+          is_public: boolean | null
+          max_members: number | null
+          name: string
+          topic: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          creator_id: string
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          max_members?: number | null
+          name: string
+          topic?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          creator_id?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          max_members?: number | null
+          name?: string
+          topic?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      study_sessions: {
+        Row: {
+          activities_count: number | null
+          created_at: string | null
+          id: string
+          session_date: string
+          total_minutes: number | null
+          updated_at: string | null
+          user_id: string
+          xp_earned: number | null
+        }
+        Insert: {
+          activities_count?: number | null
+          created_at?: string | null
+          id?: string
+          session_date?: string
+          total_minutes?: number | null
+          updated_at?: string | null
+          user_id: string
+          xp_earned?: number | null
+        }
+        Update: {
+          activities_count?: number | null
+          created_at?: string | null
+          id?: string
+          session_date?: string
+          total_minutes?: number | null
+          updated_at?: string | null
+          user_id?: string
+          xp_earned?: number | null
+        }
+        Relationships: []
       }
       user_achievements: {
         Row: {

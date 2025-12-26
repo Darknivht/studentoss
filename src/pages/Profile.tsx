@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight } from 'lucide-react';
+import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight, AtSign, AlertCircle } from 'lucide-react';
 
 const STUDY_PERSONAS = [
   { id: 'chill', name: 'Chill Bro', emoji: '😎', description: 'Relaxed and encouraging' },
@@ -20,12 +20,16 @@ const Profile = () => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
   const [schoolName, setSchoolName] = useState('');
   const [gradeLevel, setGradeLevel] = useState('');
   const [studyPersona, setStudyPersona] = useState('chill');
   const [saving, setSaving] = useState(false);
   const [achievementCount, setAchievementCount] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
+  const [subscriptionTier, setSubscriptionTier] = useState('free');
 
   useEffect(() => {
     if (user) {
@@ -43,10 +47,12 @@ const Profile = () => {
 
     if (data) {
       setFullName(data.full_name || '');
+      setUsername(data.username || '');
       setSchoolName(data.school_name || '');
       setGradeLevel(data.grade_level || '');
       setStudyPersona(data.study_persona || 'chill');
       setTotalXP(data.total_xp || 0);
+      setSubscriptionTier(data.subscription_tier || 'free');
     }
   };
 
@@ -59,13 +65,54 @@ const Profile = () => {
     setAchievementCount(count || 0);
   };
 
+  const checkUsernameAvailability = async (name: string) => {
+    if (!name.trim() || name.length < 3) {
+      setUsernameError('Username must be at least 3 characters');
+      return false;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(name)) {
+      setUsernameError('Only letters, numbers, and underscores allowed');
+      return false;
+    }
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', name.toLowerCase())
+      .neq('user_id', user?.id || '')
+      .maybeSingle();
+
+    if (data) {
+      setUsernameError('Username is taken');
+      // Generate suggestions
+      const suggestions = [
+        `${name}${Math.floor(Math.random() * 100)}`,
+        `${name}_${Math.floor(Math.random() * 100)}`,
+        `${name}${new Date().getFullYear() % 100}`,
+      ];
+      setUsernameSuggestions(suggestions);
+      return false;
+    }
+
+    setUsernameError('');
+    setUsernameSuggestions([]);
+    return true;
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
+      if (username && !(await checkUsernameAvailability(username))) {
+        setSaving(false);
+        return;
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({
           full_name: fullName,
+          username: username.toLowerCase() || null,
           school_name: schoolName,
           grade_level: gradeLevel,
           study_persona: studyPersona,
@@ -75,7 +122,7 @@ const Profile = () => {
       if (error) throw error;
 
       toast({
-        title: 'Profile updated! ✨',
+        title: 'Profile updated!',
         description: 'Your changes have been saved.',
       });
     } catch (error) {
@@ -93,7 +140,7 @@ const Profile = () => {
     await signOut();
     toast({
       title: 'Signed out',
-      description: 'See you next time! 👋',
+      description: 'See you next time!',
     });
   };
 
@@ -143,12 +190,70 @@ const Profile = () => {
         </Link>
       </motion.div>
 
+      {/* Subscription Badge */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`p-3 rounded-xl border ${subscriptionTier === 'pro' ? 'bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-amber-500/30' : 'bg-muted border-border'}`}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium text-foreground">{subscriptionTier === 'pro' ? 'Pro Member' : 'Free Tier'}</p>
+            <p className="text-xs text-muted-foreground">{subscriptionTier === 'pro' ? 'Unlimited AI access' : 'Limited AI calls per day'}</p>
+          </div>
+          {subscriptionTier !== 'pro' && (
+            <Button size="sm" className="gradient-primary text-primary-foreground">
+              Upgrade
+            </Button>
+          )}
+        </div>
+      </motion.div>
+
       {/* Profile Form */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="space-y-4"
       >
+        <div>
+          <Label htmlFor="username" className="flex items-center gap-2">
+            <AtSign size={14} />
+            Username
+          </Label>
+          <Input
+            id="username"
+            value={username}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setUsernameError('');
+              setUsernameSuggestions([]);
+            }}
+            onBlur={() => username && checkUsernameAvailability(username)}
+            placeholder="legend11"
+            className={`mt-1.5 ${usernameError ? 'border-destructive' : ''}`}
+          />
+          {usernameError && (
+            <div className="mt-1.5 text-xs text-destructive flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {usernameError}
+            </div>
+          )}
+          {usernameSuggestions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="text-xs text-muted-foreground">Try:</span>
+              {usernameSuggestions.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => { setUsername(s); setUsernameError(''); setUsernameSuggestions([]); }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div>
           <Label htmlFor="fullName" className="flex items-center gap-2">
             <User size={14} />
