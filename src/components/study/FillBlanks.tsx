@@ -63,8 +63,8 @@ const FillBlanks = ({ onBack }: FillBlanksProps) => {
       await streamAIChat({
         messages: [],
         mode: 'chat',
-        content: `Create 5 fill-in-the-blank exercises from this content. Remove key terms and ask students to fill them in.
-Return ONLY valid JSON:
+content: `Create 5 fill-in-the-blank exercises from this content. Remove key terms and ask students to fill them in.
+Return ONLY a valid JSON array, no markdown, no explanation:
 [
   { "sentence": "The ___ is the powerhouse of the cell.", "blank": "mitochondria", "hint": "Organelle" }
 ]
@@ -74,12 +74,20 @@ ${note.content}`,
         onDelta: (chunk) => { fullResponse += chunk; },
         onDone: () => {
           try {
-            const jsonMatch = fullResponse.match(/\[[\s\S]*\]/);
+            // Try to find JSON array in response
+            const jsonMatch = fullResponse.match(/\[[\s\S]*?\]/);
             if (jsonMatch) {
               const parsed = JSON.parse(jsonMatch[0]);
-              setBlanks(parsed);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setBlanks(parsed);
+              } else {
+                throw new Error('Invalid format');
+              }
+            } else {
+              throw new Error('No JSON found');
             }
           } catch (e) {
+            console.error('Parse error:', e, fullResponse);
             toast({ title: 'Error', description: 'Failed to parse exercises', variant: 'destructive' });
           }
           setLoading(false);

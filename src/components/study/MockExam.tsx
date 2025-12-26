@@ -70,7 +70,7 @@ const MockExam = ({ onBack }: MockExamProps) => {
         messages: [],
         mode: 'chat',
         content: `Create a 10-question multiple choice exam from this content. Make it challenging.
-Return ONLY valid JSON:
+Return ONLY a valid JSON array, no markdown, no explanation:
 [
   { "question": "Question?", "options": ["A", "B", "C", "D"], "correct": 0 }
 ]
@@ -80,15 +80,22 @@ ${note.content}`,
         onDelta: (chunk) => { fullResponse += chunk; },
         onDone: () => {
           try {
-            const jsonMatch = fullResponse.match(/\[[\s\S]*\]/);
+            const jsonMatch = fullResponse.match(/\[[\s\S]*?\]/);
             if (jsonMatch) {
               const parsed = JSON.parse(jsonMatch[0]);
-              setQuestions(parsed);
-              setAnswers(new Array(parsed.length).fill(null));
-              setTimeLeft(parsed.length * 60); // 1 min per question
-              setExamStarted(true);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setQuestions(parsed);
+                setAnswers(new Array(parsed.length).fill(null));
+                setTimeLeft(parsed.length * 60);
+                setExamStarted(true);
+              } else {
+                throw new Error('Invalid format');
+              }
+            } else {
+              throw new Error('No JSON found');
             }
           } catch (e) {
+            console.error('Parse error:', e, fullResponse);
             toast({ title: 'Error', description: 'Failed to generate exam', variant: 'destructive' });
           }
           setLoading(false);
