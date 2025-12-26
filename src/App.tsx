@@ -17,6 +17,7 @@ import Achievements from "./pages/Achievements";
 import Plan from "./pages/Plan";
 import Social from "./pages/Social";
 import Career from "./pages/Career";
+import Safety from "./pages/Safety";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/plan" element={<AppLayout><Plan /></AppLayout>} />
             <Route path="/social" element={<AppLayout><Social /></AppLayout>} />
             <Route path="/career" element={<AppLayout><Career /></AppLayout>} />
+            <Route path="/safety" element={<AppLayout><Safety /></AppLayout>} />
             <Route path="/profile" element={<AppLayout><Profile /></AppLayout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
