@@ -90,7 +90,15 @@ serve(async (req) => {
     }
 
     const fileBuffer = await fileResponse.arrayBuffer();
-    const base64Content = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+    
+    // Convert to base64 in chunks to avoid stack overflow
+    const uint8Array = new Uint8Array(fileBuffer);
+    const chunkSize = 32768; // 32KB chunks
+    let base64Content = '';
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.slice(i, Math.min(i + chunkSize, uint8Array.length));
+      base64Content += btoa(String.fromCharCode.apply(null, Array.from(chunk)));
+    }
 
     // Use Lovable AI (Gemini) for OCR
     const aiResponse = await fetch("https://ai.lovable.dev/api/chat", {
