@@ -114,9 +114,9 @@ const GroupDetail = ({ groupId, groupName, onBack }: GroupDetailProps) => {
           supabase.from('profiles').select('user_id, display_name, username').in('user_id', sharerIds),
         ]);
 
-        const noteMap = new Map<string, any>(notesRes.data?.map(n => [n.id, n]) || []);
-        const courseMap = new Map<string, any>(coursesRes.data?.map(c => [c.id, c]) || []);
-        const sharerMap = new Map<string, any>(sharersRes.data?.map(s => [s.user_id, s]) || []);
+        const noteMap = new Map<string, any>(notesRes.data?.map(n => [n.id, n] as [string, any]) || []);
+        const courseMap = new Map<string, any>(coursesRes.data?.map(c => [c.id, c] as [string, any]) || []);
+        const sharerMap = new Map<string, any>(sharersRes.data?.map(s => [s.user_id, s] as [string, any]) || []);
 
         const enrichedResources = resourcesData.map(r => ({
           ...r,
