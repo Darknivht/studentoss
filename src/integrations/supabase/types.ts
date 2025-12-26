@@ -172,6 +172,33 @@ export type Database = {
           },
         ]
       }
+      friendships: {
+        Row: {
+          created_at: string
+          friend_id: string
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           content: string | null
@@ -265,6 +292,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string | null
           current_streak: number | null
+          display_name: string | null
           full_name: string | null
           grade_level: string | null
           id: string
@@ -282,6 +310,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           current_streak?: number | null
+          display_name?: string | null
           full_name?: string | null
           grade_level?: string | null
           id?: string
@@ -299,6 +328,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           current_streak?: number | null
+          display_name?: string | null
           full_name?: string | null
           grade_level?: string | null
           id?: string
@@ -362,6 +392,59 @@ export type Database = {
           },
         ]
       }
+      study_goals: {
+        Row: {
+          completed: boolean
+          course_id: string | null
+          created_at: string
+          description: string | null
+          due_date: string
+          goal_type: string
+          id: string
+          priority: string
+          reminder_enabled: boolean
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date: string
+          goal_type?: string
+          id?: string
+          priority?: string
+          reminder_enabled?: boolean
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string
+          goal_type?: string
+          id?: string
+          priority?: string
+          reminder_enabled?: boolean
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_goals_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_achievements: {
         Row: {
           achievement_id: string
@@ -390,6 +473,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      weekly_xp: {
+        Row: {
+          created_at: string
+          flashcards_reviewed: number
+          focus_minutes: number
+          id: string
+          notes_created: number
+          quizzes_completed: number
+          updated_at: string
+          user_id: string
+          week_start: string
+          xp_earned: number
+        }
+        Insert: {
+          created_at?: string
+          flashcards_reviewed?: number
+          focus_minutes?: number
+          id?: string
+          notes_created?: number
+          quizzes_completed?: number
+          updated_at?: string
+          user_id: string
+          week_start: string
+          xp_earned?: number
+        }
+        Update: {
+          created_at?: string
+          flashcards_reviewed?: number
+          focus_minutes?: number
+          id?: string
+          notes_created?: number
+          quizzes_completed?: number
+          updated_at?: string
+          user_id?: string
+          week_start?: string
+          xp_earned?: number
+        }
+        Relationships: []
       }
     }
     Views: {
