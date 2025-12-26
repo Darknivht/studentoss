@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOfflineAI } from '@/hooks/useOfflineAI';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -14,7 +15,10 @@ import {
   HardDrive,
   BookOpen,
   FileText,
-  Brain
+  Brain,
+  Cpu,
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 
 interface StudyPack {
@@ -29,11 +33,15 @@ interface StudyPack {
 const OfflineMode = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const offlineAI = useOfflineAI();
   const [studyPacks, setStudyPacks] = useState<StudyPack[]>([]);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [storageUsed, setStorageUsed] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [testPrompt, setTestPrompt] = useState('');
+  const [testResponse, setTestResponse] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -44,19 +52,16 @@ const OfflineMode = () => {
 
   const fetchAvailablePacks = async () => {
     try {
-      // Fetch user's courses
       const { data: courses } = await supabase
         .from('courses')
         .select('id, name')
         .eq('user_id', user?.id);
 
-      // Fetch notes count per course
       const { data: notes } = await supabase
         .from('notes')
         .select('id, course_id')
         .eq('user_id', user?.id);
 
-      // Fetch flashcards count
       const { data: flashcards } = await supabase
         .from('flashcards')
         .select('id, course_id')
@@ -64,7 +69,6 @@ const OfflineMode = () => {
 
       const packs: StudyPack[] = [];
 
-      // Create packs for each course
       courses?.forEach((course) => {
         const courseNotes = notes?.filter((n) => n.course_id === course.id).length || 0;
         const courseCards = flashcards?.filter((f) => f.course_id === course.id).length || 0;
@@ -81,7 +85,6 @@ const OfflineMode = () => {
         }
       });
 
-      // Add all notes pack
       if (notes && notes.length > 0) {
         packs.unshift({
           id: 'all-notes',
@@ -93,7 +96,6 @@ const OfflineMode = () => {
         });
       }
 
-      // Add all flashcards pack
       if (flashcards && flashcards.length > 0) {
         packs.unshift({
           id: 'all-flashcards',
@@ -140,13 +142,11 @@ const OfflineMode = () => {
     setProgress(0);
 
     try {
-      // Simulate download with progress
       for (let i = 0; i <= 100; i += 10) {
         await new Promise((resolve) => setTimeout(resolve, 200));
         setProgress(i);
       }
 
-      // Fetch and store data based on pack type
       let data: any = null;
 
       if (pack.type === 'notes' || pack.id === 'all-notes') {
@@ -162,7 +162,6 @@ const OfflineMode = () => {
           .eq('user_id', user?.id);
         data = flashcards;
       } else {
-        // Course pack
         const { data: notes } = await supabase
           .from('notes')
           .select('*')
@@ -178,7 +177,6 @@ const OfflineMode = () => {
         data = { notes, flashcards };
       }
 
-      // Store in localStorage
       localStorage.setItem(`offline_pack_${pack.id}`, JSON.stringify(data));
 
       setStudyPacks((prev) =>
@@ -222,6 +220,30 @@ const OfflineMode = () => {
     }
   };
 
+  const handleLoadAI = async () => {
+    await offlineAI.loadModel();
+  };
+
+  const handleTestAI = async () => {
+    if (!testPrompt.trim() || !offlineAI.isModelLoaded) return;
+    
+    setIsTesting(true);
+    setTestResponse('');
+    
+    try {
+      const response = await offlineAI.generateText(testPrompt);
+      setTestResponse(response);
+    } catch (error) {
+      toast({
+        title: 'AI Error',
+        description: 'Failed to generate response',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -256,6 +278,102 @@ const OfflineMode = () => {
             Download study packs to access them without internet. Perfect for studying on the go!
           </p>
         </div>
+      </Card>
+
+      {/* Offline AI Section */}
+      <Card className="p-6 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-purple-500/20">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
+            <Cpu className="w-6 h-6 text-purple-500" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Offline AI Assistant</h3>
+            <p className="text-sm text-muted-foreground">
+              {offlineAI.isModelLoaded 
+                ? `Model loaded: ${offlineAI.modelName}` 
+                : 'Download AI model to use without internet'}
+            </p>
+          </div>
+        </div>
+
+        {offlineAI.isLoading ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Downloading AI model... {offlineAI.progress}%</span>
+            </div>
+            <Progress value={offlineAI.progress} className="h-2" />
+            <p className="text-xs text-muted-foreground">
+              This may take a few minutes on first download. The model will be cached for future use.
+            </p>
+          </div>
+        ) : offlineAI.isModelLoaded ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-green-500">
+              <Check className="w-4 h-4" />
+              <span>AI ready for offline use!</span>
+            </div>
+
+            <div className="space-y-3">
+              <textarea
+                value={testPrompt}
+                onChange={(e) => setTestPrompt(e.target.value)}
+                placeholder="Ask a study question..."
+                className="w-full p-3 rounded-xl bg-background border border-border text-foreground text-sm resize-none h-20"
+              />
+              <Button 
+                onClick={handleTestAI} 
+                disabled={isTesting || !testPrompt.trim()}
+                className="w-full"
+              >
+                {isTesting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Thinking...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Ask Offline AI
+                  </>
+                )}
+              </Button>
+
+              {testResponse && (
+                <div className="p-3 bg-muted rounded-xl">
+                  <p className="text-sm text-foreground">{testResponse}</p>
+                </div>
+              )}
+            </div>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={offlineAI.unloadModel}
+              className="text-destructive"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Unload Model
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Download a lightweight AI model (~77MB) to get AI assistance without internet connection. 
+              Features include:
+            </p>
+            <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+              <li>• Answer study questions</li>
+              <li>• Summarize notes</li>
+              <li>• Generate flashcard hints</li>
+              <li>• Explain concepts</li>
+            </ul>
+            <Button onClick={handleLoadAI} className="w-full">
+              <Download className="w-4 h-4 mr-2" />
+              Download Offline AI Model
+            </Button>
+          </div>
+        )}
       </Card>
 
       {/* Study Packs */}
@@ -333,19 +451,6 @@ const OfflineMode = () => {
           </div>
         )}
       </div>
-
-      {/* Offline AI Info */}
-      <Card className="p-4 bg-amber-500/10 border-amber-500/20">
-        <div className="flex items-start gap-3">
-          <Brain className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm text-foreground font-medium">Offline AI Mode</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Basic AI features like flashcard review work offline. Advanced features require internet.
-            </p>
-          </div>
-        </div>
-      </Card>
     </motion.div>
   );
 };
