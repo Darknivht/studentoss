@@ -21,6 +21,7 @@ import Career from "./pages/Career";
 import Safety from "./pages/Safety";
 import Profile from "./pages/Profile";
 import CoursePage from "./pages/CoursePage";
+import Upgrade from "./pages/Upgrade";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +50,7 @@ const App = () => (
             <Route path="/career" element={<AppLayout><Career /></AppLayout>} />
             <Route path="/safety" element={<AppLayout><Safety /></AppLayout>} />
             <Route path="/profile" element={<AppLayout><Profile /></AppLayout>} />
+            <Route path="/upgrade" element={<AppLayout><Upgrade /></AppLayout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

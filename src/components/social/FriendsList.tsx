@@ -6,9 +6,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
-  Users, UserPlus, Check, X, Clock, Search, Flame 
+  Users, UserPlus, Check, X, Clock, Search, Flame, MessageCircle 
 } from 'lucide-react';
+import ChatRoom from '@/components/chat/ChatRoom';
 
 interface Friend {
   id: string;
@@ -22,6 +24,7 @@ interface Friend {
     avatar_url: string | null;
     current_streak: number;
     total_xp: number;
+    user_id: string;
   };
 }
 
@@ -34,6 +37,7 @@ const FriendsList = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
+  const [chatFriend, setChatFriend] = useState<Friend | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -78,16 +82,17 @@ const FriendsList = () => {
         const profile = profileMap.get(friendUserId);
         return {
           ...f,
-          profile: profile || {
+          profile: profile ? { ...profile } : {
             display_name: 'Unknown',
-            username: null,
+            username: null as string | null,
             full_name: 'Unknown User',
-            avatar_url: null,
+            avatar_url: null as string | null,
             current_streak: 0,
             total_xp: 0,
+            user_id: friendUserId,
           },
         };
-      });
+      }) as Friend[];
 
       setFriends(enrichedFriendships.filter(f => f.status === 'accepted'));
       setPendingRequests(enrichedFriendships.filter(
@@ -316,39 +321,64 @@ const FriendsList = () => {
             <p className="text-sm">Search for users to add!</p>
           </div>
         ) : (
-          friends.map((friend) => (
-            <motion.div
-              key={friend.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border"
-            >
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={friend.profile.avatar_url || undefined} />
-                <AvatarFallback>
-                  {(friend.profile.username || friend.profile.display_name)?.[0]?.toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <p className="font-medium">
-                  {friend.profile.display_name || friend.profile.full_name}
-                </p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {friend.profile.username && (
-                    <span className="text-primary">@{friend.profile.username}</span>
-                  )}
-                  <span className="flex items-center gap-1">
-                    <Flame className="w-3 h-3 text-orange-500" />
-                    {friend.profile.current_streak} day streak
-                  </span>
-                  <span>•</span>
-                  <span>{friend.profile.total_xp} XP</span>
+          friends.map((friend) => {
+            const friendUserId = friend.user_id === user?.id ? friend.friend_id : friend.user_id;
+            return (
+              <motion.div
+                key={friend.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border"
+              >
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={friend.profile.avatar_url || undefined} />
+                  <AvatarFallback>
+                    {(friend.profile.username || friend.profile.display_name)?.[0]?.toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <p className="font-medium">
+                    {friend.profile.display_name || friend.profile.full_name}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {friend.profile.username && (
+                      <span className="text-primary">@{friend.profile.username}</span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Flame className="w-3 h-3 text-orange-500" />
+                      {friend.profile.current_streak} day streak
+                    </span>
+                    <span>•</span>
+                    <span>{friend.profile.total_xp} XP</span>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setChatFriend({ ...friend, profile: { ...friend.profile, user_id: friendUserId } })}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </Button>
+              </motion.div>
+            );
+          })
         )}
       </div>
+
+      {/* DM Chat Dialog */}
+      <Dialog open={!!chatFriend} onOpenChange={(open) => !open && setChatFriend(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              Chat with {chatFriend?.profile.display_name || chatFriend?.profile.full_name}
+            </DialogTitle>
+          </DialogHeader>
+          {chatFriend && (
+            <ChatRoom recipientId={chatFriend.profile.user_id} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
