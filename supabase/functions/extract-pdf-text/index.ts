@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { extractText } from "https://esm.sh/unpdf@0.12.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,69 +13,6 @@ type ReqBody = {
   path: string;
   filename?: string;
 };
-
-// Simple PDF text extraction without pdfjs-dist (which requires workers)
-// This uses a basic approach to extract text from PDF content streams
-function extractTextFromPDF(bytes: Uint8Array): string {
-  const decoder = new TextDecoder("latin1");
-  const content = decoder.decode(bytes);
-  
-  const textParts: string[] = [];
-  
-  // Extract text from BT...ET blocks (text objects)
-  const textBlockRegex = /BT\s*([\s\S]*?)\s*ET/g;
-  let match;
-  
-  while ((match = textBlockRegex.exec(content)) !== null) {
-    const block = match[1];
-    
-    // Extract text from Tj operator (show text)
-    const tjRegex = /\(([^)]*)\)\s*Tj/g;
-    let tjMatch;
-    while ((tjMatch = tjRegex.exec(block)) !== null) {
-      const text = tjMatch[1]
-        .replace(/\\n/g, "\n")
-        .replace(/\\r/g, "\r")
-        .replace(/\\t/g, "\t")
-        .replace(/\\\(/g, "(")
-        .replace(/\\\)/g, ")")
-        .replace(/\\\\/g, "\\");
-      if (text.trim()) textParts.push(text);
-    }
-    
-    // Extract text from TJ operator (show text with positioning)
-    const tjArrayRegex = /\[(.*?)\]\s*TJ/g;
-    let tjArrayMatch;
-    while ((tjArrayMatch = tjArrayRegex.exec(block)) !== null) {
-      const arrayContent = tjArrayMatch[1];
-      const stringRegex = /\(([^)]*)\)/g;
-      let strMatch;
-      while ((strMatch = stringRegex.exec(arrayContent)) !== null) {
-        const text = strMatch[1]
-          .replace(/\\n/g, "\n")
-          .replace(/\\r/g, "\r")
-          .replace(/\\t/g, "\t")
-          .replace(/\\\(/g, "(")
-          .replace(/\\\)/g, ")")
-          .replace(/\\\\/g, "\\");
-        if (text.trim()) textParts.push(text);
-      }
-    }
-  }
-  
-  // Also try to extract from stream content
-  const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
-  while ((match = streamRegex.exec(content)) !== null) {
-    const streamContent = match[1];
-    // Look for readable ASCII text sequences
-    const readableText = streamContent.match(/[A-Za-z0-9\s.,!?;:'"()-]{10,}/g);
-    if (readableText) {
-      textParts.push(...readableText.filter(t => t.trim().length > 10));
-    }
-  }
-  
-  return textParts.join(" ").replace(/\s+/g, " ").trim();
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -143,14 +81,17 @@ serve(async (req) => {
     }
 
     const arrayBuffer = await fileData.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
+    const pdfBuffer = new Uint8Array(arrayBuffer);
 
-    console.log("Extracting text from PDF, size:", bytes.length);
+    console.log("Extracting text from PDF, size:", pdfBuffer.length);
+
+    // Use unpdf for proper text extraction (Deno-compatible, no workers needed)
+    const { text: extractedText, totalPages } = await extractText(pdfBuffer, { mergePages: true });
     
-    // Use simple text extraction
-    let text = extractTextFromPDF(bytes);
+    let text = typeof extractedText === 'string' ? extractedText : (extractedText as string[]).join('\n\n');
+    text = text.replace(/\s+/g, " ").trim();
 
-    console.log("Extracted text length:", text.length);
+    console.log("Extracted text length:", text.length, "pages:", totalPages);
 
     if (text.length < 80) {
       const name = filename ? ` (${filename})` : "";
