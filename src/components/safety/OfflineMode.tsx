@@ -286,7 +286,7 @@ const OfflineMode = () => {
           <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
             <Cpu className="w-6 h-6 text-purple-500" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="font-semibold text-foreground">Offline AI Assistant</h3>
             <p className="text-sm text-muted-foreground">
               {offlineAI.isModelLoaded 
@@ -294,7 +294,42 @@ const OfflineMode = () => {
                 : 'Download AI model to use without internet'}
             </p>
           </div>
+          {/* Device indicator */}
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            {offlineAI.isMobile ? (
+              <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">📱 Mobile</span>
+            ) : (
+              <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-500">💻 Desktop</span>
+            )}
+          </div>
         </div>
+
+        {/* Capacitor/Mobile specific info */}
+        {offlineAI.isMobile && !offlineAI.isModelLoaded && !offlineAI.isLoading && (
+          <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-500">📱</span>
+              <div className="text-sm">
+                <p className="font-medium text-amber-600 dark:text-amber-400">Mobile Device Detected</p>
+                <p className="text-muted-foreground mt-1">
+                  {offlineAI.isCapacitor 
+                    ? 'Running as native app. AI will work offline after download.'
+                    : 'AI model works in mobile browsers. Download on WiFi for best results.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Model cached indicator */}
+        {offlineAI.modelCached && !offlineAI.isModelLoaded && !offlineAI.isLoading && (
+          <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <Check className="w-4 h-4" />
+              <span>Model cached - loads faster next time!</span>
+            </div>
+          </div>
+        )}
 
         {offlineAI.isLoading ? (
           <div className="space-y-3">
@@ -304,14 +339,25 @@ const OfflineMode = () => {
             </div>
             <Progress value={offlineAI.progress} className="h-2" />
             <p className="text-xs text-muted-foreground">
-              This may take a few minutes on first download. The model will be cached for future use.
+              {offlineAI.isMobile 
+                ? 'First download may take a few minutes on mobile. Stay on this page.'
+                : 'This may take a few minutes on first download. The model will be cached for future use.'}
             </p>
           </div>
         ) : offlineAI.isModelLoaded ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm text-green-500">
-              <Check className="w-4 h-4" />
-              <span>AI ready for offline use!</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-green-500">
+                <Check className="w-4 h-4" />
+                <span>AI ready for offline use!</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                {offlineAI.supportsWebGPU ? (
+                  <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-500">WebGPU</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-500">WASM</span>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -329,7 +375,7 @@ const OfflineMode = () => {
                 {isTesting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Thinking...
+                    {offlineAI.isMobile ? 'Processing...' : 'Thinking...'}
                   </>
                 ) : (
                   <>
@@ -346,32 +392,47 @@ const OfflineMode = () => {
               )}
             </div>
 
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={offlineAI.unloadModel}
-              className="text-destructive"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Unload Model
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={offlineAI.unloadModel}
+                className="text-destructive flex-1"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Unload Model
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={offlineAI.clearModelCache}
+                className="flex-1"
+              >
+                <HardDrive className="w-4 h-4 mr-2" />
+                Clear Cache
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Download a lightweight AI model (~77MB) to get AI assistance without internet connection. 
-              Features include:
+              {offlineAI.isMobile && ' Optimized for mobile devices.'}
             </p>
             <ul className="text-sm text-muted-foreground space-y-1 ml-4">
               <li>• Answer study questions</li>
               <li>• Summarize notes</li>
               <li>• Generate flashcard hints</li>
               <li>• Explain concepts</li>
+              {offlineAI.isMobile && <li>• Works offline on your phone</li>}
             </ul>
             <Button onClick={handleLoadAI} className="w-full">
               <Download className="w-4 h-4 mr-2" />
               Download Offline AI Model
             </Button>
+            {offlineAI.error && (
+              <p className="text-xs text-destructive">{offlineAI.error}</p>
+            )}
           </div>
         )}
       </Card>
