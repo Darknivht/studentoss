@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-// Configure worker to use inline worker (avoids CORS/dynamic import issues)
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+// Configure worker using Vite ?url import for reliable bundling
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 interface PDFViewerProps {
   fileUrl: string;
