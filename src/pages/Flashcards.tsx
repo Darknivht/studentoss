@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,6 +8,7 @@ import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen } from 'lucide-react
 import { Link } from 'react-router-dom';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
+import { useActivityTracking } from '@/hooks/useActivityTracking';
 
 interface Flashcard {
   id: string;
@@ -30,6 +31,7 @@ const Flashcards = () => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [loading, setLoading] = useState(true);
   const [studyMode, setStudyMode] = useState(false);
+  const { startTracking, stopTracking } = useActivityTracking({ activityType: 'flashcard' });
 
   useEffect(() => {
     if (user) fetchFlashcards();
@@ -107,6 +109,7 @@ const Flashcards = () => {
         setTimeout(() => setCurrentIndex(currentIndex + 1), 300);
       } else {
         setStudyMode(false);
+        stopTracking(); // Stop activity tracking when session ends
         toast({
           title: 'Session complete! 🎉',
           description: `You reviewed ${dueCards.length} cards.`,
@@ -140,6 +143,7 @@ const Flashcards = () => {
     setStudyMode(true);
     setCurrentIndex(0);
     setIsFlipped(false);
+    startTracking(); // Start activity tracking
   };
 
   if (loading) {
@@ -156,7 +160,7 @@ const Flashcards = () => {
     return (
       <div className="p-6 space-y-6">
         <header className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => setStudyMode(false)}>
+          <Button variant="ghost" onClick={() => { stopTracking(); setStudyMode(false); }}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Exit
           </Button>
