@@ -6,7 +6,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Users, Plus, MessageSquare, Trash2, UserPlus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Users, Plus, MessageSquare, Trash2, UserPlus, ArrowRight } from 'lucide-react';
+import GroupDetail from './GroupDetail';
 
 interface StudyGroup {
   id: string;
@@ -28,6 +30,7 @@ const StudyGroups = () => {
   const [creating, setCreating] = useState(false);
   const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedGroup, setSelectedGroup] = useState<StudyGroup | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -259,7 +262,10 @@ const StudyGroups = () => {
               >
                 <Card className="p-4 bg-card border-border hover:border-primary/50 transition-colors">
                   <div className="flex items-center justify-between">
-                    <div className="flex-1">
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => group.is_member && setSelectedGroup(group)}
+                    >
                       <div className="flex items-center gap-2">
                         <h4 className="font-medium text-foreground">{group.name}</h4>
                         {group.is_member && (
@@ -279,12 +285,21 @@ const StudyGroups = () => {
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      {group.is_member && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSelectedGroup(group)}
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                      )}
                       {group.creator_id === user?.id ? (
                         <Button
                           size="sm"
                           variant="ghost"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => deleteGroup(group.id)}
+                          onClick={(e) => { e.stopPropagation(); deleteGroup(group.id); }}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -292,7 +307,7 @@ const StudyGroups = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => leaveGroup(group.id)}
+                          onClick={(e) => { e.stopPropagation(); leaveGroup(group.id); }}
                         >
                           Leave
                         </Button>
@@ -314,6 +329,18 @@ const StudyGroups = () => {
           </div>
         )}
       </div>
+
+      {/* Group Detail Dialog */}
+      <Dialog open={!!selectedGroup} onOpenChange={(open) => !open && setSelectedGroup(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedGroup?.name}</DialogTitle>
+          </DialogHeader>
+          {selectedGroup && (
+            <GroupDetail groupId={selectedGroup.id} groupName={selectedGroup.name} />
+          )}
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 };

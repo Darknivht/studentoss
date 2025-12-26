@@ -50,7 +50,7 @@ interface GroupMember {
 interface GroupDetailProps {
   groupId: string;
   groupName: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 const GroupDetail = ({ groupId, groupName, onBack }: GroupDetailProps) => {

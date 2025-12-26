@@ -23,13 +23,19 @@ interface Message {
 }
 
 interface ChatRoomProps {
-  type: 'group' | 'dm';
-  targetId: string; // group_id for groups, friend's user_id for DMs
-  targetName: string;
-  onBack: () => void;
+  type?: 'group' | 'dm';
+  targetId?: string; // group_id for groups, friend's user_id for DMs
+  targetName?: string;
+  onBack?: () => void;
+  groupId?: string; // Legacy support
+  recipientId?: string; // For DMs
 }
 
-const ChatRoom = ({ type, targetId, targetName, onBack }: ChatRoomProps) => {
+const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: ChatRoomProps) => {
+  // Support both old and new props
+  const chatType = type || (groupId ? 'group' : 'dm');
+  const chatTargetId = targetId || groupId || recipientId || '';
+  const chatTargetName = targetName || '';
   const { user } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,7 +56,7 @@ const ChatRoom = ({ type, targetId, targetName, onBack }: ChatRoomProps) => {
         supabase.removeChannel(channelRef.current);
       }
     };
-  }, [user, targetId]);
+  }, [user, chatTargetId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -70,12 +76,12 @@ const ChatRoom = ({ type, targetId, targetName, onBack }: ChatRoomProps) => {
         .order('created_at', { ascending: true })
         .limit(100);
 
-      if (type === 'group') {
-        query = query.eq('group_id', targetId);
+      if (chatType === 'group') {
+        query = query.eq('group_id', chatTargetId);
       } else {
         query = query
           .is('group_id', null)
-          .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${targetId}),and(sender_id.eq.${targetId},recipient_id.eq.${user?.id})`);
+          .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${chatTargetId}),and(sender_id.eq.${chatTargetId},recipient_id.eq.${user?.id})`);
       }
 
       const { data, error } = await query;
@@ -104,7 +110,7 @@ const ChatRoom = ({ type, targetId, targetName, onBack }: ChatRoomProps) => {
   };
 
   const subscribeToMessages = () => {
-    const channelName = type === 'group' ? `group_${targetId}` : `dm_${[user?.id, targetId].sort().join('_')}`;
+    const channelName = chatType === 'group' ? `group_${chatTargetId}` : `dm_${[user?.id, chatTargetId].sort().join('_')}`;
     
     channelRef.current = supabase
       .channel(channelName)
@@ -114,16 +120,16 @@ const ChatRoom = ({ type, targetId, targetName, onBack }: ChatRoomProps) => {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: type === 'group' ? `group_id=eq.${targetId}` : undefined,
+          filter: chatType === 'group' ? `group_id=eq.${chatTargetId}` : undefined,
         },
         async (payload) => {
           const newMsg = payload.new as Message;
           
           // For DMs, check if message is for this conversation
-          if (type === 'dm') {
+          if (chatType === 'dm') {
             const isRelevant = 
-              (newMsg.sender_id === user?.id && newMsg.recipient_id === targetId) ||
-              (newMsg.sender_id === targetId && newMsg.recipient_id === user?.id);
+              (newMsg.sender_id === user?.id && newMsg.recipient_id === chatTargetId) ||
+              (newMsg.sender_id === chatTargetId && newMsg.recipient_id === user?.id);
             if (!isRelevant) return;
           }
 
@@ -150,10 +156,10 @@ const ChatRoom = ({ type, targetId, targetName, onBack }: ChatRoomProps) => {
         content: newMessage.trim(),
       };
 
-      if (type === 'group') {
-        messageData.group_id = targetId;
+      if (chatType === 'group') {
+        messageData.group_id = chatTargetId;
       } else {
-        messageData.recipient_id = targetId;
+        messageData.recipient_id = chatTargetId;
       }
 
       const { error } = await supabase
@@ -184,19 +190,21 @@ const ChatRoom = ({ type, targetId, targetName, onBack }: ChatRoomProps) => {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-border">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div>
-          <h3 className="font-semibold text-foreground">{targetName}</h3>
-          <p className="text-xs text-muted-foreground">
-            {type === 'group' ? 'Group Chat' : 'Direct Message'}
-          </p>
+    <div className="flex flex-col h-full min-h-[400px]">
+      {/* Header - only show if onBack is provided */}
+      {onBack && (
+        <div className="flex items-center gap-3 p-4 border-b border-border">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h3 className="font-semibold text-foreground">{chatTargetName}</h3>
+            <p className="text-xs text-muted-foreground">
+              {chatType === 'group' ? 'Group Chat' : 'Direct Message'}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
