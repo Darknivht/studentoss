@@ -515,6 +515,19 @@ const SmartNotes = () => {
           open={showViewer}
           onOpenChange={setShowViewer}
           note={selectedNote}
+          onContentUpdated={(noteId, newContent) => {
+            setNotes(notes.map((n) => (n.id === noteId ? { ...n, content: newContent } : n)));
+          }}
+          onTutor={() => {
+            setShowViewer(false);
+            setShowTutor(true);
+          }}
+          onGenerateFlashcards={() => handleGenerateFlashcards(selectedNote)}
+          onGenerateQuiz={() => handleGenerateQuiz(selectedNote)}
+          onSummarize={() => {
+            setShowViewer(false);
+            setShowSummary(true);
+          }}
         />
       )}
     </div>
