@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen, List, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
 import { useActivityTracking } from '@/hooks/useActivityTracking';
+import FlashcardsList from '@/components/flashcards/FlashcardsList';
+import StudyStatistics from '@/components/study/StudyStatistics';
 
 interface Flashcard {
   id: string;
@@ -276,42 +279,69 @@ const Flashcards = () => {
         </div>
       </motion.div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="p-4 rounded-2xl bg-card border border-border">
-          <p className="text-2xl font-bold text-foreground">{flashcards.length}</p>
-          <p className="text-xs text-muted-foreground">Total Cards</p>
-        </div>
-        <div className="p-4 rounded-2xl bg-card border border-border">
-          <p className="text-2xl font-bold text-foreground">
-            {flashcards.filter((c) => c.repetitions > 0).length}
-          </p>
-          <p className="text-xs text-muted-foreground">Learned</p>
-        </div>
-      </div>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="w-full grid grid-cols-3">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="cards" className="flex items-center gap-2">
+            <List className="w-4 h-4" />
+            My Cards
+          </TabsTrigger>
+          <TabsTrigger value="stats" className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" />
+            Statistics
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Empty State or Generate CTA */}
-      {flashcards.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-12"
-        >
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-            <BookOpen className="w-8 h-8 text-primary" />
+        <TabsContent value="overview" className="mt-4 space-y-4">
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-4 rounded-2xl bg-card border border-border">
+              <p className="text-2xl font-bold text-foreground">{flashcards.length}</p>
+              <p className="text-xs text-muted-foreground">Total Cards</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-card border border-border">
+              <p className="text-2xl font-bold text-foreground">
+                {flashcards.filter((c) => c.repetitions > 0).length}
+              </p>
+              <p className="text-xs text-muted-foreground">Learned</p>
+            </div>
           </div>
-          <h3 className="font-semibold text-lg mb-2">No flashcards yet</h3>
-          <p className="text-muted-foreground text-sm mb-4">
-            Generate flashcards from your notes
-          </p>
-          <Link to="/notes">
-            <Button variant="outline">
-              <Sparkles className="w-4 h-4 mr-2" />
-              Go to Notes
-            </Button>
-          </Link>
-        </motion.div>
-      )}
+
+          {/* Empty State or Generate CTA */}
+          {flashcards.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-12"
+            >
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <BookOpen className="w-8 h-8 text-primary" />
+              </div>
+              <h3 className="font-semibold text-lg mb-2">No flashcards yet</h3>
+              <p className="text-muted-foreground text-sm mb-4">
+                Generate flashcards from your notes
+              </p>
+              <Link to="/notes">
+                <Button variant="outline">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Go to Notes
+                </Button>
+              </Link>
+            </motion.div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="cards" className="mt-4">
+          <FlashcardsList />
+        </TabsContent>
+
+        <TabsContent value="stats" className="mt-4">
+          <StudyStatistics />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
