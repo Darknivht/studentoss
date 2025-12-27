@@ -22,6 +22,8 @@ import Safety from "./pages/Safety";
 import Profile from "./pages/Profile";
 import CoursePage from "./pages/CoursePage";
 import Upgrade from "./pages/Upgrade";
+import Chat from "./pages/Chat";
+import GroupChat from "./pages/GroupChat";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +53,8 @@ const App = () => (
             <Route path="/safety" element={<AppLayout><Safety /></AppLayout>} />
             <Route path="/profile" element={<AppLayout><Profile /></AppLayout>} />
             <Route path="/upgrade" element={<AppLayout><Upgrade /></AppLayout>} />
+            <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
+            <Route path="/group/:groupId" element={<AppLayout><GroupChat /></AppLayout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

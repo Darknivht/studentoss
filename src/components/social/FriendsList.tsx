@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Users, UserPlus, Check, X, Clock, Search, Flame, MessageCircle 
 } from 'lucide-react';
-import ChatRoom from '@/components/chat/ChatRoom';
 
 interface Friend {
   id: string;
@@ -31,13 +30,13 @@ interface Friend {
 const FriendsList = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Friend[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
-  const [chatFriend, setChatFriend] = useState<Friend | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -355,7 +354,7 @@ const FriendsList = () => {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setChatFriend({ ...friend, profile: { ...friend.profile, user_id: friendUserId } })}
+                  onClick={() => navigate(`/chat?user=${friendUserId}`)}
                 >
                   <MessageCircle className="w-4 h-4" />
                 </Button>
@@ -364,21 +363,6 @@ const FriendsList = () => {
           })
         )}
       </div>
-
-      {/* DM Chat Dialog */}
-      <Dialog open={!!chatFriend} onOpenChange={(open) => !open && setChatFriend(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageCircle className="w-5 h-5" />
-              Chat with {chatFriend?.profile.display_name || chatFriend?.profile.full_name}
-            </DialogTitle>
-          </DialogHeader>
-          {chatFriend && (
-            <ChatRoom recipientId={chatFriend.profile.user_id} />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
