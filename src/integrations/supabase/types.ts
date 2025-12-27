@@ -586,6 +586,7 @@ export type Database = {
           creator_id: string
           description: string | null
           id: string
+          invitation_code: string
           is_public: boolean | null
           max_members: number | null
           name: string
@@ -597,6 +598,7 @@ export type Database = {
           creator_id: string
           description?: string | null
           id?: string
+          invitation_code: string
           is_public?: boolean | null
           max_members?: number | null
           name: string
@@ -608,6 +610,7 @@ export type Database = {
           creator_id?: string
           description?: string | null
           id?: string
+          invitation_code?: string
           is_public?: boolean | null
           max_members?: number | null
           name?: string
@@ -722,7 +725,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_invite_code: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
