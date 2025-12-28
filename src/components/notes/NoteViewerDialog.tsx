@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
   Dialog,
   DialogContent,
@@ -8,8 +9,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  FileText, Download, Loader2, RefreshCw, Sparkles, Eye, Type, 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  FileText, Download, Loader2, RefreshCw, Sparkles, Eye, Type,
   MessageCircle, BookOpen, ClipboardList, Brain, Copy, Share2, Pencil
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,9 +25,11 @@ interface Note {
   id: string;
   title: string;
   content: string | null;
+  summary: string | null;
   file_url?: string | null;
   original_filename?: string | null;
   source_type: string;
+  course_id?: string | null;
 }
 
 interface NoteViewerDialogProps {
@@ -37,17 +41,21 @@ interface NoteViewerDialogProps {
   onGenerateFlashcards?: () => void;
   onGenerateQuiz?: () => void;
   onSummarize?: () => void;
+  courses?: { id: string; name: string; icon: string }[];
+  onCourseChange?: (courseId: string | null) => void;
 }
 
-const NoteViewerDialog = ({ 
-  open, 
-  onOpenChange, 
-  note, 
+const NoteViewerDialog = ({
+  open,
+  onOpenChange,
+  note,
   onContentUpdated,
   onTutor,
   onGenerateFlashcards,
   onGenerateQuiz,
-  onSummarize
+  onSummarize,
+  courses = [],
+  onCourseChange
 }: NoteViewerDialogProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -55,7 +63,7 @@ const NoteViewerDialog = ({
   const [reextracting, setReextracting] = useState(false);
   const [ocrExtracting, setOcrExtracting] = useState(false);
   const [localContent, setLocalContent] = useState<string | null>(note.content);
-  const [activeTab, setActiveTab] = useState<string>('preview');
+  const [activeTab, setActiveTab] = useState<string>('content');
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
 
   useEffect(() => {
@@ -65,16 +73,19 @@ const NoteViewerDialog = ({
   useEffect(() => {
     if (note.file_url && open) {
       getSignedUrl();
+      setActiveTab('preview');
+    } else {
+      setActiveTab('content');
     }
   }, [note.file_url, open]);
 
   const getSignedUrl = async () => {
     if (!note.file_url) return;
-    
+
     const { data } = await supabase.storage
       .from('note-files')
       .createSignedUrl(note.file_url, 3600);
-    
+
     if (data?.signedUrl) {
       setFileUrl(data.signedUrl);
     }
@@ -98,7 +109,7 @@ const NoteViewerDialog = ({
 
   const handleReextract = async () => {
     if (!note.file_url) return;
-    
+
     setReextracting(true);
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -125,7 +136,7 @@ const NoteViewerDialog = ({
       }
 
       const newContent = payload.text || '';
-      
+
       const { error: updateError } = await supabase
         .from('notes')
         .update({ content: newContent })
@@ -154,7 +165,7 @@ const NoteViewerDialog = ({
 
   const handleOcrExtract = async () => {
     if (!note.file_url) return;
-    
+
     setOcrExtracting(true);
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -186,7 +197,7 @@ const NoteViewerDialog = ({
       }
 
       const newContent = payload.text || '';
-      
+
       const { error: updateError } = await supabase
         .from('notes')
         .update({ content: newContent })
@@ -235,7 +246,7 @@ const NoteViewerDialog = ({
 
   const handleQuickFlashcards = async () => {
     if (!localContent || !user) return;
-    
+
     if (onGenerateFlashcards) {
       onOpenChange(false);
       onGenerateFlashcards();
@@ -259,7 +270,7 @@ const NoteViewerDialog = ({
             const flashcardsData = Array.isArray(parsed)
               ? parsed
               : (parsed.flashcards || []);
-            
+
             const flashcardsToInsert = flashcardsData
               .filter((fc: any) => fc?.front && fc?.back)
               .map((fc: { front: string; back: string }) => ({
@@ -272,7 +283,7 @@ const NoteViewerDialog = ({
 
             if (flashcardsToInsert.length > 0) {
               await supabase.from('flashcards').insert(flashcardsToInsert);
-              
+
               if ((note as any).course_id && user.id) {
                 updateCourseProgress(user.id, (note as any).course_id);
               }
@@ -391,10 +402,36 @@ const NoteViewerDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" />
-            {note.title}
-          </DialogTitle>
+          <div className="flex items-center justify-between gap-4 pr-8">
+            <DialogTitle className="flex items-center gap-2 truncate">
+              <FileText className="w-5 h-5 text-primary flex-shrink-0" />
+              <span className="truncate">{note.title}</span>
+            </DialogTitle>
+
+            {onCourseChange && (
+              <div className="flex-shrink-0">
+                <Select
+                  value={note.course_id || 'none'}
+                  onValueChange={(value) => onCourseChange(value === 'none' ? null : value)}
+                >
+                  <SelectTrigger className="w-[180px] h-8 text-xs">
+                    <SelectValue placeholder="Select course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Course</SelectItem>
+                    {courses.map((course) => (
+                      <SelectItem key={course.id} value={course.id}>
+                        <span className="flex items-center gap-2">
+                          <span>{course.icon}</span>
+                          <span className="truncate">{course.name}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr,280px] gap-4 overflow-hidden">
@@ -410,9 +447,9 @@ const NoteViewerDialog = ({
                 <div className="flex items-center gap-2 flex-wrap">
                   {isPdf && (
                     <>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleReextract}
                         disabled={isProcessing}
                       >
@@ -423,9 +460,9 @@ const NoteViewerDialog = ({
                         )}
                         Re-extract
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleOcrExtract}
                         disabled={isProcessing}
                       >
@@ -442,59 +479,73 @@ const NoteViewerDialog = ({
               </div>
             )}
 
-            {/* Content with Tabs for Preview/Text */}
-            {canPreview && fileUrl ? (
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+            {/* Content with Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                {canPreview && fileUrl && (
                   <TabsTrigger value="preview" className="flex items-center gap-2">
                     <Eye className="w-4 h-4" />
-                    Document Preview
+                    Preview
                   </TabsTrigger>
-                  <TabsTrigger value="text" className="flex items-center gap-2">
-                    <Type className="w-4 h-4" />
-                    Extracted Text
-                  </TabsTrigger>
-                </TabsList>
-                
+                )}
+                <TabsTrigger value="content" className="flex items-center gap-2">
+                  <Type className="w-4 h-4" />
+                  Content
+                </TabsTrigger>
+                <TabsTrigger value="summary" className="flex items-center gap-2">
+                  <Brain className="w-4 h-4" />
+                  Summary
+                </TabsTrigger>
+              </TabsList>
+
+              {canPreview && fileUrl && (
                 <TabsContent value="preview" className="mt-4">
-                  <DocumentViewer 
-                    fileUrl={fileUrl} 
-                    filename={note.original_filename || ''} 
+                  <DocumentViewer
+                    fileUrl={fileUrl}
+                    filename={note.original_filename || ''}
                     className="max-h-[45vh]"
                   />
                 </TabsContent>
-                
-                <TabsContent value="text" className="mt-4">
-                  <ScrollArea className="h-[45vh] rounded-lg border border-border p-4">
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                      {localContent ? (
-                        <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
-                          {localContent}
-                        </pre>
-                      ) : (
-                        <p className="text-muted-foreground text-center py-8">
-                          No text content extracted yet. Try the Re-extract or OCR buttons.
+              )}
+
+              <TabsContent value="content" className="mt-4">
+                <ScrollArea className="h-[45vh] rounded-lg border border-border p-4">
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    {localContent ? (
+                      <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
+                        {localContent}
+                      </pre>
+                    ) : (
+                      <p className="text-muted-foreground text-center py-8">
+                        No text content available
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="summary" className="mt-4">
+                <ScrollArea className="h-[45vh] rounded-lg border border-border p-4">
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    {note.summary ? (
+                      <ReactMarkdown>{note.summary}</ReactMarkdown>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <Brain className="w-12 h-12 text-muted-foreground/30 mb-4" />
+                        <h3 className="font-semibold text-lg mb-2">No summary yet</h3>
+                        <p className="text-muted-foreground text-sm mb-6 max-w-xs">
+                          Generate an AI summary to get a quick overview of this note.
                         </p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-              </Tabs>
-            ) : (
-              <ScrollArea className="h-[45vh] rounded-lg border border-border p-4">
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  {localContent ? (
-                    <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
-                      {localContent}
-                    </pre>
-                  ) : (
-                    <p className="text-muted-foreground text-center py-8">
-                      No text content available
-                    </p>
-                  )}
-                </div>
-              </ScrollArea>
-            )}
+                        <Button onClick={handleQuickSummary} disabled={!hasContent}>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Generate Summary
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
 
             {/* Metadata */}
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
@@ -536,25 +587,25 @@ const NoteViewerDialog = ({
                 </div>
               </div>
 
-            {/* Utility Actions */}
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Utilities</h3>
-              <div className="flex gap-2 flex-wrap">
-                {utilityActions.map((action) => (
-                  <Button
-                    key={action.label}
-                    variant="outline"
-                    size="sm"
-                    onClick={action.onClick}
-                    disabled={action.disabled}
-                    className="flex-1 min-w-[100px]"
-                  >
-                    <action.icon className="w-4 h-4 mr-1" />
-                    {action.label}
-                  </Button>
-                ))}
+              {/* Utility Actions */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3">Utilities</h3>
+                <div className="flex gap-2 flex-wrap">
+                  {utilityActions.map((action) => (
+                    <Button
+                      key={action.label}
+                      variant="outline"
+                      size="sm"
+                      onClick={action.onClick}
+                      disabled={action.disabled}
+                      className="flex-1 min-w-[100px]"
+                    >
+                      <action.icon className="w-4 h-4 mr-1" />
+                      {action.label}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
 
               {/* Tip */}
               {!hasContent && (

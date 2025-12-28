@@ -9,6 +9,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import NoteCard from '@/components/notes/NoteCard';
 import NoteViewerDialog from '@/components/notes/NoteViewerDialog';
+import { streamAIChat } from '@/lib/ai';
+import { updateCourseProgress } from '@/hooks/useCourseProgress';
+import { runAchievementCheck } from '@/hooks/useAchievements';
 
 interface Note {
   id: string;
@@ -36,17 +39,36 @@ const CoursePage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [course, setCourse] = useState<Course | null>(null);
+  const [allCourses, setAllCourses] = useState<{ id: string; name: string; icon: string }[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [flashcardCount, setFlashcardCount] = useState(0);
   const [quizCount, setQuizCount] = useState(0);
+  const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
 
   useEffect(() => {
     if (user && courseId) {
       fetchCourseData();
+      fetchAllCourses();
     }
   }, [user, courseId]);
+
+  const fetchAllCourses = async () => {
+    try {
+      const { data } = await supabase
+        .from('courses')
+        .select('id, name, icon')
+        .eq('user_id', user?.id)
+        .order('name');
+
+      if (data) {
+        setAllCourses(data as any);
+      }
+    } catch (error) {
+      console.error('Error fetching all courses:', error);
+    }
+  };
 
   const fetchCourseData = async () => {
     try {
@@ -116,6 +138,147 @@ const CoursePage = () => {
     }
   };
 
+  const handleCourseUpdate = async (noteId: string, newCourseId: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .update({ course_id: newCourseId })
+        .eq('id', noteId);
+
+      if (error) throw error;
+
+      // If the note is moved to a different course (or no course), remove it from the current list
+      if (newCourseId !== courseId) {
+        setNotes(notes.filter(n => n.id !== noteId));
+        if (selectedNote?.id === noteId) {
+          setSelectedNote(null);
+        }
+        toast({
+          title: 'Note moved',
+          description: 'Note has been moved to another course.',
+        });
+      } else {
+        // If for some reason it's the same course, just update local state (unlikely but safe)
+        setNotes(notes.map(n => n.id === noteId ? { ...n, course_id: newCourseId } : n));
+      }
+
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update course.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const extractJsonFromAI = (raw: string) => {
+    // Try fenced JSON first
+    const fence = raw.match(/```json\s*([\s\S]*?)\s*```/i);
+    if (fence?.[1]) return fence[1].trim();
+
+    // Otherwise try to slice the first JSON object/array out of the stream
+    const trimmed = raw.trim();
+    const objStart = trimmed.indexOf('{');
+    const objEnd = trimmed.lastIndexOf('}');
+    if (objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
+      return trimmed.slice(objStart, objEnd + 1);
+    }
+
+    const arrStart = trimmed.indexOf('[');
+    const arrEnd = trimmed.lastIndexOf(']');
+    if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
+      return trimmed.slice(arrStart, arrEnd + 1);
+    }
+
+    return trimmed;
+  };
+
+  const handleGenerateCourseFlashcards = async () => {
+    if (notes.length === 0) {
+      toast({ title: 'No notes', description: 'Add some notes first!', variant: 'destructive' });
+      return;
+    }
+
+    setGeneratingFlashcards(true);
+    try {
+      // Concatenate all note content (limit to ~20k chars to avoid token limits if needed, but for now send all)
+      const allContent = notes.map(n => n.content).join('\n\n---\n\n').slice(0, 30000);
+
+      let fullResponse = '';
+      await streamAIChat({
+        messages: [],
+        mode: 'flashcards',
+        content: `Create flashcards for this entire course content:\n\n${allContent}`,
+        onDelta: (chunk) => {
+          fullResponse += chunk;
+        },
+        onDone: async () => {
+          try {
+            const jsonStr = extractJsonFromAI(fullResponse);
+            const parsed = JSON.parse(jsonStr);
+            const flashcardsData = Array.isArray(parsed)
+              ? parsed
+              : (parsed.flashcards || []);
+
+            const flashcardsToInsert = flashcardsData
+              .filter((fc: any) => fc?.front && fc?.back)
+              .map((fc: { front: string; back: string }) => ({
+                user_id: user!.id,
+                course_id: courseId,
+                front: fc.front,
+                back: fc.back,
+              }));
+
+            if (flashcardsToInsert.length > 0) {
+              await supabase.from('flashcards').insert(flashcardsToInsert);
+
+              if (user?.id && courseId) {
+                updateCourseProgress(user.id, courseId);
+              }
+
+              // Refresh count
+              const { count } = await supabase
+                .from('flashcards')
+                .select('*', { count: 'exact', head: true })
+                .eq('course_id', courseId)
+                .eq('user_id', user?.id);
+              setFlashcardCount(count || 0);
+            }
+
+            toast({
+              title: `Created ${flashcardsToInsert.length} flashcards! 🎴`,
+              description: 'Go to Flashcards to start studying.',
+            });
+          } catch (e) {
+            console.error('Failed to parse/insert flashcards:', e, fullResponse);
+            toast({
+              title: 'Error',
+              description: 'AI response was not valid flashcard JSON.',
+              variant: 'destructive',
+            });
+          }
+          setGeneratingFlashcards(false);
+        },
+        onError: (err) => {
+          toast({ title: 'Error', description: err, variant: 'destructive' });
+          setGeneratingFlashcards(false);
+        },
+      });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to generate flashcards.', variant: 'destructive' });
+      setGeneratingFlashcards(false);
+    }
+  };
+
+  const handleGenerateCourseQuiz = () => {
+    if (notes.length === 0) {
+      toast({ title: 'No notes', description: 'Add some notes first!', variant: 'destructive' });
+      return;
+    }
+    // Navigate to quiz page with courseId param
+    navigate(`/quizzes?courseId=${courseId}`);
+  };
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[60vh]">
@@ -142,7 +305,7 @@ const CoursePage = () => {
         </Button>
 
         <div className="flex items-center gap-4">
-          <div 
+          <div
             className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
             style={{ backgroundColor: `${course.color}20` }}
           >
@@ -171,7 +334,7 @@ const CoursePage = () => {
           <p className="text-2xl font-bold text-foreground">{notes.length}</p>
           <p className="text-xs text-muted-foreground">Notes</p>
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -182,7 +345,7 @@ const CoursePage = () => {
           <p className="text-2xl font-bold text-foreground">{flashcardCount}</p>
           <p className="text-xs text-muted-foreground">Flashcards</p>
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -193,6 +356,30 @@ const CoursePage = () => {
           <p className="text-2xl font-bold text-foreground">{quizCount}</p>
           <p className="text-xs text-muted-foreground">Quizzes</p>
         </motion.div>
+      </div>
+
+      {/* Course Actions */}
+      <div className="flex gap-3">
+        <Button
+          onClick={handleGenerateCourseFlashcards}
+          disabled={generatingFlashcards || notes.length === 0}
+          className="flex-1 gradient-secondary text-secondary-foreground"
+        >
+          {generatingFlashcards ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Brain className="w-4 h-4 mr-2" />
+          )}
+          Generate Flashcards
+        </Button>
+        <Button
+          onClick={handleGenerateCourseQuiz}
+          disabled={notes.length === 0}
+          className="flex-1 gradient-primary text-primary-foreground"
+        >
+          <GraduationCap className="w-4 h-4 mr-2" />
+          Take Course Quiz
+        </Button>
       </div>
 
       {/* Notes Section */}
@@ -255,6 +442,8 @@ const CoursePage = () => {
           }}
           open={!!selectedNote}
           onOpenChange={(open) => !open && setSelectedNote(null)}
+          courses={allCourses}
+          onCourseChange={(newCourseId) => selectedNote && handleCourseUpdate(selectedNote.id, newCourseId)}
         />
       )}
     </div>

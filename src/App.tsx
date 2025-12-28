@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { OfflineAIProvider } from "@/context/OfflineAIContext";
 import AppLayout from "@/components/layout/AppLayout";
 import OfflineSyncIndicator from "@/components/safety/OfflineSyncIndicator";
 import Auth from "./pages/Auth";
@@ -35,28 +36,30 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <OfflineSyncIndicator />
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
-            <Route path="/course/:courseId" element={<AppLayout><CoursePage /></AppLayout>} />
-            <Route path="/study" element={<AppLayout><Study /></AppLayout>} />
-            <Route path="/notes" element={<AppLayout><SmartNotes /></AppLayout>} />
-            <Route path="/tutor" element={<AppLayout><AITutor /></AppLayout>} />
-            <Route path="/flashcards" element={<AppLayout><Flashcards /></AppLayout>} />
-            <Route path="/quizzes" element={<AppLayout><Quizzes /></AppLayout>} />
-            <Route path="/focus" element={<AppLayout><Focus /></AppLayout>} />
-            <Route path="/achievements" element={<AppLayout><Achievements /></AppLayout>} />
-            <Route path="/plan" element={<AppLayout><Plan /></AppLayout>} />
-            <Route path="/social" element={<AppLayout><Social /></AppLayout>} />
-            <Route path="/career" element={<AppLayout><Career /></AppLayout>} />
-            <Route path="/safety" element={<AppLayout><Safety /></AppLayout>} />
-            <Route path="/profile" element={<AppLayout><Profile /></AppLayout>} />
-            <Route path="/upgrade" element={<AppLayout><Upgrade /></AppLayout>} />
-            <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
-            <Route path="/group/:groupId" element={<AppLayout><GroupChat /></AppLayout>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <OfflineAIProvider>
+            <OfflineSyncIndicator />
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
+              <Route path="/course/:courseId" element={<AppLayout><CoursePage /></AppLayout>} />
+              <Route path="/study" element={<AppLayout><Study /></AppLayout>} />
+              <Route path="/notes" element={<AppLayout><SmartNotes /></AppLayout>} />
+              <Route path="/tutor" element={<AppLayout><AITutor /></AppLayout>} />
+              <Route path="/flashcards" element={<AppLayout><Flashcards /></AppLayout>} />
+              <Route path="/quizzes" element={<AppLayout><Quizzes /></AppLayout>} />
+              <Route path="/focus" element={<AppLayout><Focus /></AppLayout>} />
+              <Route path="/achievements" element={<AppLayout><Achievements /></AppLayout>} />
+              <Route path="/plan" element={<AppLayout><Plan /></AppLayout>} />
+              <Route path="/social" element={<AppLayout><Social /></AppLayout>} />
+              <Route path="/career" element={<AppLayout><Career /></AppLayout>} />
+              <Route path="/safety" element={<AppLayout><Safety /></AppLayout>} />
+              <Route path="/profile" element={<AppLayout><Profile /></AppLayout>} />
+              <Route path="/upgrade" element={<AppLayout><Upgrade /></AppLayout>} />
+              <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
+              <Route path="/group/:groupId" element={<AppLayout><GroupChat /></AppLayout>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </OfflineAIProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -16,6 +16,8 @@ import { Plus, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { streamAIChat } from '@/lib/ai';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
+import { useLocation } from 'react-router-dom';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 
 interface Note {
   id: string;
@@ -39,6 +41,8 @@ interface Course {
 const SmartNotes = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const location = useLocation();
+  const { queueAction, isOnline } = useOfflineSync();
   const [notes, setNotes] = useState<Note[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +60,7 @@ const SmartNotes = () => {
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
   const [originalFilename, setOriginalFilename] = useState<string | null>(null);
   const [showViewer, setShowViewer] = useState(false);
+  const [tutorContext, setTutorContext] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (user) {
@@ -63,6 +68,27 @@ const SmartNotes = () => {
       fetchCourses();
     }
   }, [user]);
+
+  // Check for navigation state to open Tutor
+  useEffect(() => {
+    if (location.state && (location.state as any).openTutor) {
+      const state = location.state as any;
+
+      if (state.tutorContext) {
+        setTutorContext(state.tutorContext);
+      }
+
+      if (state.courseId) {
+        // If we have a noteId in state, use that.
+        if (state.noteId) {
+          const note = notes.find(n => n.id === state.noteId);
+          if (note) setSelectedNote(note);
+        }
+      }
+
+      setShowTutor(true);
+    }
+  }, [location.state, notes]);
 
   const fetchNotes = async () => {
     try {
@@ -108,45 +134,52 @@ const SmartNotes = () => {
 
     setSaving(true);
     try {
-      const { data, error } = await supabase
-        .from('notes')
-        .insert({
-          user_id: user?.id,
-          title: newTitle.trim(),
-          content: newContent.trim(),
-          source_type: uploadedFileUrl ? 'file' : 'text',
-          course_id: selectedCourseId === 'none' ? null : selectedCourseId,
-          file_url: uploadedFileUrl,
-          original_filename: originalFilename,
-        })
-        .select()
-        .single();
+      const newNote = {
+        id: crypto.randomUUID(), // Generate ID locally
+        user_id: user?.id,
+        title: newTitle.trim(),
+        content: newContent.trim(),
+        source_type: uploadedFileUrl ? 'file' : 'text',
+        course_id: selectedCourseId === 'none' ? null : selectedCourseId,
+        file_url: uploadedFileUrl,
+        original_filename: originalFilename,
+        created_at: new Date().toISOString(),
+        summary: null, // Initialize summary as null
+      };
 
-      if (error) throw error;
+      // Use queueAction which handles both online and offline cases
+      const result = await queueAction('notes', 'insert', newNote);
 
-      setNotes([data, ...notes]);
+      if (!result.success && !result.offlineQueued) {
+        throw new Error('Failed to save note');
+      }
+
+      setNotes([newNote, ...notes]);
       setNewTitle('');
       setNewContent('');
       setSelectedCourseId('none');
       setUploadedFileUrl(null);
       setOriginalFilename(null);
       setShowCreate(false);
-      
+
       // Update course progress if note is associated with a course
-      if (data.course_id && user?.id) {
-        updateCourseProgress(user.id, data.course_id);
+      if (newNote.course_id && user?.id) {
+        updateCourseProgress(user.id, newNote.course_id);
       }
-      
+
       // Check for achievements
       if (user?.id) {
         runAchievementCheck(user.id);
       }
-      
-      toast({
-        title: 'Note created! 📝',
-        description: 'Your note has been saved.',
-      });
+
+      if (isOnline) {
+        toast({
+          title: 'Note created! 📝',
+          description: 'Your note has been saved.',
+        });
+      }
     } catch (error) {
+      console.error('Error creating note:', error);
       toast({
         title: 'Error',
         description: 'Failed to create note. Please try again.',
@@ -181,6 +214,34 @@ const SmartNotes = () => {
     setNotes(notes.map((n) => (n.id === noteId ? { ...n, summary } : n)));
   };
 
+  const handleCourseUpdate = async (noteId: string, courseId: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .update({ course_id: courseId })
+        .eq('id', noteId);
+
+      if (error) throw error;
+
+      setNotes(notes.map((n) => (n.id === noteId ? { ...n, course_id: courseId } : n)));
+
+      if (selectedNote?.id === noteId) {
+        setSelectedNote({ ...selectedNote, course_id: courseId });
+      }
+
+      toast({
+        title: 'Course updated',
+        description: 'Note has been moved to the selected course.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update course.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const extractJsonFromAI = (raw: string) => {
     // Try fenced JSON first
     const fence = raw.match(/```json\s*([\s\S]*?)\s*```/i);
@@ -205,7 +266,7 @@ const SmartNotes = () => {
 
   const handleGenerateFlashcards = async (note: Note) => {
     if (!note.content) return;
-    
+
     setGeneratingFlashcards(note.id);
     try {
       let fullResponse = '';
@@ -216,47 +277,47 @@ const SmartNotes = () => {
         onDelta: (chunk) => {
           fullResponse += chunk;
         },
-         onDone: async () => {
-           try {
-             const jsonStr = extractJsonFromAI(fullResponse);
-             const parsed = JSON.parse(jsonStr);
-             const flashcardsData = Array.isArray(parsed)
-               ? parsed
-               : (parsed.flashcards || []);
-             
-             const flashcardsToInsert = flashcardsData
-               .filter((fc: any) => fc?.front && fc?.back)
-               .map((fc: { front: string; back: string }) => ({
-                 user_id: user!.id,
-                 note_id: note.id,
-                 course_id: note.course_id,
-                 front: fc.front,
-                 back: fc.back,
-               }));
+        onDone: async () => {
+          try {
+            const jsonStr = extractJsonFromAI(fullResponse);
+            const parsed = JSON.parse(jsonStr);
+            const flashcardsData = Array.isArray(parsed)
+              ? parsed
+              : (parsed.flashcards || []);
 
-             if (flashcardsToInsert.length > 0) {
-               await supabase.from('flashcards').insert(flashcardsToInsert);
-               
-               // Update course progress if note has a course
-               if (note.course_id && user?.id) {
-                 updateCourseProgress(user.id, note.course_id);
-               }
-             }
+            const flashcardsToInsert = flashcardsData
+              .filter((fc: any) => fc?.front && fc?.back)
+              .map((fc: { front: string; back: string }) => ({
+                user_id: user!.id,
+                note_id: note.id,
+                course_id: note.course_id,
+                front: fc.front,
+                back: fc.back,
+              }));
 
-             toast({
-               title: `Created ${flashcardsToInsert.length} flashcards! 🎴`,
-               description: 'Go to Flashcards to start studying.',
-             });
-           } catch (e) {
-             console.error('Failed to parse/insert flashcards:', e, fullResponse);
-             toast({
-               title: 'Error',
-               description: 'AI response was not valid flashcard JSON. Please try again.',
-               variant: 'destructive',
-             });
-           }
-           setGeneratingFlashcards(null);
-         },
+            if (flashcardsToInsert.length > 0) {
+              await supabase.from('flashcards').insert(flashcardsToInsert);
+
+              // Update course progress if note has a course
+              if (note.course_id && user?.id) {
+                updateCourseProgress(user.id, note.course_id);
+              }
+            }
+
+            toast({
+              title: `Created ${flashcardsToInsert.length} flashcards! 🎴`,
+              description: 'Go to Flashcards to start studying.',
+            });
+          } catch (e) {
+            console.error('Failed to parse/insert flashcards:', e, fullResponse);
+            toast({
+              title: 'Error',
+              description: 'AI response was not valid flashcard JSON. Please try again.',
+              variant: 'destructive',
+            });
+          }
+          setGeneratingFlashcards(null);
+        },
         onError: (err) => {
           toast({ title: 'Error', description: err, variant: 'destructive' });
           setGeneratingFlashcards(null);
@@ -274,13 +335,13 @@ const SmartNotes = () => {
 
   const handleGenerateQuiz = async (note: Note) => {
     if (!note.content) return;
-    
+
     setGeneratingQuiz(note.id);
     toast({
       title: 'Generating quiz...',
       description: 'This will take a few seconds.',
     });
-    
+
     // Navigate to quiz page - quiz generation happens there
     window.location.href = `/quizzes?noteId=${note.id}`;
   };
@@ -291,19 +352,31 @@ const SmartNotes = () => {
     return course ? `${course.icon} ${course.name}` : undefined;
   };
 
-  const filteredNotes = filterCourseId === 'all' 
-    ? notes 
+  const filteredNotes = filterCourseId === 'all'
+    ? notes
     : filterCourseId === 'none'
-    ? notes.filter((n) => !n.course_id)
-    : notes.filter((n) => n.course_id === filterCourseId);
+      ? notes.filter((n) => !n.course_id)
+      : notes.filter((n) => n.course_id === filterCourseId);
 
-  if (showTutor && selectedNote) {
+  if (showTutor) {
+    // Determine props for SocraticTutor
+    const activeCourseId = selectedNote?.course_id || (location.state as any)?.courseId;
+    const activeNote = selectedNote || (activeCourseId ? undefined : undefined); // If course mode, note might be undefined
+
+    // If we are in "Course Mode" (no specific note selected), we want to pass all notes for that course.
+    const courseNotes = activeCourseId ? notes.filter(n => n.course_id === activeCourseId) : (selectedNote ? [selectedNote] : []);
+
     return (
       <SocraticTutor
-        note={selectedNote}
+        note={activeNote}
+        courseId={activeCourseId}
+        courseName={courses.find(c => c.id === activeCourseId)?.name}
+        allNotes={courseNotes}
+        initialContext={tutorContext}
         onBack={() => {
           setShowTutor(false);
           setSelectedNote(null);
+          setTutorContext(undefined);
         }}
       />
     );
@@ -348,7 +421,7 @@ const SmartNotes = () => {
                 onChange={(e) => setNewTitle(e.target.value)}
                 className="text-lg font-medium"
               />
-              
+
               {courses.length > 0 && (
                 <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
                   <SelectTrigger>
@@ -373,7 +446,7 @@ const SmartNotes = () => {
               />
 
               <div className="text-center text-xs text-muted-foreground">or</div>
-              
+
               <Textarea
                 placeholder="Paste or type your notes here... You can paste lecture notes, textbook content, or any study material."
                 value={newContent}
@@ -439,7 +512,7 @@ const SmartNotes = () => {
       {/* Notes List */}
       <section>
         <h2 className="text-lg font-display font-semibold mb-4">Your Notes</h2>
-        
+
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -506,6 +579,10 @@ const SmartNotes = () => {
           onOpenChange={setShowSummary}
           note={selectedNote}
           onUpdateSummary={handleUpdateSummary}
+          onViewNote={() => {
+            setShowSummary(false);
+            setShowViewer(true);
+          }}
         />
       )}
 
@@ -528,6 +605,8 @@ const SmartNotes = () => {
             setShowViewer(false);
             setShowSummary(true);
           }}
+          courses={courses}
+          onCourseChange={(courseId) => handleCourseUpdate(selectedNote.id, courseId)}
         />
       )}
     </div>

@@ -7,11 +7,11 @@ import { useOfflineAI } from '@/hooks/useOfflineAI';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { 
-  Download, 
-  WifiOff, 
-  Check, 
-  Trash2, 
+import {
+  Download,
+  WifiOff,
+  Check,
+  Trash2,
   HardDrive,
   BookOpen,
   FileText,
@@ -167,13 +167,13 @@ const OfflineMode = () => {
           .select('*')
           .eq('user_id', user?.id)
           .eq('course_id', pack.id);
-        
+
         const { data: flashcards } = await supabase
           .from('flashcards')
           .select('*')
           .eq('user_id', user?.id)
           .eq('course_id', pack.id);
-        
+
         data = { notes, flashcards };
       }
 
@@ -226,10 +226,10 @@ const OfflineMode = () => {
 
   const handleTestAI = async () => {
     if (!testPrompt.trim() || !offlineAI.isModelLoaded) return;
-    
+
     setIsTesting(true);
     setTestResponse('');
-    
+
     try {
       const response = await offlineAI.generateText(testPrompt);
       setTestResponse(response);
@@ -289,8 +289,8 @@ const OfflineMode = () => {
           <div className="flex-1">
             <h3 className="font-semibold text-foreground">Offline AI Assistant</h3>
             <p className="text-sm text-muted-foreground">
-              {offlineAI.isModelLoaded 
-                ? `Model loaded: ${offlineAI.modelName}` 
+              {offlineAI.isModelLoaded
+                ? `Model loaded: ${offlineAI.modelName}`
                 : 'Download AI model to use without internet'}
             </p>
           </div>
@@ -312,7 +312,7 @@ const OfflineMode = () => {
               <div className="text-sm">
                 <p className="font-medium text-amber-600 dark:text-amber-400">Mobile Device Detected</p>
                 <p className="text-muted-foreground mt-1">
-                  {offlineAI.isCapacitor 
+                  {offlineAI.isCapacitor
                     ? 'Running as native app. AI will work offline after download.'
                     : 'AI model works in mobile browsers. Download on WiFi for best results.'}
                 </p>
@@ -322,7 +322,7 @@ const OfflineMode = () => {
         )}
 
         {/* Model cached indicator */}
-        {offlineAI.modelCached && !offlineAI.isModelLoaded && !offlineAI.isLoading && (
+        {offlineAI.isModelCached && !offlineAI.isModelLoaded && !offlineAI.isDownloading && (
           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
             <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
               <Check className="w-4 h-4" />
@@ -331,18 +331,26 @@ const OfflineMode = () => {
           </div>
         )}
 
-        {offlineAI.isLoading ? (
+        {offlineAI.isDownloading ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Downloading AI model... {offlineAI.progress}%</span>
+              <span>Downloading AI model... {Math.round(offlineAI.progress)}%</span>
             </div>
             <Progress value={offlineAI.progress} className="h-2" />
             <p className="text-xs text-muted-foreground">
-              {offlineAI.isMobile 
-                ? 'First download may take a few minutes on mobile. Stay on this page.'
-                : 'This may take a few minutes on first download. The model will be cached for future use.'}
+              {offlineAI.progressText || (offlineAI.isMobile
+                ? 'Downloading Llama-3.2-1B (~1.1GB). This may take a while. Please stay on this page.'
+                : 'Downloading Llama-3.2-1B (~1.1GB). This may take a while.')}
             </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={offlineAI.pauseDownload}
+              className="w-full"
+            >
+              Pause Download
+            </Button>
           </div>
         ) : offlineAI.isModelLoaded ? (
           <div className="space-y-4">
@@ -352,11 +360,7 @@ const OfflineMode = () => {
                 <span>AI ready for offline use!</span>
               </div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                {offlineAI.supportsWebGPU ? (
-                  <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-500">WebGPU</span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-500">WASM</span>
-                )}
+                <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-500">WebGPU</span>
               </div>
             </div>
 
@@ -367,8 +371,8 @@ const OfflineMode = () => {
                 placeholder="Ask a study question..."
                 className="w-full p-3 rounded-xl bg-background border border-border text-foreground text-sm resize-none h-20"
               />
-              <Button 
-                onClick={handleTestAI} 
+              <Button
+                onClick={handleTestAI}
                 disabled={isTesting || !testPrompt.trim()}
                 className="w-full"
               >
@@ -391,44 +395,23 @@ const OfflineMode = () => {
                 </div>
               )}
             </div>
-
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={offlineAI.unloadModel}
-                className="text-destructive flex-1"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Unload Model
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={offlineAI.clearModelCache}
-                className="flex-1"
-              >
-                <HardDrive className="w-4 h-4 mr-2" />
-                Clear Cache
-              </Button>
-            </div>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Download a lightweight AI model (~77MB) to get AI assistance without internet connection. 
+              Download Llama-3.2-1B (~1.1GB) to get powerful AI assistance without internet connection.
               {offlineAI.isMobile && ' Optimized for mobile devices.'}
             </p>
             <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-              <li>• Answer study questions</li>
-              <li>• Summarize notes</li>
+              <li>• Answer complex study questions</li>
+              <li>• Summarize notes with high accuracy</li>
               <li>• Generate flashcard hints</li>
-              <li>• Explain concepts</li>
+              <li>• Explain difficult concepts</li>
               {offlineAI.isMobile && <li>• Works offline on your phone</li>}
             </ul>
             <Button onClick={handleLoadAI} className="w-full">
               <Download className="w-4 h-4 mr-2" />
-              Download Offline AI Model
+              {offlineAI.progress > 0 ? 'Resume Download' : 'Download Offline AI Model'}
             </Button>
             {offlineAI.error && (
               <p className="text-xs text-destructive">{offlineAI.error}</p>

@@ -4,8 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle, XCircle, Trophy, BookOpen, Sparkles, Loader2, History } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle, XCircle, Trophy, BookOpen, Sparkles, Loader2, History, Brain } from 'lucide-react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { streamAIChat } from '@/lib/ai';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
@@ -19,6 +19,7 @@ interface QuizAttempt {
   total_questions: number;
   completed_at: string;
   note_id?: string;
+  course_id?: string;
 }
 
 interface QuizQuestion {
@@ -31,6 +32,7 @@ interface QuizQuestion {
 const Quizzes = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +44,7 @@ const Quizzes = () => {
   const [score, setScore] = useState(0);
   const [quizComplete, setQuizComplete] = useState(false);
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(null);
+  const [currentCourseId, setCurrentCourseId] = useState<string | null>(null);
   const [userAnswers, setUserAnswers] = useState<number[]>([]);
   const { startTracking, stopTracking } = useActivityTracking({ activityType: 'quiz' });
   const quizStartTimeRef = useRef<number | null>(null);
@@ -49,12 +52,18 @@ const Quizzes = () => {
   useEffect(() => {
     if (user) {
       fetchAttempts();
-      
-      // Check for noteId in URL params
+
+      // Check for noteId or courseId in URL params
       const noteId = searchParams.get('noteId');
+      const courseId = searchParams.get('courseId');
+
       if (noteId) {
         generateQuizFromNote(noteId);
         searchParams.delete('noteId');
+        setSearchParams(searchParams);
+      } else if (courseId) {
+        generateQuizFromCourse(courseId);
+        searchParams.delete('courseId');
         setSearchParams(searchParams);
       }
     }
@@ -64,7 +73,7 @@ const Quizzes = () => {
     try {
       const { data, error } = await supabase
         .from('quiz_attempts')
-        .select('id, score, total_questions, completed_at, note_id')
+        .select('id, score, total_questions, completed_at, note_id, course_id')
         .eq('user_id', user?.id)
         .order('completed_at', { ascending: false })
         .limit(10);
@@ -78,20 +87,96 @@ const Quizzes = () => {
     }
   };
 
+  const generateQuizFromCourse = async (courseId: string) => {
+    setGenerating(true);
+    setCurrentNoteId(null);
+    setCurrentCourseId(courseId);
+
+    try {
+      // Fetch all notes for the course
+      const { data: notes, error } = await supabase
+        .from('notes')
+        .select('content')
+        .eq('course_id', courseId)
+        .eq('user_id', user?.id);
+
+      if (error || !notes || notes.length === 0) {
+        throw new Error('No notes found for this course');
+      }
+
+      // Concatenate content (limit to ~30k chars)
+      const allContent = notes.map(n => n.content).join('\n\n---\n\n').slice(0, 30000);
+
+      let fullResponse = '';
+      await streamAIChat({
+        messages: [],
+        mode: 'quiz',
+        content: `Create a quiz from this course content:\n\n${allContent}`,
+        onDelta: (chunk) => {
+          fullResponse += chunk;
+        },
+        onDone: () => {
+          try {
+            const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```/);
+            let quizData: QuizQuestion[];
+
+            if (jsonMatch) {
+              quizData = JSON.parse(jsonMatch[1]);
+            } else {
+              quizData = JSON.parse(fullResponse);
+            }
+
+            if (Array.isArray(quizData) && quizData.length > 0) {
+              setActiveQuiz(quizData);
+              setUserAnswers([]);
+              startTracking();
+            } else {
+              throw new Error('Invalid quiz format');
+            }
+          } catch (e) {
+            console.error('Failed to parse quiz:', e, fullResponse);
+            toast({
+              title: 'Error',
+              description: 'Failed to generate quiz.',
+              variant: 'destructive',
+            });
+          }
+          setGenerating(false);
+        },
+        onError: (err) => {
+          toast({ title: 'Error', description: err, variant: 'destructive' });
+          setGenerating(false);
+        },
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load course notes.',
+        variant: 'destructive',
+      });
+      setGenerating(false);
+    }
+  };
+
   const generateQuizFromNote = async (noteId: string) => {
     setGenerating(true);
     setCurrentNoteId(noteId);
+    setCurrentCourseId(null);
 
     try {
       // Fetch the note content
       const { data: note, error } = await supabase
         .from('notes')
-        .select('content')
+        .select('content, course_id')
         .eq('id', noteId)
         .single();
 
       if (error || !note?.content) {
         throw new Error('Note not found');
+      }
+
+      if (note.course_id) {
+        setCurrentCourseId(note.course_id);
       }
 
       let fullResponse = '';
@@ -107,7 +192,7 @@ const Quizzes = () => {
             // Parse the quiz JSON from the response
             const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```/);
             let quizData: QuizQuestion[];
-            
+
             if (jsonMatch) {
               quizData = JSON.parse(jsonMatch[1]);
             } else {
@@ -166,19 +251,8 @@ const Quizzes = () => {
     } else {
       setQuizComplete(true);
       stopTracking(); // Stop activity tracking when quiz ends
-      
+
       try {
-        // Fetch the note to get course_id
-        let courseId: string | null = null;
-        if (currentNoteId) {
-          const { data: noteData } = await supabase
-            .from('notes')
-            .select('course_id')
-            .eq('id', currentNoteId)
-            .maybeSingle();
-          courseId = noteData?.course_id || null;
-        }
-        
         // Build quiz data with user answers for review
         const quizDataWithAnswers = activeQuiz!.map((q, idx) => ({
           question: q.question,
@@ -187,26 +261,26 @@ const Quizzes = () => {
           userAnswer: userAnswers[idx],
           explanation: q.explanation,
         }));
-        
+
         await supabase.from('quiz_attempts').insert([{
           user_id: user!.id,
           score,
           total_questions: activeQuiz!.length,
           quiz_data: { questions: quizDataWithAnswers },
           note_id: currentNoteId,
-          course_id: courseId,
+          course_id: currentCourseId,
         }]);
-        
+
         // Update course progress if there's a course
-        if (courseId && user?.id) {
-          updateCourseProgress(user.id, courseId);
+        if (currentCourseId && user?.id) {
+          updateCourseProgress(user.id, currentCourseId);
         }
-        
+
         // Check for achievements
         if (user?.id) {
           runAchievementCheck(user.id);
         }
-        
+
         fetchAttempts();
       } catch (error) {
         console.error('Failed to save quiz:', error);
@@ -223,6 +297,7 @@ const Quizzes = () => {
     setScore(0);
     setQuizComplete(false);
     setCurrentNoteId(null);
+    setCurrentCourseId(null);
     setUserAnswers([]);
   };
 
@@ -284,24 +359,22 @@ const Quizzes = () => {
                   onClick={() => handleAnswer(i)}
                   disabled={showResult}
                   whileTap={{ scale: showResult ? 1 : 0.98 }}
-                  className={`w-full p-4 rounded-2xl border text-left transition-all ${
-                    showResult
-                      ? isCorrect
-                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700'
-                        : isSelected
+                  className={`w-full p-4 rounded-2xl border text-left transition-all ${showResult
+                    ? isCorrect
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700'
+                      : isSelected
                         ? 'border-red-500 bg-red-500/10 text-red-700'
                         : 'border-border bg-card text-muted-foreground'
-                      : 'border-border bg-card hover:border-primary/50'
-                  }`}
+                    : 'border-border bg-card hover:border-primary/50'
+                    }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                      showResult && isCorrect
-                        ? 'bg-emerald-500 text-white'
-                        : showResult && isSelected
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${showResult && isCorrect
+                      ? 'bg-emerald-500 text-white'
+                      : showResult && isSelected
                         ? 'bg-red-500 text-white'
                         : 'bg-muted text-foreground'
-                    }`}>
+                      }`}>
                       {String.fromCharCode(65 + i)}
                     </span>
                     <span className="flex-1">{option}</span>
@@ -362,7 +435,7 @@ const Quizzes = () => {
           {percentage}%
         </div>
 
-        <div className="flex gap-3 w-full">
+        <div className="flex gap-3 w-full flex-col sm:flex-row">
           <Button variant="outline" onClick={exitQuiz} className="flex-1">
             Back to Quizzes
           </Button>
@@ -372,6 +445,40 @@ const Quizzes = () => {
             </Button>
           </Link>
         </div>
+
+        {/* Review with Tutor Button */}
+        {score < activeQuiz!.length && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="w-full"
+          >
+            <Button
+              onClick={() => {
+                const missedIndices = activeQuiz!.map((q, i) => userAnswers[i] !== q.correct ? i : -1).filter(i => i !== -1);
+                const context = `I just finished a quiz and got these questions wrong:\n\n` +
+                  missedIndices.map(i => {
+                    const q = activeQuiz![i];
+                    return `- Q: ${q.question}\n  Correct Answer: ${q.options[q.correct]}\n  My Answer: ${q.options[userAnswers[i]]}`;
+                  }).join('\n\n');
+
+                navigate('/notes', {
+                  state: {
+                    openTutor: true,
+                    courseId: currentCourseId,
+                    noteId: currentNoteId,
+                    tutorContext: context
+                  }
+                });
+              }}
+              className="w-full gradient-secondary text-secondary-foreground"
+            >
+              <Brain className="w-4 h-4 mr-2" />
+              Review Missed Questions with Tutor
+            </Button>
+          </motion.div>
+        )}
       </div>
     );
   }
@@ -420,7 +527,7 @@ const Quizzes = () => {
 
           <section>
             <h2 className="text-lg font-display font-semibold mb-4">Recent Attempts</h2>
-            
+
             {attempts.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}

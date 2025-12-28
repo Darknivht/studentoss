@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen, List, BarChart3 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
 import { useActivityTracking } from '@/hooks/useActivityTracking';
@@ -49,10 +49,10 @@ const Flashcards = () => {
         .order('next_review', { ascending: true });
 
       if (error) throw error;
-      
+
       const cards = data || [];
       setFlashcards(cards);
-      
+
       // Filter due cards
       const now = new Date();
       const due = cards.filter((c) => new Date(c.next_review) <= now);
@@ -67,7 +67,7 @@ const Flashcards = () => {
   const calculateNextReview = (card: Flashcard, quality: number) => {
     // SM-2 Algorithm
     let { ease_factor, interval_days, repetitions } = card;
-    
+
     if (quality < 3) {
       // Wrong answer - reset
       repetitions = 0;
@@ -86,16 +86,34 @@ const Flashcards = () => {
 
     // Update ease factor
     ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
-    
+
     const next_review = new Date();
     next_review.setDate(next_review.getDate() + interval_days);
 
     return { ease_factor, interval_days, repetitions, next_review: next_review.toISOString() };
   };
 
+  const navigate = useNavigate();
+  const [missedCards, setMissedCards] = useState<Flashcard[]>([]);
+
+  // ... (keep other state)
+
+  // ... (keep useEffect and fetchFlashcards)
+
+  // ... (keep calculateNextReview)
+
   const handleAnswer = async (quality: number) => {
     const card = dueCards[currentIndex];
     if (!card) return;
+
+    // Track missed cards
+    if (quality < 3) {
+      setMissedCards(prev => {
+        // Avoid duplicates if user sees card multiple times in session (though standard SM-2 here doesn't repeat immediately in same session logic implemented simply)
+        if (prev.some(c => c.id === card.id)) return prev;
+        return [...prev, card];
+      });
+    }
 
     const updates = calculateNextReview(card, quality);
 
@@ -107,7 +125,7 @@ const Flashcards = () => {
 
       // Move to next card
       setIsFlipped(false);
-      
+
       if (currentIndex < dueCards.length - 1) {
         setTimeout(() => setCurrentIndex(currentIndex + 1), 300);
       } else {
@@ -117,7 +135,7 @@ const Flashcards = () => {
           title: 'Session complete! 🎉',
           description: `You reviewed ${dueCards.length} cards.`,
         });
-        
+
         // Update course progress for all unique courses in reviewed cards
         if (user?.id) {
           const courseIds = new Set(dueCards.map(c => c.course_id).filter(Boolean));
@@ -126,11 +144,11 @@ const Flashcards = () => {
               updateCourseProgress(user.id, courseId);
             }
           }
-          
+
           // Check for achievements
           runAchievementCheck(user.id);
         }
-        
+
         fetchFlashcards();
       }
     } catch (error) {
@@ -146,6 +164,7 @@ const Flashcards = () => {
     setStudyMode(true);
     setCurrentIndex(0);
     setIsFlipped(false);
+    setMissedCards([]); // Reset missed cards
     startTracking(); // Start activity tracking
   };
 
@@ -330,6 +349,45 @@ const Flashcards = () => {
                   Go to Notes
                 </Button>
               </Link>
+            </motion.div>
+          )}
+
+          {/* Session Complete / Missed Cards Review */}
+          {!studyMode && missedCards.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-6 rounded-3xl bg-card border border-border mt-6"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Need help with missed cards?</h3>
+                  <p className="text-sm text-muted-foreground">
+                    You struggled with {missedCards.length} cards. The AI Tutor can help you understand them.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => {
+                    const context = `I just finished a flashcard session and struggled with these concepts:\n\n` +
+                      missedCards.map(c => `- Q: ${c.front}\n  A: ${c.back}`).join('\n');
+
+                    // Find a course ID from the cards if possible
+                    const courseId = missedCards[0]?.course_id || dueCards[0]?.course_id;
+
+                    navigate('/notes', {
+                      state: {
+                        openTutor: true,
+                        courseId: courseId,
+                        tutorContext: context
+                      }
+                    });
+                  }}
+                  className="gradient-secondary text-secondary-foreground"
+                >
+                  <Brain className="w-4 h-4 mr-2" />
+                  Review with Tutor
+                </Button>
+              </div>
             </motion.div>
           )}
         </TabsContent>

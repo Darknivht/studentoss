@@ -1,11 +1,11 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.3466d826a12e410298a159cf4922e191',
+  appId: 'com.studentoss.app',
   appName: 'studentoss',
   webDir: 'dist',
   server: {
-    url: 'https://3466d826-a12e-4102-98a1-59cf4922e191.lovableproject.com?forceHideBadge=true',
+    url: 'https://studentoss.lovable.app?forceHideBadge=true',
     cleartext: true,
   },
   ios: {

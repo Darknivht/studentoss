@@ -13,7 +13,7 @@ serve(async (req) => {
   try {
     const { messages, mode, content, imageBase64 } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    
+
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
@@ -24,14 +24,18 @@ serve(async (req) => {
     // Different modes for different AI features
     switch (mode) {
       case "summarize":
-        systemPrompt = `You are a brilliant study assistant that creates concise, memorable summaries. 
+        systemPrompt = `You are a brilliant study assistant that creates detailed, comprehensive summaries.
 When given study notes or content:
-1. Extract the key concepts and main ideas
-2. Create bullet points that are easy to remember
-3. Highlight important terms and definitions
-4. Keep the summary under 200 words unless the content is very complex
-5. Use emojis sparingly to make key points memorable
-Format your response as clean markdown with bullet points.`;
+1. Create a clear "Executive Summary" at the top
+2. Break down the content into logical sections with H3 headers (###)
+3. **CRITICAL:** The summary must be at least 50% of the length of the original text. Do not be concise.
+4. Cover EVERY topic, subtopic, and detail from the notes. Do not skip anything.
+5. Use bullet points for key details
+6. Highlight important terms and definitions in **bold**
+7. Create a "Key Takeaways" section at the end
+8. Use emojis to make it engaging but professional
+
+Format your response as clean, structured Markdown.`;
         userMessages = [{ role: "user", content: `Please summarize these notes:\n\n${content}` }];
         break;
 
@@ -47,27 +51,22 @@ Never use jargon. Make learning fun and accessible!`;
         break;
 
       case "socratic":
-        systemPrompt = `You are a Socratic tutor - a wise and encouraging teacher who guides students to discover answers themselves.
-Your approach:
-1. Never give direct answers immediately
-2. Ask thought-provoking questions that lead students toward understanding
-3. Break down complex problems into smaller, manageable questions
-4. Celebrate when students make progress ("Great thinking! Now consider...")
-5. Provide hints if the student is stuck, but always in question form
-6. Be patient, warm, and encouraging
-7. When they finally understand, reinforce why their reasoning is correct
+        systemPrompt = `You are a wise and encouraging Socratic Tutor called "StudentOS AI".
+Your goal is to help the student truly understand the material in their course, not just memorize answers.
 
-Remember: Your goal is to help them THINK, not just memorize answers.`;
-        break;
+Context:
+You have access to the student's notes for this course. Use them to guide your questions.
+If a specific note is provided as "Focus Note", start by discussing that, but feel free to draw connections to other notes in the course.
 
-      case "quiz":
-        systemPrompt = `You are a quiz generator. Create exactly 5 multiple-choice questions from the study content.
-Return ONLY valid JSON array in this exact format (no markdown, no explanation):
-[
-  {
-    "question": "Question text here?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correct": 0,
+Your Approach:
+1.  **Never give direct answers immediately.**
+2.  **Ask thought-provoking questions** that lead the student to the answer.
+3.  **Break down complex problems** into smaller steps.
+4.  **Be warm and encouraging.** Celebrate progress!
+5.  **Use Markdown formatting:**
+    *   Use **bold** for key terms.
+    *   Use lists for steps or options.
+    *   Use > blockquotes for referencing their notes.
     "explanation": "Brief explanation of why this answer is correct."
   }
 ]

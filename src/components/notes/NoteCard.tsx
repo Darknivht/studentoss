@@ -32,16 +32,16 @@ interface NoteCardProps {
   courseName?: string;
 }
 
-const NoteCard = ({ 
-  note, 
-  index, 
-  onDelete, 
-  onSummarize, 
+const NoteCard = ({
+  note,
+  index,
+  onDelete,
+  onSummarize,
   onTutor,
   onGenerateFlashcards,
   onGenerateQuiz,
   onViewContent,
-  courseName 
+  courseName
 }: NoteCardProps) => {
   const preview = note.content?.slice(0, 120) + (note.content && note.content.length > 120 ? '...' : '');
   const createdAt = new Date(note.created_at).toLocaleDateString('en-US', {
@@ -54,7 +54,8 @@ const NoteCard = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="p-4 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-elevated transition-all group"
+      onClick={onViewContent}
+      className={`p-4 rounded-2xl bg-card border border-border/50 shadow-sm hover:shadow-elevated transition-all group ${onViewContent ? 'cursor-pointer' : ''}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -71,7 +72,7 @@ const NoteCard = ({
               )}
             </div>
           </div>
-          
+
           <p className="text-sm text-muted-foreground line-clamp-2 ml-10 mb-3">
             {preview || 'No content'}
           </p>
@@ -87,7 +88,10 @@ const NoteCard = ({
             <span className="text-xs text-muted-foreground">{createdAt}</span>
             <span className="text-muted-foreground/30">•</span>
             <button
-              onClick={onSummarize}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSummarize();
+              }}
               className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
             >
               <Sparkles size={12} />
@@ -95,7 +99,10 @@ const NoteCard = ({
             </button>
             <span className="text-muted-foreground/30">•</span>
             <button
-              onClick={onTutor}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTutor();
+              }}
               className="text-xs text-secondary hover:text-secondary/80 font-medium flex items-center gap-1 transition-colors"
             >
               <Brain size={12} />
@@ -105,31 +112,46 @@ const NoteCard = ({
         </div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger className="p-2 rounded-lg hover:bg-muted transition-colors opacity-0 group-hover:opacity-100">
+          <DropdownMenuTrigger
+            onClick={(e) => e.stopPropagation()}
+            className="p-2 rounded-lg hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
+          >
             <MoreVertical size={16} className="text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {onViewContent && (
-              <DropdownMenuItem onClick={onViewContent}>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                onViewContent();
+              }}>
                 <Eye className="w-4 h-4 mr-2" />
                 View Full Content
               </DropdownMenuItem>
             )}
             {onGenerateFlashcards && (
-              <DropdownMenuItem onClick={onGenerateFlashcards}>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                onGenerateFlashcards();
+              }}>
                 <Layers className="w-4 h-4 mr-2" />
                 Generate Flashcards
               </DropdownMenuItem>
             )}
             {onGenerateQuiz && (
-              <DropdownMenuItem onClick={onGenerateQuiz}>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                onGenerateQuiz();
+              }}>
                 <BookOpen className="w-4 h-4 mr-2" />
                 Generate Quiz
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => onDelete(note.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(note.id);
+              }}
               className="text-destructive focus:text-destructive"
             >
               <Trash2 className="w-4 h-4 mr-2" />
