@@ -19,7 +19,9 @@ import {
   Brain,
   Cpu,
   Loader2,
-  Sparkles
+  Sparkles,
+  X,
+  RefreshCw
 } from 'lucide-react';
 
 interface StudyPack {
@@ -322,33 +324,28 @@ const OfflineMode = () => {
           </div>
         )}
 
-        {/* Model cached indicator */}
-        {offlineAI.isModelCached && !offlineAI.isModelLoaded && !offlineAI.isDownloading && (
-          <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-              <Check className="w-4 h-4" />
-              <span>Model cached - loads faster next time!</span>
-            </div>
-          </div>
-        )}
 
         {offlineAI.isDownloading ? (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Downloading AI model... {Math.round(offlineAI.progress)}%</span>
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Downloading AI model...</span>
+              </div>
+              <span className="font-medium text-foreground">{Math.round(offlineAI.progress)}%</span>
             </div>
-            <Progress value={offlineAI.progress} className="h-2" />
+            <Progress value={offlineAI.progress} className="h-3" />
             <p className="text-xs text-muted-foreground">
               {offlineAI.progressText || 'This may take a while. Please stay on this page.'}
             </p>
             <Button
-              variant="outline"
+              variant="destructive"
               size="sm"
-              onClick={offlineAI.pauseDownload}
+              onClick={offlineAI.cancelDownload}
               className="w-full"
             >
-              Pause Download
+              <X className="w-4 h-4 mr-2" />
+              Cancel Download
             </Button>
           </div>
         ) : offlineAI.isModelLoaded ? (
@@ -358,8 +355,16 @@ const OfflineMode = () => {
                 <Check className="w-4 h-4" />
                 <span>AI ready for offline use!</span>
               </div>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-500">WebGPU</span>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-500 text-xs">WebGPU</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => offlineAI.deleteModel()}
+                  className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
             </div>
 
@@ -393,6 +398,58 @@ const OfflineMode = () => {
                   <p className="text-sm text-foreground">{testResponse}</p>
                 </div>
               )}
+            </div>
+          </div>
+        ) : offlineAI.isModelCached ? (
+          /* Cached model - show load or delete options */
+          <div className="space-y-4">
+            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                  <Check className="w-4 h-4" />
+                  <span>Model downloaded: {AVAILABLE_MODELS.find(m => m.id === offlineAI.cachedModelId)?.name}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button onClick={() => offlineAI.startDownload()} className="flex-1">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Load Model
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => offlineAI.deleteModel()}
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <p className="text-xs text-muted-foreground text-center">
+              Or download a different model below
+            </p>
+            
+            {/* Model Selection for switching */}
+            <div className="space-y-2">
+              <Select
+                value={offlineAI.selectedModelId}
+                onValueChange={(value) => offlineAI.setSelectedModelId(value as any)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a different model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABLE_MODELS.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">{model.name}</span>
+                        <span className="text-xs text-muted-foreground">{model.size} • {model.recommended}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         ) : (
