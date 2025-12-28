@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useOfflineAI } from '@/hooks/useOfflineAI';
+import { useOfflineAI, AVAILABLE_MODELS } from '@/hooks/useOfflineAI';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -297,9 +298,9 @@ const OfflineMode = () => {
           {/* Device indicator */}
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             {offlineAI.isMobile ? (
-              <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">📱 Mobile</span>
+              <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">Mobile</span>
             ) : (
-              <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-500">💻 Desktop</span>
+              <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-500">Desktop</span>
             )}
           </div>
         </div>
@@ -339,9 +340,7 @@ const OfflineMode = () => {
             </div>
             <Progress value={offlineAI.progress} className="h-2" />
             <p className="text-xs text-muted-foreground">
-              {offlineAI.progressText || (offlineAI.isMobile
-                ? 'Downloading Llama-3.2-1B (~1.1GB). This may take a while. Please stay on this page.'
-                : 'Downloading Llama-3.2-1B (~1.1GB). This may take a while.')}
+              {offlineAI.progressText || 'This may take a while. Please stay on this page.'}
             </p>
             <Button
               variant="outline"
@@ -397,11 +396,42 @@ const OfflineMode = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Download Llama-3.2-1B (~1.1GB) to get powerful AI assistance without internet connection.
-              {offlineAI.isMobile && ' Optimized for mobile devices.'}
-            </p>
+          <div className="space-y-4">
+            {/* Model Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Select Model</label>
+              <Select
+                value={offlineAI.selectedModelId}
+                onValueChange={(value) => offlineAI.setSelectedModelId(value as any)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABLE_MODELS.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">{model.name}</span>
+                        <span className="text-xs text-muted-foreground">{model.size} • {model.recommended}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {/* Selected model info */}
+              {(() => {
+                const selected = AVAILABLE_MODELS.find(m => m.id === offlineAI.selectedModelId);
+                return selected ? (
+                  <div className="p-3 bg-muted/50 rounded-lg text-sm">
+                    <p className="font-medium text-foreground">{selected.name}</p>
+                    <p className="text-muted-foreground">{selected.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Size: {selected.size}</p>
+                  </div>
+                ) : null;
+              })()}
+            </div>
+
             <ul className="text-sm text-muted-foreground space-y-1 ml-4">
               <li>• Answer complex study questions</li>
               <li>• Summarize notes with high accuracy</li>
@@ -409,10 +439,12 @@ const OfflineMode = () => {
               <li>• Explain difficult concepts</li>
               {offlineAI.isMobile && <li>• Works offline on your phone</li>}
             </ul>
-            <Button onClick={handleLoadAI} className="w-full">
+            
+            <Button onClick={() => offlineAI.startDownload()} className="w-full">
               <Download className="w-4 h-4 mr-2" />
               {offlineAI.progress > 0 ? 'Resume Download' : 'Download Offline AI Model'}
             </Button>
+            
             {offlineAI.error && (
               <p className="text-xs text-destructive">{offlineAI.error}</p>
             )}

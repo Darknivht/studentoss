@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useOfflineAIContext } from '@/context/OfflineAIContext';
+import { useOfflineAIContext, AVAILABLE_MODELS, ModelId } from '@/context/OfflineAIContext';
 import { useToast } from '@/hooks/use-toast';
 
 export const useOfflineAI = () => {
@@ -108,12 +108,16 @@ export const useOfflineAI = () => {
 
   return {
     ...context,
-    loadModel: context.startDownload, // Alias for compatibility
+    loadModel: context.startDownload,
     generateText,
     summarize,
     answerQuestion,
     generateFlashcardHint,
     isCapacitor,
     isMobile,
+    availableModels: AVAILABLE_MODELS,
   };
 };
+
+export type { ModelId };
+export { AVAILABLE_MODELS };

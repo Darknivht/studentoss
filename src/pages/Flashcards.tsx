@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen, List, BarChart3 } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen, List, BarChart3, Brain } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
