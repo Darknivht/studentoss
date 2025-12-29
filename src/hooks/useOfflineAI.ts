@@ -1,17 +1,17 @@
 import { useCallback } from 'react';
-import { useOfflineAIContext, AVAILABLE_MODELS, ModelId } from '@/context/OfflineAIContext';
+import { useOfflineAIContext, AVAILABLE_MODELS, ModelId, DeviceCapabilities } from '@/context/OfflineAIContext';
 import { useToast } from '@/hooks/use-toast';
 
 export const useOfflineAI = () => {
   const { toast } = useToast();
   const context = useOfflineAIContext();
-  const { engine, isModelLoaded } = context;
+  const { engine, isModelLoaded, deviceCapabilities } = context;
 
   // Check if running in Capacitor (native mobile)
   const isCapacitor = typeof (window as any).Capacitor !== 'undefined';
 
   // Check if mobile device
-  const isMobile = isCapacitor || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isMobile = isCapacitor || deviceCapabilities?.isMobile || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   const generateText = useCallback(async (prompt: string, maxLength: number = 250): Promise<string> => {
     if (!engine || !isModelLoaded) {
@@ -119,5 +119,5 @@ export const useOfflineAI = () => {
   };
 };
 
-export type { ModelId };
+export type { ModelId, DeviceCapabilities };
 export { AVAILABLE_MODELS };

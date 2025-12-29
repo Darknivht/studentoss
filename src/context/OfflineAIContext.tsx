@@ -2,6 +2,18 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useToast } from '@/hooks/use-toast';
 import * as webllm from '@mlc-ai/web-llm';
 
+// Device capability detection
+export interface DeviceCapabilities {
+  supportsWebGPU: boolean;
+  gpuVendor: string | null;
+  gpuDevice: string | null;
+  estimatedMemoryGB: number;
+  isMobile: boolean;
+  isLowEnd: boolean;
+  recommendedModelId: ModelId;
+  webGPUError: string | null;
+}
+
 // Available models for user selection - using correct WebLLM model IDs
 export const AVAILABLE_MODELS = [
   {
@@ -9,6 +21,8 @@ export const AVAILABLE_MODELS = [
     name: "Qwen 0.5B (Lite)",
     description: "Smallest model, works on low-end devices",
     size: "~350MB",
+    sizeBytes: 350 * 1024 * 1024,
+    minMemoryGB: 2,
     recommended: "Low-end phones & tablets"
   },
   {
@@ -16,6 +30,8 @@ export const AVAILABLE_MODELS = [
     name: "Llama 3.2 1B (Standard)",
     description: "Good balance of speed and quality",
     size: "~1.1GB",
+    sizeBytes: 1.1 * 1024 * 1024 * 1024,
+    minMemoryGB: 4,
     recommended: "Most devices"
   },
   {
@@ -23,6 +39,8 @@ export const AVAILABLE_MODELS = [
     name: "Llama 3.2 3B (Pro)",
     description: "Best quality, requires more resources",
     size: "~2.5GB",
+    sizeBytes: 2.5 * 1024 * 1024 * 1024,
+    minMemoryGB: 6,
     recommended: "High-end devices"
   }
 ] as const;
@@ -41,16 +59,81 @@ interface OfflineAIContextType {
   modelName: string | null;
   selectedModelId: ModelId;
   isLoading: boolean;
+  deviceCapabilities: DeviceCapabilities | null;
+  isCheckingDevice: boolean;
   startDownload: (modelId?: ModelId) => Promise<void>;
   cancelDownload: () => void;
   deleteModel: (modelId?: ModelId) => Promise<void>;
   setSelectedModelId: (id: ModelId) => void;
+  checkDeviceCapabilities: () => Promise<DeviceCapabilities>;
   engine: webllm.MLCEngine | null;
 }
 
 const OfflineAIContext = createContext<OfflineAIContextType | undefined>(undefined);
 
 const DEFAULT_MODEL: ModelId = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+
+// Helper to detect device capabilities
+async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  let supportsWebGPU = false;
+  let gpuVendor: string | null = null;
+  let gpuDevice: string | null = null;
+  let webGPUError: string | null = null;
+  
+  // Check WebGPU support
+  if ('gpu' in navigator) {
+    try {
+      const adapter = await (navigator as any).gpu.requestAdapter();
+      if (adapter) {
+        supportsWebGPU = true;
+        const info = await adapter.requestAdapterInfo?.();
+        if (info) {
+          gpuVendor = info.vendor || null;
+          gpuDevice = info.device || info.description || null;
+        }
+      } else {
+        webGPUError = "No GPU adapter found. Your browser may not support WebGPU, or your device's GPU may not be compatible.";
+      }
+    } catch (e: any) {
+      webGPUError = e.message || "Failed to initialize WebGPU. Your device may not have a compatible GPU.";
+    }
+  } else {
+    webGPUError = "WebGPU is not supported in this browser. Try Chrome, Edge, or a modern browser on a device with a GPU.";
+  }
+  
+  // Estimate device memory
+  let estimatedMemoryGB = 4; // Default assumption
+  if ('deviceMemory' in navigator) {
+    estimatedMemoryGB = (navigator as any).deviceMemory || 4;
+  }
+  
+  // Determine if low-end device
+  const isLowEnd = isMobile || estimatedMemoryGB < 4 || !supportsWebGPU;
+  
+  // Recommend model based on capabilities
+  let recommendedModelId: ModelId = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+  
+  if (supportsWebGPU) {
+    if (estimatedMemoryGB >= 6 && !isMobile) {
+      recommendedModelId = "Llama-3.2-3B-Instruct-q4f16_1-MLC";
+    } else if (estimatedMemoryGB >= 4) {
+      recommendedModelId = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+    }
+  }
+  
+  return {
+    supportsWebGPU,
+    gpuVendor,
+    gpuDevice,
+    estimatedMemoryGB,
+    isMobile,
+    isLowEnd,
+    recommendedModelId,
+    webGPUError,
+  };
+}
 
 export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { toast } = useToast();
@@ -65,6 +148,8 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [supportsWebGPU, setSupportsWebGPU] = useState(false);
   const [modelName, setModelName] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<ModelId>(DEFAULT_MODEL);
+  const [deviceCapabilities, setDeviceCapabilities] = useState<DeviceCapabilities | null>(null);
+  const [isCheckingDevice, setIsCheckingDevice] = useState(true);
 
   const engineRef = useRef<webllm.MLCEngine | null>(null);
   const isCancelledRef = useRef<boolean>(false);
@@ -90,29 +175,36 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  useEffect(() => {
-    // Check WebGPU support
-    const checkWebGPU = async () => {
-      try {
-        if ('gpu' in navigator) {
-          const adapter = await (navigator as any).gpu.requestAdapter();
-          setSupportsWebGPU(!!adapter);
-        }
-      } catch {
-        setSupportsWebGPU(false);
+  // Check device capabilities function
+  const checkDeviceCapabilities = useCallback(async (): Promise<DeviceCapabilities> => {
+    setIsCheckingDevice(true);
+    try {
+      const capabilities = await detectDeviceCapabilities();
+      setDeviceCapabilities(capabilities);
+      setSupportsWebGPU(capabilities.supportsWebGPU);
+      
+      // Auto-select recommended model if no cached model
+      const cachedModel = await checkCache();
+      if (!cachedModel) {
+        setSelectedModelId(capabilities.recommendedModelId);
       }
-    };
-    
-    checkWebGPU();
+      
+      return capabilities;
+    } finally {
+      setIsCheckingDevice(false);
+    }
+  }, [checkCache]);
+
+  useEffect(() => {
+    // Check device capabilities on mount
+    checkDeviceCapabilities();
 
     // Load saved model preference
     const savedModel = localStorage.getItem('offline_ai_model') as ModelId | null;
     if (savedModel && AVAILABLE_MODELS.some(m => m.id === savedModel)) {
       setSelectedModelId(savedModel);
     }
-
-    checkCache();
-  }, [checkCache]);
+  }, [checkDeviceCapabilities]);
 
   const initProgressCallback = useCallback((report: webllm.InitProgressReport) => {
     // Check if cancelled
@@ -260,10 +352,13 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         modelName,
         selectedModelId,
         isLoading,
+        deviceCapabilities,
+        isCheckingDevice,
         startDownload,
         cancelDownload,
         deleteModel,
         setSelectedModelId,
+        checkDeviceCapabilities,
         engine: engineRef.current,
       }}
     >
