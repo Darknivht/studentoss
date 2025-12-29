@@ -250,6 +250,27 @@ Format as clean, study-ready notes that are easy to review.`;
         userMessages = [{ role: "user", content: `Clean up and organize this lecture transcription:\n\n${content}` }];
         break;
 
+      case "chat":
+        systemPrompt = `You are StudentOS AI, a helpful and encouraging study assistant.
+You help students learn effectively by:
+- Answering questions clearly and thoroughly
+- Providing examples and analogies
+- Breaking down complex topics
+- Being encouraging and supportive
+- Using markdown formatting for clarity
+
+Keep responses helpful but concise unless detail is specifically needed.`;
+        // Use provided messages directly for chat mode
+        break;
+
+      case "quick_answer":
+        systemPrompt = `You are a quick study helper. Give brief, direct answers.
+- Be concise (2-4 sentences max unless more detail is needed)
+- Focus on the core answer
+- Use simple language`;
+        userMessages = [{ role: "user", content: content }];
+        break;
+
       default:
         systemPrompt = `You are a helpful, encouraging AI study assistant called StudentOS AI.
 You help students learn effectively by:
