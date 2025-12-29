@@ -25,8 +25,12 @@ import {
   AlertTriangle,
   Smartphone,
   Monitor,
-  Zap
+  Zap,
+  Cloud,
+  Wifi
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface StudyPack {
   id: string;
@@ -232,7 +236,17 @@ const OfflineMode = () => {
   };
 
   const handleTestAI = async () => {
-    if (!testPrompt.trim() || !offlineAI.isModelLoaded) return;
+    if (!testPrompt.trim()) return;
+    
+    // Check if AI is available (cloud is always available, offline needs model loaded)
+    if (offlineAI.aiMode === 'offline' && !offlineAI.isModelLoaded) {
+      toast({
+        title: 'Model Not Loaded',
+        description: 'Please download the offline AI model first, or switch to Cloud AI.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsTesting(true);
     setTestResponse('');
@@ -240,10 +254,10 @@ const OfflineMode = () => {
     try {
       const response = await offlineAI.generateText(testPrompt);
       setTestResponse(response);
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: 'AI Error',
-        description: 'Failed to generate response',
+        description: error.message || 'Failed to generate response',
         variant: 'destructive',
       });
     } finally {
@@ -287,18 +301,24 @@ const OfflineMode = () => {
         </div>
       </Card>
 
-      {/* Offline AI Section */}
+      {/* AI Mode Selection */}
       <Card className="p-6 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-purple-500/20">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-            <Cpu className="w-6 h-6 text-purple-500" />
+            {offlineAI.aiMode === 'cloud' ? (
+              <Cloud className="w-6 h-6 text-purple-500" />
+            ) : (
+              <Cpu className="w-6 h-6 text-purple-500" />
+            )}
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-foreground">Offline AI Assistant</h3>
+            <h3 className="font-semibold text-foreground">AI Assistant</h3>
             <p className="text-sm text-muted-foreground">
-              {offlineAI.isModelLoaded
-                ? `Model loaded: ${offlineAI.modelName}`
-                : 'Download AI model to use without internet'}
+              {offlineAI.aiMode === 'cloud' 
+                ? 'Using Cloud AI (requires internet)'
+                : offlineAI.isModelLoaded
+                  ? `Offline model: ${offlineAI.modelName}`
+                  : 'Download AI model to use without internet'}
             </p>
           </div>
           {/* Device indicator */}
@@ -316,6 +336,102 @@ const OfflineMode = () => {
             )}
           </div>
         </div>
+
+        {/* AI Mode Toggle */}
+        <div className="mb-4 p-4 bg-background/50 rounded-xl border border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="ai-mode" className="text-sm font-medium">AI Mode</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs ${offlineAI.aiMode === 'cloud' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                <Cloud className="w-3 h-3 inline mr-1" />
+                Cloud
+              </span>
+              <Switch
+                id="ai-mode"
+                checked={offlineAI.aiMode === 'offline'}
+                onCheckedChange={(checked) => offlineAI.setAIMode(checked ? 'offline' : 'cloud')}
+                disabled={!offlineAI.deviceCapabilities?.supportsWebGPU && offlineAI.aiMode === 'cloud'}
+              />
+              <span className={`text-xs ${offlineAI.aiMode === 'offline' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                <WifiOff className="w-3 h-3 inline mr-1" />
+                Offline
+              </span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className={`p-3 rounded-lg border ${offlineAI.aiMode === 'cloud' ? 'border-primary bg-primary/5' : 'border-border bg-muted/30'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <Cloud className="w-4 h-4 text-blue-500" />
+                <span className="font-medium text-foreground">Cloud AI</span>
+              </div>
+              <ul className="text-muted-foreground space-y-0.5">
+                <li>• Powerful AI models</li>
+                <li>• No download required</li>
+                <li>• Requires internet</li>
+              </ul>
+            </div>
+            <div className={`p-3 rounded-lg border ${offlineAI.aiMode === 'offline' ? 'border-primary bg-primary/5' : 'border-border bg-muted/30'} ${!offlineAI.deviceCapabilities?.supportsWebGPU ? 'opacity-50' : ''}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <WifiOff className="w-4 h-4 text-green-500" />
+                <span className="font-medium text-foreground">Offline AI</span>
+              </div>
+              <ul className="text-muted-foreground space-y-0.5">
+                <li>• Works without internet</li>
+                <li>• Privacy-focused</li>
+                <li>• Requires WebGPU</li>
+              </ul>
+            </div>
+          </div>
+          
+          {offlineAI.aiMode === 'cloud' && (
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                <Wifi className="w-3 h-3" />
+                <span>Cloud AI is ready to use!</span>
+              </div>
+              
+              {/* Cloud AI Test Section */}
+              <div className="p-3 bg-background/50 rounded-lg border border-border space-y-3">
+                <textarea
+                  value={testPrompt}
+                  onChange={(e) => setTestPrompt(e.target.value)}
+                  placeholder="Ask a study question..."
+                  className="w-full p-3 rounded-xl bg-background border border-border text-foreground text-sm resize-none h-20"
+                />
+                <Button
+                  onClick={handleTestAI}
+                  disabled={isTesting || !testPrompt.trim()}
+                  className="w-full"
+                >
+                  {isTesting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Thinking...
+                    </>
+                  ) : (
+                    <>
+                      <Cloud className="w-4 h-4 mr-2" />
+                      Ask Cloud AI
+                    </>
+                  )}
+                </Button>
+
+                {testResponse && (
+                  <div className="p-3 bg-muted rounded-xl">
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{testResponse}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Only show offline AI sections when in offline mode */}
+        {offlineAI.aiMode === 'offline' && (
+          <>
 
         {/* Device Capabilities Card */}
         {offlineAI.isCheckingDevice ? (
@@ -654,6 +770,8 @@ const OfflineMode = () => {
               <p className="text-xs text-destructive">{offlineAI.error}</p>
             )}
           </div>
+        )}
+        </>
         )}
       </Card>
 

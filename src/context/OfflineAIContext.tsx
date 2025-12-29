@@ -47,6 +47,9 @@ export const AVAILABLE_MODELS = [
 
 export type ModelId = typeof AVAILABLE_MODELS[number]['id'];
 
+// AI Mode - offline (WebLLM) or cloud (Lovable AI)
+export type AIMode = 'offline' | 'cloud';
+
 interface OfflineAIContextType {
   isDownloading: boolean;
   progress: number;
@@ -61,6 +64,8 @@ interface OfflineAIContextType {
   isLoading: boolean;
   deviceCapabilities: DeviceCapabilities | null;
   isCheckingDevice: boolean;
+  aiMode: AIMode;
+  setAIMode: (mode: AIMode) => void;
   startDownload: (modelId?: ModelId) => Promise<void>;
   cancelDownload: () => void;
   deleteModel: (modelId?: ModelId) => Promise<void>;
@@ -150,6 +155,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [selectedModelId, setSelectedModelId] = useState<ModelId>(DEFAULT_MODEL);
   const [deviceCapabilities, setDeviceCapabilities] = useState<DeviceCapabilities | null>(null);
   const [isCheckingDevice, setIsCheckingDevice] = useState(true);
+  const [aiMode, setAIMode] = useState<AIMode>('cloud'); // Default to cloud, switch to offline if WebGPU available
 
   const engineRef = useRef<webllm.MLCEngine | null>(null);
   const isCancelledRef = useRef<boolean>(false);
@@ -354,6 +360,8 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isLoading,
         deviceCapabilities,
         isCheckingDevice,
+        aiMode,
+        setAIMode,
         startDownload,
         cancelDownload,
         deleteModel,
