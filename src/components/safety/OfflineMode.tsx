@@ -21,7 +21,11 @@ import {
   Loader2,
   Sparkles,
   X,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle,
+  Smartphone,
+  Monitor,
+  Zap
 } from 'lucide-react';
 
 interface StudyPack {
@@ -300,15 +304,110 @@ const OfflineMode = () => {
           {/* Device indicator */}
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             {offlineAI.isMobile ? (
-              <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">Mobile</span>
+              <span className="px-2 py-1 rounded-full bg-primary/10 text-primary flex items-center gap-1">
+                <Smartphone className="w-3 h-3" />
+                Mobile
+              </span>
             ) : (
-              <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-500">Desktop</span>
+              <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 flex items-center gap-1">
+                <Monitor className="w-3 h-3" />
+                Desktop
+              </span>
             )}
           </div>
         </div>
 
-        {/* Capacitor/Mobile specific info */}
-        {offlineAI.isMobile && !offlineAI.isModelLoaded && !offlineAI.isLoading && (
+        {/* Device Capabilities Card */}
+        {offlineAI.isCheckingDevice ? (
+          <div className="mb-4 p-4 bg-muted/50 rounded-xl">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Detecting device capabilities...</span>
+            </div>
+          </div>
+        ) : offlineAI.deviceCapabilities && (
+          <div className="mb-4 p-4 bg-muted/50 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">Device Capabilities</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => offlineAI.checkDeviceCapabilities()}
+                className="h-7 px-2"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${offlineAI.deviceCapabilities.supportsWebGPU ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="text-muted-foreground">
+                  WebGPU: {offlineAI.deviceCapabilities.supportsWebGPU ? 'Supported' : 'Not Available'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Zap className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground">
+                  Memory: ~{offlineAI.deviceCapabilities.estimatedMemoryGB}GB
+                </span>
+              </div>
+              {offlineAI.deviceCapabilities.gpuDevice && (
+                <div className="col-span-2 flex items-center gap-2">
+                  <Cpu className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-muted-foreground truncate">
+                    GPU: {offlineAI.deviceCapabilities.gpuDevice}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Recommended Model */}
+            {!offlineAI.isModelCached && offlineAI.deviceCapabilities.supportsWebGPU && (
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span className="text-xs text-primary font-medium">
+                  Recommended: {AVAILABLE_MODELS.find(m => m.id === offlineAI.deviceCapabilities?.recommendedModelId)?.name}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* WebGPU Not Supported Warning */}
+        {offlineAI.deviceCapabilities && !offlineAI.deviceCapabilities.supportsWebGPU && (
+          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-xl">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="font-medium text-destructive">WebGPU Not Available</p>
+                <p className="text-sm text-muted-foreground">
+                  {offlineAI.deviceCapabilities.webGPUError || "Your device doesn't support WebGPU, which is required for offline AI."}
+                </p>
+                <div className="text-sm text-muted-foreground space-y-1 mt-3">
+                  <p className="font-medium">How to fix:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Use Chrome, Edge, or a modern browser</li>
+                    <li>On Android, try Chrome or Samsung Internet</li>
+                    <li>Ensure your device has a compatible GPU</li>
+                    <li>Some older devices may not support WebGPU</li>
+                  </ul>
+                </div>
+                <a 
+                  href="https://webgpureport.org/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-block text-xs text-primary underline mt-2"
+                >
+                  Check WebGPU compatibility →
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Device Info - only show if WebGPU is supported */}
+        {offlineAI.isMobile && !offlineAI.isModelLoaded && !offlineAI.isLoading && offlineAI.deviceCapabilities?.supportsWebGPU && (
           <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
             <div className="flex items-start gap-2">
               <span className="text-amber-500">📱</span>
@@ -452,15 +551,12 @@ const OfflineMode = () => {
               </Select>
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Model Selection */}
+        ) : offlineAI.deviceCapabilities?.supportsWebGPU === false ? (
+          /* WebGPU not supported - show disabled state */
+          <div className="space-y-4 opacity-50">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Select Model</label>
-              <Select
-                value={offlineAI.selectedModelId}
-                onValueChange={(value) => offlineAI.setSelectedModelId(value as any)}
-              >
+              <Select disabled value={offlineAI.selectedModelId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Choose a model" />
                 </SelectTrigger>
@@ -475,15 +571,67 @@ const OfflineMode = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            
+            <Button disabled className="w-full">
+              <Download className="w-4 h-4 mr-2" />
+              WebGPU Required for Offline AI
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Model Selection */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">Select Model</label>
+                {offlineAI.deviceCapabilities && (
+                  <span className="text-xs text-primary">
+                    ✨ {offlineAI.selectedModelId === offlineAI.deviceCapabilities.recommendedModelId ? 'Recommended for your device' : ''}
+                  </span>
+                )}
+              </div>
+              <Select
+                value={offlineAI.selectedModelId}
+                onValueChange={(value) => offlineAI.setSelectedModelId(value as any)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABLE_MODELS.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col items-start">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{model.name}</span>
+                          {offlineAI.deviceCapabilities?.recommendedModelId === model.id && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary">Recommended</span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">{model.size} • {model.recommended}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               
               {/* Selected model info */}
               {(() => {
                 const selected = AVAILABLE_MODELS.find(m => m.id === offlineAI.selectedModelId);
+                const deviceMem = offlineAI.deviceCapabilities?.estimatedMemoryGB || 4;
+                const isCompatible = selected && deviceMem >= selected.minMemoryGB;
+                
                 return selected ? (
-                  <div className="p-3 bg-muted/50 rounded-lg text-sm">
-                    <p className="font-medium text-foreground">{selected.name}</p>
+                  <div className={`p-3 rounded-lg text-sm ${isCompatible ? 'bg-muted/50' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-foreground">{selected.name}</p>
+                      {!isCompatible && (
+                        <span className="text-xs text-amber-600 dark:text-amber-400">May be slow on your device</span>
+                      )}
+                    </div>
                     <p className="text-muted-foreground">{selected.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Size: {selected.size}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Size: {selected.size} • Requires ~{selected.minMemoryGB}GB RAM
+                    </p>
                   </div>
                 ) : null;
               })()}
