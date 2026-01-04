@@ -9,6 +9,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { streamAIChat } from '@/lib/ai';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
+import { updateStreak } from '@/lib/streak';
 import { useActivityTracking } from '@/hooks/useActivityTracking';
 import { QuizHistory } from '@/components/quiz/QuizHistory';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

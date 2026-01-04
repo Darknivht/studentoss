@@ -63,32 +63,79 @@ const FillBlanks = ({ onBack }: FillBlanksProps) => {
       await streamAIChat({
         messages: [],
         mode: 'chat',
-content: `Create 5 fill-in-the-blank exercises from this content. Remove key terms and ask students to fill them in.
-Return ONLY a valid JSON array, no markdown, no explanation:
-[
-  { "sentence": "The ___ is the powerhouse of the cell.", "blank": "mitochondria", "hint": "Organelle" }
-]
+        content: `Create 5 fill-in-the-blank exercises from this content.
+Use this format for each exercise:
+---
+Sentence: The ___ is the powerhouse of the cell.
+Answer: mitochondria
+Hint: Organelle
+---
 
 Content:
 ${note.content}`,
         onDelta: (chunk) => { fullResponse += chunk; },
         onDone: () => {
           try {
-            // Try to find JSON array in response
-            const jsonMatch = fullResponse.match(/\[[\s\S]*?\]/);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setBlanks(parsed);
-              } else {
-                throw new Error('Invalid format');
+            console.log('Raw AI Response:', fullResponse);
+            let parsedBlanks: FillBlank[] = [];
+
+            // Strategy 1: Block-based parsing (Sentence/Answer/Hint)
+            const blocks = fullResponse.split(/---|___|\*\*\*/);
+            for (const block of blocks) {
+              if (!block.trim()) continue;
+
+              const sentenceMatch = block.match(/Sentence:\s*(.+?)(?:\n|$)/i);
+              const answerMatch = block.match(/(?:Answer|Blank):\s*(.+?)(?:\n|$)/i);
+              const hintMatch = block.match(/Hint:\s*(.+?)(?:\n|$)/i);
+
+              if (sentenceMatch && answerMatch) {
+                parsedBlanks.push({
+                  sentence: sentenceMatch[1].trim(),
+                  blank: answerMatch[1].trim(),
+                  hint: hintMatch ? hintMatch[1].trim() : 'Review the notes'
+                });
               }
+            }
+
+            // Strategy 2: Pipe-based parsing fallback
+            if (parsedBlanks.length === 0) {
+              const lines = fullResponse.split('\n');
+              for (const line of lines) {
+                const match = line.match(/(?:Sentence:\s*)?(.+?)\s*\|\s*(?:Blank:\s*)?(.+?)(?:\s*\|\s*(?:Hint:\s*)?(.+))?$/i);
+                if (match && match[1].includes('___')) {
+                  parsedBlanks.push({
+                    sentence: match[1].trim(),
+                    blank: match[2].trim(),
+                    hint: match[3] ? match[3].trim() : 'Review the notes'
+                  });
+                }
+              }
+            }
+
+            // Strategy 3: JSON fallback
+            if (parsedBlanks.length === 0) {
+              const jsonMatch = fullResponse.match(/\[[\s\S]*?\]/);
+              if (jsonMatch) {
+                try {
+                  const parsed = JSON.parse(jsonMatch[0]);
+                  if (Array.isArray(parsed)) parsedBlanks = parsed;
+                } catch (e) { /* ignore */ }
+              }
+            }
+
+            if (parsedBlanks.length > 0) {
+              setBlanks(parsedBlanks);
             } else {
-              throw new Error('No JSON found');
+              console.error('Failed to parse any exercises from:', fullResponse);
+              throw new Error('Could not parse exercises from AI response');
             }
           } catch (e) {
             console.error('Parse error:', e, fullResponse);
-            toast({ title: 'Error', description: 'Failed to parse exercises', variant: 'destructive' });
+            toast({
+              title: 'Error',
+              description: 'Failed to generate exercises. Please try again.',
+              variant: 'destructive'
+            });
           }
           setLoading(false);
         },

@@ -9,6 +9,7 @@ import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen, List, BarChart3, Br
 import { Link, useNavigate } from 'react-router-dom';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
+import { updateStreak } from '@/lib/streak';
 import { useActivityTracking } from '@/hooks/useActivityTracking';
 import FlashcardsList from '@/components/flashcards/FlashcardsList';
 import StudyStatistics from '@/components/study/StudyStatistics';
@@ -146,6 +147,7 @@ const Flashcards = () => {
           }
 
           // Check for achievements
+          await updateStreak(user.id);
           runAchievementCheck(user.id);
         }
 

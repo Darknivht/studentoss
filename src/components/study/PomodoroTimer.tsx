@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Play, Pause, RotateCcw, Coffee, Brain, CheckCircle, Lock, Shield } from 'lucide-react';
+import { updateStreak } from '@/lib/streak';
 import FocusModeOverlay from '@/components/focus/FocusModeOverlay';
 
 interface PomodoroTimerProps {
@@ -48,7 +49,7 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
 
   const handleSessionComplete = async () => {
     setIsRunning(false);
-    
+
     if (sessionType === 'focus' && user) {
       try {
         // Save completed focus session
@@ -60,47 +61,26 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
         });
 
         // Update streak and XP
-        const today = new Date().toISOString().split('T')[0];
+        await updateStreak(user.id);
+
+        // Award XP for session
         const { data: profile } = await supabase
           .from('profiles')
-          .select('current_streak, longest_streak, last_study_date, total_xp')
+          .select('total_xp')
           .eq('user_id', user.id)
           .single();
 
         if (profile) {
-          const lastDate = profile.last_study_date;
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-          let newStreak = profile.current_streak || 0;
-          
-          // If last study was yesterday, increment streak
-          // If last study was today, keep streak
-          // Otherwise, reset to 1
-          if (lastDate === yesterdayStr) {
-            newStreak += 1;
-          } else if (lastDate !== today) {
-            newStreak = 1;
-          }
-
-          const newLongest = Math.max(newStreak, profile.longest_streak || 0);
           const newXP = (profile.total_xp || 0) + 25; // 25 XP per session
-
           await supabase
             .from('profiles')
-            .update({
-              current_streak: newStreak,
-              longest_streak: newLongest,
-              last_study_date: today,
-              total_xp: newXP,
-            })
+            .update({ total_xp: newXP })
             .eq('user_id', user.id);
         }
-        
+
         setCompletedPomodoros((prev) => prev + 1);
         onSessionComplete?.();
-        
+
         toast({
           title: 'Great work! 🎉',
           description: '+25 XP earned! Time for a break.',
@@ -127,7 +107,7 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
   const toggleTimer = () => {
     const newIsRunning = !isRunning;
     setIsRunning(newIsRunning);
-    
+
     // Activate focus mode when starting a focus session
     if (newIsRunning && sessionType === 'focus' && focusModeEnabled) {
       setIsFocusModeActive(true);
@@ -195,141 +175,139 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
         animate={{ opacity: 1, y: 0 }}
         className="p-6 rounded-3xl bg-card border border-border shadow-lg"
       >
-      {/* Session Type Tabs */}
-      <div className="flex gap-2 mb-6">
-        {(['focus', 'short_break', 'long_break'] as const).map((type) => (
-          <button
-            key={type}
-            onClick={() => switchSession(type)}
-            className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium transition-all ${
-              sessionType === type
+        {/* Session Type Tabs */}
+        <div className="flex gap-2 mb-6">
+          {(['focus', 'short_break', 'long_break'] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => switchSession(type)}
+              className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium transition-all ${sessionType === type
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            {type === 'focus' && <Brain className="w-4 h-4 inline mr-1" />}
-            {type === 'short_break' && <Coffee className="w-4 h-4 inline mr-1" />}
-            {type === 'long_break' && <Coffee className="w-4 h-4 inline mr-1" />}
-            {type === 'focus' ? 'Focus' : type === 'short_break' ? 'Short' : 'Long'}
-          </button>
-        ))}
-      </div>
-
-      {/* Timer Circle */}
-      <div className="relative w-48 h-48 mx-auto mb-6">
-        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-          <circle
-            cx="50"
-            cy="50"
-            r="45"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="8"
-            className="text-muted"
-          />
-          <motion.circle
-            cx="50"
-            cy="50"
-            r="45"
-            fill="none"
-            strokeWidth="8"
-            strokeLinecap="round"
-            className={`bg-gradient-to-r ${getSessionColor()}`}
-            style={{ stroke: 'url(#gradient)' }}
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: progress / 100 }}
-            transition={{ duration: 0.5 }}
-          />
-          <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="hsl(var(--primary))" />
-              <stop offset="100%" stopColor="hsl(var(--accent))" />
-            </linearGradient>
-          </defs>
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-display font-bold text-foreground">
-            {formatTime(timeLeft)}
-          </span>
-          <span className="text-sm text-muted-foreground capitalize">
-            {sessionType.replace('_', ' ')}
-          </span>
+                }`}
+            >
+              {type === 'focus' && <Brain className="w-4 h-4 inline mr-1" />}
+              {type === 'short_break' && <Coffee className="w-4 h-4 inline mr-1" />}
+              {type === 'long_break' && <Coffee className="w-4 h-4 inline mr-1" />}
+              {type === 'focus' ? 'Focus' : type === 'short_break' ? 'Short' : 'Long'}
+            </button>
+          ))}
         </div>
-      </div>
 
-      {/* Controls */}
-      <div className="flex justify-center gap-3">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={resetTimer}
-          className="rounded-full w-12 h-12"
-        >
-          <RotateCcw className="w-5 h-5" />
-        </Button>
-        <Button
-          onClick={toggleTimer}
-          className={`rounded-full w-16 h-16 gradient-primary text-primary-foreground`}
-        >
-          {isRunning ? (
-            <Pause className="w-7 h-7" />
-          ) : (
-            <Play className="w-7 h-7 ml-1" />
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={handleSessionComplete}
-          className="rounded-full w-12 h-12"
-          disabled={timeLeft === DURATIONS[sessionType]}
-        >
-          <CheckCircle className="w-5 h-5" />
-        </Button>
-      </div>
+        {/* Timer Circle */}
+        <div className="relative w-48 h-48 mx-auto mb-6">
+          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+            <circle
+              cx="50"
+              cy="50"
+              r="45"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="8"
+              className="text-muted"
+            />
+            <motion.circle
+              cx="50"
+              cy="50"
+              r="45"
+              fill="none"
+              strokeWidth="8"
+              strokeLinecap="round"
+              className={`bg-gradient-to-r ${getSessionColor()}`}
+              style={{ stroke: 'url(#gradient)' }}
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: progress / 100 }}
+              transition={{ duration: 0.5 }}
+            />
+            <defs>
+              <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="hsl(var(--primary))" />
+                <stop offset="100%" stopColor="hsl(var(--accent))" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-4xl font-display font-bold text-foreground">
+              {formatTime(timeLeft)}
+            </span>
+            <span className="text-sm text-muted-foreground capitalize">
+              {sessionType.replace('_', ' ')}
+            </span>
+          </div>
+        </div>
 
-      {/* Completed Sessions */}
-      <div className="mt-6 flex justify-center gap-2">
-        {[...Array(4)].map((_, i) => (
-          <div
-            key={i}
-            className={`w-3 h-3 rounded-full transition-colors ${
-              i < completedPomodoros % 4
+        {/* Controls */}
+        <div className="flex justify-center gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={resetTimer}
+            className="rounded-full w-12 h-12"
+          >
+            <RotateCcw className="w-5 h-5" />
+          </Button>
+          <Button
+            onClick={toggleTimer}
+            className={`rounded-full w-16 h-16 gradient-primary text-primary-foreground`}
+          >
+            {isRunning ? (
+              <Pause className="w-7 h-7" />
+            ) : (
+              <Play className="w-7 h-7 ml-1" />
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleSessionComplete}
+            className="rounded-full w-12 h-12"
+            disabled={timeLeft === DURATIONS[sessionType]}
+          >
+            <CheckCircle className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* Completed Sessions */}
+        <div className="mt-6 flex justify-center gap-2">
+          {[...Array(4)].map((_, i) => (
+            <div
+              key={i}
+              className={`w-3 h-3 rounded-full transition-colors ${i < completedPomodoros % 4
                 ? 'bg-primary'
                 : 'bg-muted'
-            }`}
-          />
-        ))}
-      </div>
-      <p className="text-center text-xs text-muted-foreground mt-2">
-        {completedPomodoros} sessions completed today
-      </p>
-
-      {/* Focus Mode Toggle */}
-      <div className="mt-6 pt-4 border-t border-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-primary" />
-            <div>
-              <p className="text-sm font-medium text-foreground">Focus Mode</p>
-              <p className="text-xs text-muted-foreground">
-                Dims screen & blocks navigation
-              </p>
-            </div>
-          </div>
-          <Switch
-            checked={focusModeEnabled}
-            onCheckedChange={setFocusModeEnabled}
-          />
+                }`}
+            />
+          ))}
         </div>
-        {focusModeEnabled && (
-          <p className="text-xs text-primary mt-2 flex items-center gap-1">
-            <Lock className="w-3 h-3" />
-            Focus mode will activate when you start
-          </p>
-        )}
-      </div>
-    </motion.div>
+        <p className="text-center text-xs text-muted-foreground mt-2">
+          {completedPomodoros} sessions completed today
+        </p>
+
+        {/* Focus Mode Toggle */}
+        <div className="mt-6 pt-4 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Focus Mode</p>
+                <p className="text-xs text-muted-foreground">
+                  Dims screen & blocks navigation
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={focusModeEnabled}
+              onCheckedChange={setFocusModeEnabled}
+            />
+          </div>
+          {focusModeEnabled && (
+            <p className="text-xs text-primary mt-2 flex items-center gap-1">
+              <Lock className="w-3 h-3" />
+              Focus mode will activate when you start
+            </p>
+          )}
+        </div>
+      </motion.div>
     </>
   );
 };

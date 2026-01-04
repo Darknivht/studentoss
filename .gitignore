@@ -44,3 +44,5 @@ www/
 
 # Java
 jdk-21/
+jdk*/
+*.zip

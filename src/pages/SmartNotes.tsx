@@ -16,6 +16,7 @@ import { Plus, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { streamAIChat } from '@/lib/ai';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
+import { updateStreak } from '@/lib/streak';
 import { useLocation } from 'react-router-dom';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 
