@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen, List, BarChart3, Brain } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Check, X, Sparkles, BookOpen, List, BarChart3, Brain, WifiOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
@@ -13,6 +13,7 @@ import { updateStreak } from '@/lib/streak';
 import { useActivityTracking } from '@/hooks/useActivityTracking';
 import FlashcardsList from '@/components/flashcards/FlashcardsList';
 import StudyStatistics from '@/components/study/StudyStatistics';
+import { useOfflineData } from '@/hooks/useOfflineData';
 
 interface Flashcard {
   id: string;
@@ -29,6 +30,7 @@ interface Flashcard {
 const Flashcards = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const offlineData = useOfflineData();
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [dueCards, setDueCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -43,20 +45,13 @@ const Flashcards = () => {
 
   const fetchFlashcards = async () => {
     try {
-      const { data, error } = await supabase
-        .from('flashcards')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('next_review', { ascending: true });
-
-      if (error) throw error;
-
-      const cards = data || [];
+      // Use offline-aware fetch that falls back to cached data
+      const cards = await offlineData.fetchFlashcards();
       setFlashcards(cards);
 
       // Filter due cards
       const now = new Date();
-      const due = cards.filter((c) => new Date(c.next_review) <= now);
+      const due = cards.filter((c: any) => new Date(c.next_review) <= now);
       setDueCards(due);
     } catch (error) {
       console.error('Error fetching flashcards:', error);
@@ -272,9 +267,17 @@ const Flashcards = () => {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h1 className="text-2xl font-display font-bold text-foreground">Flashcards</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-display font-bold text-foreground">Flashcards</h1>
+          {!offlineData.isOnline && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs">
+              <WifiOff className="w-3 h-3" />
+              Offline
+            </span>
+          )}
+        </div>
         <p className="text-muted-foreground text-sm mt-1">
-          Spaced repetition for better retention
+          {offlineData.isOnline ? 'Spaced repetition for better retention' : 'Viewing cached flashcards'}
         </p>
       </motion.header>
 

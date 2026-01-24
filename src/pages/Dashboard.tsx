@@ -8,9 +8,12 @@ import CourseCard from '@/components/dashboard/CourseCard';
 import AddCourseDialog from '@/components/dashboard/AddCourseDialog';
 import StreakCard from '@/components/dashboard/StreakCard';
 import StudyProgressWidget from '@/components/dashboard/StudyProgressWidget';
-import { Settings } from 'lucide-react';
+import { Settings, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { checkAndResetStreak } from '@/lib/streak';
+import { useOfflineData, cacheDataLocally, getCachedData } from '@/hooks/useOfflineData';
+
+const OFFLINE_PROFILE_KEY = 'offline_profile_cache';
 
 interface Course {
   id: string;
@@ -31,6 +34,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const offlineData = useOfflineData();
   const [courses, setCourses] = useState<Course[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,35 +47,54 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
-      // First check and reset streak if needed
-      const streakResult = await checkAndResetStreak(user!.id);
-      
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('full_name, total_xp, current_streak, longest_streak')
-        .eq('user_id', user?.id)
-        .single();
+      // Check if online
+      if (offlineData.isOnline) {
+        // First check and reset streak if needed
+        const streakResult = await checkAndResetStreak(user!.id);
+        
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('full_name, total_xp, current_streak, longest_streak')
+          .eq('user_id', user?.id)
+          .single();
 
-      if (profileData) {
-        // Use the checked streak values to ensure accuracy
-        setProfile({
-          ...profileData,
-          current_streak: streakResult.currentStreak,
-          longest_streak: streakResult.longestStreak,
-        });
-      }
+        if (profileData) {
+          // Use the checked streak values to ensure accuracy
+          const updatedProfile = {
+            ...profileData,
+            current_streak: streakResult.currentStreak,
+            longest_streak: streakResult.longestStreak,
+          };
+          setProfile(updatedProfile);
+          // Cache profile for offline use
+          cacheDataLocally(OFFLINE_PROFILE_KEY, updatedProfile);
+        }
 
-      const { data: coursesData } = await supabase
-        .from('courses')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: true });
-
-      if (coursesData) {
-        setCourses(coursesData);
+        // Fetch courses with offline-aware method (it caches automatically)
+        const coursesData = await offlineData.fetchCourses();
+        if (coursesData) {
+          setCourses(coursesData);
+        }
+      } else {
+        // Offline: use cached data
+        const cachedProfile = getCachedData<Profile>(OFFLINE_PROFILE_KEY);
+        if (cachedProfile) {
+          setProfile(cachedProfile);
+        }
+        
+        const cachedCourses = await offlineData.fetchCourses();
+        if (cachedCourses) {
+          setCourses(cachedCourses);
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
+      // Try to load cached data on error
+      const cachedProfile = getCachedData<Profile>(OFFLINE_PROFILE_KEY);
+      if (cachedProfile) setProfile(cachedProfile);
+      
+      const cachedCourses = await offlineData.fetchCourses();
+      if (cachedCourses) setCourses(cachedCourses);
     } finally {
       setLoading(false);
     }
@@ -149,7 +172,15 @@ const Dashboard = () => {
         className="flex items-center justify-between"
       >
         <div>
-          <p className="text-muted-foreground text-sm">{getGreeting()}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-muted-foreground text-sm">{getGreeting()}</p>
+            {!offlineData.isOnline && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs">
+                <WifiOff className="w-3 h-3" />
+                Offline
+              </span>
+            )}
+          </div>
           <h1 className="text-2xl font-display font-bold text-foreground">
             {firstName} 👋
           </h1>

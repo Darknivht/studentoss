@@ -12,13 +12,14 @@ import SocraticTutor from '@/components/notes/SocraticTutor';
 import AISummaryDialog from '@/components/notes/AISummaryDialog';
 import FileUpload from '@/components/notes/FileUpload';
 import NoteViewerDialog from '@/components/notes/NoteViewerDialog';
-import { Plus, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, FileText, Sparkles, Loader2, WifiOff } from 'lucide-react';
 import { streamAIChat } from '@/lib/ai';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import { runAchievementCheck } from '@/hooks/useAchievements';
 import { updateStreak } from '@/lib/streak';
 import { useLocation } from 'react-router-dom';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { useOfflineData } from '@/hooks/useOfflineData';
 
 interface Note {
   id: string;
@@ -43,6 +44,7 @@ const SmartNotes = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
+  const offlineData = useOfflineData();
   const { queueAction, isOnline } = useOfflineSync();
   const [notes, setNotes] = useState<Note[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -93,13 +95,8 @@ const SmartNotes = () => {
 
   const fetchNotes = async () => {
     try {
-      const { data, error } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      // Use offline-aware fetch that falls back to cached data
+      const data = await offlineData.fetchNotes();
       setNotes(data || []);
     } catch (error) {
       console.error('Error fetching notes:', error);
@@ -110,13 +107,8 @@ const SmartNotes = () => {
 
   const fetchCourses = async () => {
     try {
-      const { data, error } = await supabase
-        .from('courses')
-        .select('id, name, icon, color')
-        .eq('user_id', user?.id)
-        .order('name', { ascending: true });
-
-      if (error) throw error;
+      // Use offline-aware fetch that falls back to cached data
+      const data = await offlineData.fetchCourses();
       setCourses(data || []);
     } catch (error) {
       console.error('Error fetching courses:', error);
@@ -391,15 +383,24 @@ const SmartNotes = () => {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Smart Notes</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-display font-bold text-foreground">Smart Notes</h1>
+            {!offlineData.isOnline && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs">
+                <WifiOff className="w-3 h-3" />
+                Offline
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground text-sm mt-1">
-            AI-powered note taking & learning
+            {offlineData.isOnline ? 'AI-powered note taking & learning' : 'Viewing cached notes'}
           </p>
         </div>
         <Button
           onClick={() => setShowCreate(!showCreate)}
           className="gradient-primary text-primary-foreground"
           size="sm"
+          disabled={!offlineData.isOnline}
         >
           <Plus className="w-4 h-4 mr-1" />
           Add Note
