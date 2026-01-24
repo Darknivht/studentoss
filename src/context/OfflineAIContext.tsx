@@ -18,46 +18,47 @@ export interface DeviceCapabilities {
 }
 
 // Available models optimized for mobile with ONNX Runtime (works everywhere!)
+// Using publicly accessible models only (no gated/auth-required models)
 export const AVAILABLE_MODELS = [
   {
-    id: "Xenova/Qwen2.5-0.5B-Instruct",
-    name: "Qwen 2.5 0.5B (Fast)",
+    id: "Xenova/Qwen1.5-0.5B-Chat",
+    name: "Qwen 1.5 0.5B (Fast)",
     description: "Compact & fast, great for mobile",
-    size: "~500MB",
-    sizeBytes: 500 * 1024 * 1024,
+    size: "~350MB",
+    sizeBytes: 350 * 1024 * 1024,
     minMemoryGB: 2,
     recommended: "Mobile & low-end devices",
     quality: 3,
   },
   {
-    id: "Xenova/Qwen2.5-1.5B-Instruct",
-    name: "Qwen 2.5 1.5B (Balanced)",
+    id: "Xenova/Qwen1.5-1.8B-Chat",
+    name: "Qwen 1.5 1.8B (Balanced)",
     description: "Best balance of speed & quality",
-    size: "~1.5GB",
-    sizeBytes: 1.5 * 1024 * 1024 * 1024,
+    size: "~1.2GB",
+    sizeBytes: 1.2 * 1024 * 1024 * 1024,
     minMemoryGB: 4,
     recommended: "Most devices",
     quality: 7,
   },
   {
-    id: "Xenova/Phi-3-mini-4k-instruct",
-    name: "Phi-3 Mini 4K (Smart)",
-    description: "Microsoft's most capable small model",
-    size: "~2.3GB",
-    sizeBytes: 2.3 * 1024 * 1024 * 1024,
+    id: "Xenova/Phi-2",
+    name: "Phi-2 (Smart)",
+    description: "Microsoft's efficient reasoning model",
+    size: "~1.5GB",
+    sizeBytes: 1.5 * 1024 * 1024 * 1024,
+    minMemoryGB: 4,
+    recommended: "Mid-range devices",
+    quality: 8,
+  },
+  {
+    id: "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+    name: "SmolLM2 1.7B (Best)",
+    description: "Latest compact model, excellent quality",
+    size: "~1.8GB",
+    sizeBytes: 1.8 * 1024 * 1024 * 1024,
     minMemoryGB: 6,
     recommended: "High-end devices",
     quality: 9,
-  },
-  {
-    id: "Xenova/Phi-3.5-mini-instruct",
-    name: "Phi-3.5 Mini (Best)",
-    description: "Latest Phi model, excellent reasoning",
-    size: "~2.5GB",
-    sizeBytes: 2.5 * 1024 * 1024 * 1024,
-    minMemoryGB: 8,
-    recommended: "Powerful devices only",
-    quality: 10,
   }
 ] as const;
 
@@ -102,7 +103,7 @@ interface OfflineAIContextType {
 
 const OfflineAIContext = createContext<OfflineAIContextType | undefined>(undefined);
 
-const DEFAULT_MODEL: ModelId = "Xenova/Qwen2.5-0.5B-Instruct";
+const DEFAULT_MODEL: ModelId = "Xenova/Qwen1.5-0.5B-Chat";
 const CACHE_KEY = 'offline_ai_cached_model';
 
 // Helper to detect device capabilities
@@ -136,14 +137,12 @@ async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
   const isLowEnd = estimatedMemoryGB < 4;
 
   // Recommend model based on capabilities
-  let recommendedModelId: ModelId = "Xenova/Qwen2.5-0.5B-Instruct";
+  let recommendedModelId: ModelId = "Xenova/Qwen1.5-0.5B-Chat";
 
-  if (estimatedMemoryGB >= 8 && !isMobile) {
-    recommendedModelId = "Xenova/Phi-3.5-mini-instruct";
-  } else if (estimatedMemoryGB >= 6) {
-    recommendedModelId = "Xenova/Phi-3-mini-4k-instruct";
+  if (estimatedMemoryGB >= 6 && !isMobile) {
+    recommendedModelId = "HuggingFaceTB/SmolLM2-1.7B-Instruct";
   } else if (estimatedMemoryGB >= 4) {
-    recommendedModelId = "Xenova/Qwen2.5-1.5B-Instruct";
+    recommendedModelId = "Xenova/Qwen1.5-1.8B-Chat";
   }
 
   return {
