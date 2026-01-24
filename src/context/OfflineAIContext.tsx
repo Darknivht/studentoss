@@ -67,6 +67,14 @@ export type ModelId = typeof AVAILABLE_MODELS[number]['id'];
 // AI Mode - offline (local model) or cloud (Lovable AI)
 export type AIMode = 'offline' | 'cloud';
 
+// Track individual file progress for accurate overall tracking
+interface FileProgress {
+  file: string;
+  loaded: number;
+  total: number;
+  done: boolean;
+}
+
 interface DownloadProgress {
   status: 'initiate' | 'download' | 'progress' | 'done' | 'ready';
   name?: string;
@@ -76,12 +84,54 @@ interface DownloadProgress {
   total?: number;
 }
 
+// Download state tracking for resume capability
+interface DownloadState {
+  modelId: string;
+  startedAt: number;
+  filesProgress: Record<string, { loaded: number; total: number; done: boolean }>;
+  totalBytes: number;
+  downloadedBytes: number;
+}
+
+const DOWNLOAD_STATE_KEY = 'offline_ai_download_state';
+
+// Save download state for resume capability
+function saveDownloadState(state: DownloadState) {
+  try {
+    localStorage.setItem(DOWNLOAD_STATE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('Could not save download state:', e);
+  }
+}
+
+// Load download state for resume
+function loadDownloadState(): DownloadState | null {
+  try {
+    const saved = localStorage.getItem(DOWNLOAD_STATE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Clear download state
+function clearDownloadState() {
+  try {
+    localStorage.removeItem(DOWNLOAD_STATE_KEY);
+  } catch {
+    // Ignore
+  }
+}
+
 interface OfflineAIContextType {
   isDownloading: boolean;
   progress: number;
   progressText: string;
   downloadedBytes: number;
   totalBytes: number;
+  currentFile: string;
+  filesCompleted: number;
+  totalFiles: number;
   isModelLoaded: boolean;
   isModelCached: boolean;
   cachedModelId: ModelId | null;
@@ -92,8 +142,10 @@ interface OfflineAIContextType {
   deviceCapabilities: DeviceCapabilities | null;
   isCheckingDevice: boolean;
   aiMode: AIMode;
+  canResume: boolean;
   setAIMode: (mode: AIMode) => void;
   startDownload: (modelId?: ModelId) => Promise<void>;
+  resumeDownload: () => Promise<void>;
   cancelDownload: () => void;
   deleteModel: (modelId?: ModelId) => Promise<void>;
   setSelectedModelId: (id: ModelId) => void;
@@ -104,7 +156,7 @@ interface OfflineAIContextType {
 const OfflineAIContext = createContext<OfflineAIContextType | undefined>(undefined);
 
 const DEFAULT_MODEL: ModelId = "onnx-community/Llama-3.2-1B-Instruct-ONNX";
-const CACHE_KEY = 'offline_ai_cached_model_v2'; // Cache bust for model update
+const CACHE_KEY = 'offline_ai_cached_model_v3'; // Cache bust for download continuity update
 
 // Helper to detect device capabilities
 async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
@@ -186,6 +238,10 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [progressText, setProgressText] = useState('');
   const [downloadedBytes, setDownloadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
+  const [currentFile, setCurrentFile] = useState('');
+  const [filesCompleted, setFilesCompleted] = useState(0);
+  const [totalFiles, setTotalFiles] = useState(0);
+  const [canResume, setCanResume] = useState(false);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -200,6 +256,28 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const pipelineRef = useRef<TextGenerationPipeline | null>(null);
   const isCancelledRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Track per-file progress for accurate overall calculation
+  const filesProgressRef = useRef<Map<string, FileProgress>>(new Map());
+  const downloadStateRef = useRef<DownloadState | null>(null);
+
+  // Check for resumable download on mount
+  useEffect(() => {
+    const savedState = loadDownloadState();
+    if (savedState && !isModelCachedState) {
+      // Check if it was interrupted (more than 30 seconds old without completion)
+      const isInterrupted = Date.now() - savedState.startedAt > 30000;
+      if (isInterrupted && savedState.downloadedBytes < savedState.totalBytes) {
+        setCanResume(true);
+        setSelectedModelId(savedState.modelId as ModelId);
+        setDownloadedBytes(savedState.downloadedBytes);
+        setTotalBytes(savedState.totalBytes);
+        downloadStateRef.current = savedState;
+      } else {
+        clearDownloadState();
+      }
+    }
+  }, [isModelCachedState]);
 
   // Check cache on mount
   const checkCache = useCallback(async () => {
@@ -212,6 +290,8 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setSelectedModelId(model.id);
           const modelInfo = AVAILABLE_MODELS.find(m => m.id === model.id);
           setModelName(modelInfo?.name || model.id);
+          clearDownloadState(); // Clear any pending download state
+          setCanResume(false);
           return model.id;
         }
       }
@@ -253,30 +333,89 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [checkDeviceCapabilities]);
 
-  // Progress callback for transformers.js
+  // Format bytes helper
+  const formatBytes = useCallback((bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }, []);
+
+  // Enhanced progress callback for transformers.js with per-file tracking
   const progressCallback = useCallback((data: DownloadProgress) => {
     if (isCancelledRef.current) return;
 
+    const fileName = data.file || 'model';
+
     if (data.status === 'initiate') {
-      setProgressText(`Preparing ${data.file || 'model'}...`);
+      setCurrentFile(fileName);
+      setProgressText(`Preparing ${fileName}...`);
+      
+      // Initialize file tracking
+      if (!filesProgressRef.current.has(fileName)) {
+        filesProgressRef.current.set(fileName, {
+          file: fileName,
+          loaded: 0,
+          total: 0,
+          done: false,
+        });
+        setTotalFiles(prev => prev + 1);
+      }
     } else if (data.status === 'download') {
-      setProgressText(`Downloading ${data.file || 'model'}...`);
+      setCurrentFile(fileName);
+      setProgressText(`Starting download: ${fileName}`);
     } else if (data.status === 'progress' && data.progress !== undefined) {
-      setProgress(data.progress);
-      if (data.loaded && data.total) {
-        setDownloadedBytes(data.loaded);
-        setTotalBytes(data.total);
-        const mb = (data.loaded / 1024 / 1024).toFixed(1);
-        const totalMb = (data.total / 1024 / 1024).toFixed(1);
-        setProgressText(`Downloading: ${mb}MB / ${totalMb}MB`);
+      const fileProgress = filesProgressRef.current.get(fileName);
+      if (fileProgress && data.loaded !== undefined && data.total !== undefined) {
+        fileProgress.loaded = data.loaded;
+        fileProgress.total = data.total;
+        filesProgressRef.current.set(fileName, fileProgress);
+      }
+
+      // Calculate total progress across all files
+      let totalLoaded = 0;
+      let totalSize = 0;
+      filesProgressRef.current.forEach((fp) => {
+        totalLoaded += fp.loaded;
+        totalSize += fp.total;
+      });
+
+      setDownloadedBytes(totalLoaded);
+      setTotalBytes(totalSize);
+
+      // Calculate overall percentage
+      const overallProgress = totalSize > 0 ? (totalLoaded / totalSize) * 100 : 0;
+      setProgress(overallProgress);
+
+      // Update progress text with accurate MB/GB display
+      setCurrentFile(fileName);
+      setProgressText(`${formatBytes(totalLoaded)} / ${formatBytes(totalSize)} (${overallProgress.toFixed(1)}%)`);
+
+      // Save download state for resume capability
+      if (downloadStateRef.current) {
+        downloadStateRef.current.downloadedBytes = totalLoaded;
+        downloadStateRef.current.totalBytes = totalSize;
+        downloadStateRef.current.filesProgress = Object.fromEntries(
+          Array.from(filesProgressRef.current.entries()).map(([k, v]) => [k, { loaded: v.loaded, total: v.total, done: v.done }])
+        );
+        saveDownloadState(downloadStateRef.current);
       }
     } else if (data.status === 'done') {
-      setProgressText(`Loaded ${data.file || 'component'}`);
+      const fileProgress = filesProgressRef.current.get(fileName);
+      if (fileProgress) {
+        fileProgress.done = true;
+        filesProgressRef.current.set(fileName, fileProgress);
+      }
+      setFilesCompleted(prev => prev + 1);
+      setProgressText(`Completed: ${fileName}`);
     } else if (data.status === 'ready') {
       setProgress(100);
       setProgressText('Model ready!');
+      clearDownloadState();
+      setCanResume(false);
     }
-  }, []);
+  }, [formatBytes]);
 
   const startDownload = useCallback(async (modelId?: ModelId) => {
     const targetModel = modelId || selectedModelId;
@@ -284,6 +423,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // Reset state
     isCancelledRef.current = false;
     abortControllerRef.current = new AbortController();
+    filesProgressRef.current = new Map();
 
     setIsDownloading(true);
     setIsLoading(true);
@@ -292,10 +432,25 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setProgressText('Initializing...');
     setDownloadedBytes(0);
     setTotalBytes(0);
+    setCurrentFile('');
+    setFilesCompleted(0);
+    setTotalFiles(0);
+    setCanResume(false);
 
     // Save preference
     localStorage.setItem('offline_ai_model', targetModel);
     setSelectedModelId(targetModel);
+
+    // Initialize download state for resume capability
+    const modelInfo = AVAILABLE_MODELS.find(m => m.id === targetModel);
+    downloadStateRef.current = {
+      modelId: targetModel,
+      startedAt: Date.now(),
+      filesProgress: {},
+      totalBytes: modelInfo?.sizeBytes || 0,
+      downloadedBytes: 0,
+    };
+    saveDownloadState(downloadStateRef.current);
 
     try {
       console.log(`Starting download for model: ${targetModel}`);
@@ -321,12 +476,14 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       
       // Mark as cached
       localStorage.setItem(CACHE_KEY, targetModel);
+      clearDownloadState();
 
       setIsDownloading(false);
       setIsLoading(false);
       setIsModelLoaded(true);
       setIsModelCached(true);
       setCachedModelId(targetModel);
+      setCanResume(false);
 
       const model = AVAILABLE_MODELS.find(m => m.id === targetModel);
       setModelName(model?.name || targetModel);
@@ -339,10 +496,12 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch (err: any) {
       if (isCancelledRef.current) {
         console.log('Download cancelled by user');
+        // Keep download state for resume capability
         setIsDownloading(false);
         setIsLoading(false);
         setProgress(0);
-        setProgressText('');
+        setProgressText('Download paused - can be resumed');
+        setCanResume(true);
         return;
       }
 
@@ -352,13 +511,45 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setIsDownloading(false);
       setIsLoading(false);
 
-      toast({
-        title: "Download Failed",
-        description: errorMsg,
-        variant: "destructive",
-      });
+      // Check if it's a network error that can be resumed
+      if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('abort')) {
+        setCanResume(true);
+        toast({
+          title: "Download Interrupted",
+          description: "You can resume the download when you're ready.",
+        });
+      } else {
+        clearDownloadState();
+        setCanResume(false);
+        toast({
+          title: "Download Failed",
+          description: errorMsg,
+          variant: "destructive",
+        });
+      }
     }
   }, [selectedModelId, toast, progressCallback]);
+
+  // Resume a previously interrupted download
+  const resumeDownload = useCallback(async () => {
+    const savedState = downloadStateRef.current || loadDownloadState();
+    if (!savedState) {
+      toast({
+        title: "Cannot Resume",
+        description: "No interrupted download found.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Resuming Download",
+      description: "Continuing from where you left off...",
+    });
+
+    // Start download with the saved model - transformers.js will use cached files
+    await startDownload(savedState.modelId as ModelId);
+  }, [startDownload, toast]);
 
   const cancelDownload = useCallback(() => {
     isCancelledRef.current = true;
@@ -371,16 +562,32 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     setIsDownloading(false);
     setIsLoading(false);
-    setProgress(0);
-    setProgressText('');
-    setDownloadedBytes(0);
-    setTotalBytes(0);
-
-    toast({
-      title: "Download Cancelled",
-      description: "The model download was cancelled.",
-    });
-  }, [toast]);
+    
+    // Preserve some state for resume capability
+    const hadProgress = downloadedBytes > 0;
+    if (hadProgress) {
+      setCanResume(true);
+      setProgressText('Download paused - tap Resume to continue');
+      toast({
+        title: "Download Paused",
+        description: "You can resume the download anytime.",
+      });
+    } else {
+      setProgress(0);
+      setProgressText('');
+      setDownloadedBytes(0);
+      setTotalBytes(0);
+      setCurrentFile('');
+      setFilesCompleted(0);
+      setTotalFiles(0);
+      clearDownloadState();
+      setCanResume(false);
+      toast({
+        title: "Download Cancelled",
+        description: "The model download was cancelled.",
+      });
+    }
+  }, [downloadedBytes, toast]);
 
   const deleteModel = useCallback(async (modelId?: ModelId) => {
     const targetModel = modelId || cachedModelId || selectedModelId;
@@ -498,6 +705,9 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         progressText,
         downloadedBytes,
         totalBytes,
+        currentFile,
+        filesCompleted,
+        totalFiles,
         isModelLoaded,
         isModelCached: isModelCachedState,
         cachedModelId,
@@ -508,8 +718,10 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         deviceCapabilities,
         isCheckingDevice,
         aiMode,
+        canResume,
         setAIMode,
         startDownload,
+        resumeDownload,
         cancelDownload,
         deleteModel,
         setSelectedModelId,
