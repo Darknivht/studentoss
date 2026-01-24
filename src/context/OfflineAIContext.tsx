@@ -658,21 +658,42 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
       }
 
-      // Reset state
+      // Reset pipeline ref
       pipelineRef.current = null;
+      
+      // Clear all localStorage entries related to offline AI
       localStorage.removeItem(CACHE_KEY);
       localStorage.removeItem('offline_ai_model');
+      clearDownloadState(); // Clear pending download state
+      
+      // Reset file tracking
+      filesProgressRef.current = new Map();
+      downloadStateRef.current = null;
 
+      // Reset ALL state to allow fresh download
       setIsModelLoaded(false);
       setIsModelCached(false);
       setCachedModelId(null);
       setModelName(null);
       setProgress(0);
       setProgressText('');
+      setDownloadedBytes(0);
+      setTotalBytes(0);
+      setCurrentFile('');
+      setFilesCompleted(0);
+      setTotalFiles(0);
+      setCanResume(false);
+      setError(null);
+      setIsDownloading(false);
+      setIsLoading(false);
+      setIsBackgroundDownloading(false);
+      
+      // Cancel any background notifications
+      backgroundDownload.cancelNotification();
 
       toast({
         title: "Model Deleted",
-        description: "The AI model has been removed from your device.",
+        description: "The AI model has been removed. You can now download a new one.",
       });
     } catch (err: any) {
       console.error("Delete error:", err);
@@ -682,7 +703,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         variant: "destructive",
       });
     }
-  }, [cachedModelId, selectedModelId, toast]);
+  }, [cachedModelId, selectedModelId, toast, backgroundDownload]);
 
   // Generate text using the loaded model
   const generateText = useCallback(async (prompt: string, maxTokens: number = 256): Promise<string> => {
