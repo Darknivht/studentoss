@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useOfflineAIContext, AVAILABLE_MODELS, ModelId, DeviceCapabilities, AIMode } from '@/context/OfflineAIContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+// Models: Qwen 2.5 (0.5B, 1.5B) and Phi-3 (Mini 4K, 3.5 Mini) - ONNX Runtime for mobile
 
 // Helper to parse SSE stream for cloud AI
 async function parseSSEStream(
