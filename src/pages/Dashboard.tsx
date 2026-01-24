@@ -8,6 +8,7 @@ import CourseCard from '@/components/dashboard/CourseCard';
 import AddCourseDialog from '@/components/dashboard/AddCourseDialog';
 import StreakCard from '@/components/dashboard/StreakCard';
 import StudyProgressWidget from '@/components/dashboard/StudyProgressWidget';
+import StudyTimeWidget from '@/components/dashboard/StudyTimeWidget';
 import { Settings, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { checkAndResetStreak } from '@/lib/streak';
@@ -199,6 +200,9 @@ const Dashboard = () => {
         longestStreak={profile?.longest_streak || 0}
         totalXP={profile?.total_xp || 0}
       />
+
+      {/* Study Time Tracker Widget */}
+      <StudyTimeWidget />
 
       {/* Study Progress Widget */}
       <StudyProgressWidget />

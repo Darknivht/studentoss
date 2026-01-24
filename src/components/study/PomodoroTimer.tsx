@@ -5,9 +5,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Play, Pause, RotateCcw, Coffee, Brain, CheckCircle, Lock, Shield } from 'lucide-react';
+import { 
+  Play, Pause, RotateCcw, Coffee, Brain, CheckCircle, 
+  Lock, Shield, Settings, Minus, Plus 
+} from 'lucide-react';
 import { updateStreak } from '@/lib/streak';
 import FocusModeOverlay from '@/components/focus/FocusModeOverlay';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface PomodoroTimerProps {
   courseId?: string;
@@ -16,22 +26,44 @@ interface PomodoroTimerProps {
 
 type SessionType = 'focus' | 'short_break' | 'long_break';
 
-const DURATIONS: Record<SessionType, number> = {
-  focus: 25 * 60,
-  short_break: 5 * 60,
-  long_break: 15 * 60,
+// Default durations
+const DEFAULT_DURATIONS: Record<SessionType, number> = {
+  focus: 25,
+  short_break: 5,
+  long_break: 15,
 };
+
+const DURATIONS_KEY = 'pomodoro_custom_durations';
 
 const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Load custom durations from localStorage
+  const getStoredDurations = (): Record<SessionType, number> => {
+    try {
+      const stored = localStorage.getItem(DURATIONS_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return DEFAULT_DURATIONS;
+  };
+
+  const [durations, setDurations] = useState<Record<SessionType, number>>(getStoredDurations);
   const [sessionType, setSessionType] = useState<SessionType>('focus');
-  const [timeLeft, setTimeLeft] = useState(DURATIONS.focus);
+  const [timeLeft, setTimeLeft] = useState(durations.focus * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const [focusModeEnabled, setFocusModeEnabled] = useState(false);
   const [isFocusModeActive, setIsFocusModeActive] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Update timeLeft when durations change
+  useEffect(() => {
+    if (!isRunning) {
+      setTimeLeft(durations[sessionType] * 60);
+    }
+  }, [durations, sessionType, isRunning]);
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
@@ -52,18 +84,20 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
 
     if (sessionType === 'focus' && user) {
       try {
+        const durationMinutes = durations.focus;
+        
         // Save completed focus session
         await supabase.from('pomodoro_sessions').insert({
           user_id: user.id,
           course_id: courseId || null,
-          duration_minutes: 25,
+          duration_minutes: durationMinutes,
           session_type: 'focus',
         });
 
         // Update streak and XP
         await updateStreak(user.id);
 
-        // Award XP for session
+        // Award XP for session (1 XP per minute)
         const { data: profile } = await supabase
           .from('profiles')
           .select('total_xp')
@@ -71,7 +105,7 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
           .single();
 
         if (profile) {
-          const newXP = (profile.total_xp || 0) + 25; // 25 XP per session
+          const newXP = (profile.total_xp || 0) + durationMinutes;
           await supabase
             .from('profiles')
             .update({ total_xp: newXP })
@@ -83,7 +117,7 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
 
         toast({
           title: 'Great work! 🎉',
-          description: '+25 XP earned! Time for a break.',
+          description: `+${durationMinutes} XP earned! Time for a break.`,
         });
       } catch (error) {
         console.error('Failed to save session:', error);
@@ -92,7 +126,7 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
       // Switch to break
       const nextBreak = (completedPomodoros + 1) % 4 === 0 ? 'long_break' : 'short_break';
       setSessionType(nextBreak);
-      setTimeLeft(DURATIONS[nextBreak]);
+      setTimeLeft(durations[nextBreak] * 60);
     } else {
       // Break complete, switch to focus
       toast({
@@ -100,7 +134,7 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
         description: 'Ready to focus again?',
       });
       setSessionType('focus');
-      setTimeLeft(DURATIONS.focus);
+      setTimeLeft(durations.focus * 60);
     }
   };
 
@@ -116,27 +150,27 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
 
   const resetTimer = () => {
     setIsRunning(false);
-    setTimeLeft(DURATIONS[sessionType]);
+    setTimeLeft(durations[sessionType] * 60);
     setIsFocusModeActive(false);
   };
 
   const switchSession = (type: SessionType) => {
     setIsRunning(false);
     setSessionType(type);
-    setTimeLeft(DURATIONS[type]);
+    setTimeLeft(durations[type] * 60);
     setIsFocusModeActive(false);
   };
 
   const handleEmergencyExit = useCallback(() => {
     setIsRunning(false);
     setIsFocusModeActive(false);
-    setTimeLeft(DURATIONS[sessionType]);
+    setTimeLeft(durations[sessionType] * 60);
     toast({
       title: 'Focus Mode Ended',
       description: 'Session progress was not saved.',
       variant: 'destructive',
     });
-  }, [sessionType, toast]);
+  }, [durations, sessionType, toast]);
 
   // Deactivate focus mode when session ends or switches to break
   useEffect(() => {
@@ -147,13 +181,22 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
     }
   }, [sessionType, isRunning, isFocusModeActive]);
 
+  const updateDuration = (type: SessionType, change: number) => {
+    setDurations(prev => {
+      const newValue = Math.max(1, Math.min(120, prev[type] + change));
+      const updated = { ...prev, [type]: newValue };
+      localStorage.setItem(DURATIONS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const progress = ((DURATIONS[sessionType] - timeLeft) / DURATIONS[sessionType]) * 100;
+  const progress = ((durations[sessionType] * 60 - timeLeft) / (durations[sessionType] * 60)) * 100;
 
   const getSessionColor = () => {
     switch (sessionType) {
@@ -175,6 +218,154 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
         animate={{ opacity: 1, y: 0 }}
         className="p-6 rounded-3xl bg-card border border-border shadow-lg"
       >
+        {/* Header with Settings */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-semibold text-foreground">Pomodoro Timer</h3>
+          <Dialog open={showSettings} onOpenChange={setShowSettings}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Settings className="w-4 h-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Timer Settings</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-6 py-4">
+                {/* Focus Duration */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-primary" />
+                      <span className="font-medium">Focus Duration</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">{durations.focus} min</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => updateDuration('focus', -5)}
+                      disabled={durations.focus <= 5}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <span className="text-2xl font-bold w-16 text-center">{durations.focus}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => updateDuration('focus', 5)}
+                      disabled={durations.focus >= 120}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Short Break Duration */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Coffee className="w-4 h-4 text-emerald-500" />
+                      <span className="font-medium">Short Break</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">{durations.short_break} min</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => updateDuration('short_break', -1)}
+                      disabled={durations.short_break <= 1}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <span className="text-2xl font-bold w-16 text-center">{durations.short_break}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => updateDuration('short_break', 1)}
+                      disabled={durations.short_break >= 30}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Long Break Duration */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Coffee className="w-4 h-4 text-blue-500" />
+                      <span className="font-medium">Long Break</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">{durations.long_break} min</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => updateDuration('long_break', -5)}
+                      disabled={durations.long_break <= 5}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <span className="text-2xl font-bold w-16 text-center">{durations.long_break}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => updateDuration('long_break', 5)}
+                      disabled={durations.long_break >= 60}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Preset Buttons */}
+                <div className="border-t border-border pt-4">
+                  <p className="text-sm text-muted-foreground mb-2">Quick Presets</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const preset = { focus: 25, short_break: 5, long_break: 15 };
+                        setDurations(preset);
+                        localStorage.setItem(DURATIONS_KEY, JSON.stringify(preset));
+                      }}
+                    >
+                      Classic
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const preset = { focus: 50, short_break: 10, long_break: 30 };
+                        setDurations(preset);
+                        localStorage.setItem(DURATIONS_KEY, JSON.stringify(preset));
+                      }}
+                    >
+                      Long
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const preset = { focus: 15, short_break: 3, long_break: 10 };
+                        setDurations(preset);
+                        localStorage.setItem(DURATIONS_KEY, JSON.stringify(preset));
+                      }}
+                    >
+                      Short
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
         {/* Session Type Tabs */}
         <div className="flex gap-2 mb-6">
           {(['focus', 'short_break', 'long_break'] as const).map((type) => (
@@ -189,7 +380,7 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
               {type === 'focus' && <Brain className="w-4 h-4 inline mr-1" />}
               {type === 'short_break' && <Coffee className="w-4 h-4 inline mr-1" />}
               {type === 'long_break' && <Coffee className="w-4 h-4 inline mr-1" />}
-              {type === 'focus' ? 'Focus' : type === 'short_break' ? 'Short' : 'Long'}
+              {type === 'focus' ? `${durations.focus}m` : type === 'short_break' ? `${durations.short_break}m` : `${durations.long_break}m`}
             </button>
           ))}
         </div>
@@ -261,7 +452,7 @@ const PomodoroTimer = ({ courseId, onSessionComplete }: PomodoroTimerProps) => {
             size="icon"
             onClick={handleSessionComplete}
             className="rounded-full w-12 h-12"
-            disabled={timeLeft === DURATIONS[sessionType]}
+            disabled={timeLeft === durations[sessionType] * 60}
           >
             <CheckCircle className="w-5 h-5" />
           </Button>
