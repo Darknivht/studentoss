@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useToast } from '@/hooks/use-toast';
 import { pipeline, env } from '@huggingface/transformers';
 import type { TextGenerationPipeline } from '@huggingface/transformers';
+import { useBackgroundDownload } from '@/hooks/useBackgroundDownload';
 
 // Configure transformers.js for browser/mobile usage
 env.allowLocalModels = false;
@@ -125,6 +126,7 @@ function clearDownloadState() {
 
 interface OfflineAIContextType {
   isDownloading: boolean;
+  isBackgroundDownloading: boolean;
   progress: number;
   progressText: string;
   downloadedBytes: number;
@@ -143,6 +145,7 @@ interface OfflineAIContextType {
   isCheckingDevice: boolean;
   aiMode: AIMode;
   canResume: boolean;
+  supportsBackgroundDownload: boolean;
   setAIMode: (mode: AIMode) => void;
   startDownload: (modelId?: ModelId) => Promise<void>;
   resumeDownload: () => Promise<void>;
@@ -233,6 +236,7 @@ async function isModelCached(modelId: string): Promise<boolean> {
 
 export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { toast } = useToast();
+  const backgroundDownload = useBackgroundDownload();
   const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
@@ -252,6 +256,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [deviceCapabilities, setDeviceCapabilities] = useState<DeviceCapabilities | null>(null);
   const [isCheckingDevice, setIsCheckingDevice] = useState(true);
   const [aiMode, setAIMode] = useState<AIMode>('cloud');
+  const [isBackgroundDownloading, setIsBackgroundDownloading] = useState(false);
 
   const pipelineRef = useRef<TextGenerationPipeline | null>(null);
   const isCancelledRef = useRef<boolean>(false);
@@ -342,11 +347,13 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }, []);
 
-  // Enhanced progress callback for transformers.js with per-file tracking
+  // Enhanced progress callback for transformers.js with per-file tracking + background notifications
   const progressCallback = useCallback((data: DownloadProgress) => {
     if (isCancelledRef.current) return;
 
     const fileName = data.file || 'model';
+    const modelInfo = AVAILABLE_MODELS.find(m => m.id === selectedModelId);
+    const currentModelName = modelInfo?.name || selectedModelId;
 
     if (data.status === 'initiate') {
       setCurrentFile(fileName);
@@ -401,6 +408,25 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         );
         saveDownloadState(downloadStateRef.current);
       }
+
+      // Update background notification (shows in notification drawer on mobile)
+      backgroundDownload.saveDownloadState({
+        isActive: true,
+        modelName: currentModelName,
+        progress: overallProgress,
+        downloadedBytes: totalLoaded,
+        totalBytes: totalSize,
+      });
+
+      // Show notification when app is in background or always on native
+      if (backgroundDownload.isNative) {
+        backgroundDownload.showProgressNotification(
+          currentModelName,
+          overallProgress,
+          totalLoaded,
+          totalSize
+        );
+      }
     } else if (data.status === 'done') {
       const fileProgress = filesProgressRef.current.get(fileName);
       if (fileProgress) {
@@ -414,8 +440,13 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setProgressText('Model ready!');
       clearDownloadState();
       setCanResume(false);
+      
+      // Show completion notification
+      if (backgroundDownload.isNative) {
+        backgroundDownload.showCompletionNotification(currentModelName, true);
+      }
     }
-  }, [formatBytes]);
+  }, [formatBytes, selectedModelId, backgroundDownload]);
 
   const startDownload = useCallback(async (modelId?: ModelId) => {
     const targetModel = modelId || selectedModelId;
@@ -493,6 +524,11 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         description: "You can now use AI offline without internet!",
       });
 
+      // Ensure background notification shows completion
+      if (backgroundDownload.isNative) {
+        const model = AVAILABLE_MODELS.find(m => m.id === targetModel);
+        backgroundDownload.showCompletionNotification(model?.name || targetModel, true);
+      }
     } catch (err: any) {
       if (isCancelledRef.current) {
         console.log('Download cancelled by user');
@@ -521,6 +557,13 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } else {
         clearDownloadState();
         setCanResume(false);
+        
+        // Show failure notification
+        if (backgroundDownload.isNative) {
+          const model = AVAILABLE_MODELS.find(m => m.id === targetModel);
+          backgroundDownload.showCompletionNotification(model?.name || targetModel, false);
+        }
+        
         toast({
           title: "Download Failed",
           description: errorMsg,
@@ -528,7 +571,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         });
       }
     }
-  }, [selectedModelId, toast, progressCallback]);
+  }, [selectedModelId, toast, progressCallback, backgroundDownload]);
 
   // Resume a previously interrupted download
   const resumeDownload = useCallback(async () => {
@@ -562,6 +605,10 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     setIsDownloading(false);
     setIsLoading(false);
+    setIsBackgroundDownloading(false);
+    
+    // Cancel background notification
+    backgroundDownload.cancelNotification();
     
     // Preserve some state for resume capability
     const hadProgress = downloadedBytes > 0;
@@ -587,7 +634,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         description: "The model download was cancelled.",
       });
     }
-  }, [downloadedBytes, toast]);
+  }, [downloadedBytes, toast, backgroundDownload]);
 
   const deleteModel = useCallback(async (modelId?: ModelId) => {
     const targetModel = modelId || cachedModelId || selectedModelId;
@@ -701,6 +748,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     <OfflineAIContext.Provider
       value={{
         isDownloading,
+        isBackgroundDownloading,
         progress,
         progressText,
         downloadedBytes,
@@ -719,6 +767,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isCheckingDevice,
         aiMode,
         canResume,
+        supportsBackgroundDownload: backgroundDownload.isNative,
         setAIMode,
         startDownload,
         resumeDownload,
