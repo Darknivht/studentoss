@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useOfflineAIContext, AVAILABLE_MODELS, ModelId, DeviceCapabilities, AIMode } from '@/context/OfflineAIContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+
 // Models: Qwen 2.5 (0.5B, 1.5B) and Phi-3 (Mini 4K, 3.5 Mini) - ONNX Runtime for mobile
 
 // Helper to parse SSE stream for cloud AI
@@ -63,36 +63,44 @@ export const useOfflineAI = () => {
   // Check if mobile device
   const isMobile = isCapacitor || deviceCapabilities?.isMobile || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  // Cloud AI call helper
+  // Cloud AI call helper - uses direct fetch for streaming support
   const callCloudAI = useCallback(async (
     prompt: string,
     mode: string = 'quick_answer'
   ): Promise<string> => {
-    const { data, error } = await supabase.functions.invoke('ai-study', {
-      body: { mode, content: prompt },
+    const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-study`;
+    
+    const response = await fetch(CHAT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ mode, content: prompt, messages: [] }),
     });
 
-    if (error) {
-      console.error('Cloud AI error:', error);
-      throw new Error(error.message || 'Cloud AI request failed');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        throw new Error('Rate limit exceeded. Please try again in a moment.');
+      }
+      if (response.status === 402) {
+        throw new Error('AI credits exhausted. Please add credits to continue.');
+      }
+      throw new Error(errorData.error || 'Cloud AI request failed');
     }
 
-    // Handle streaming response
-    if (data instanceof ReadableStream) {
-      let result = '';
-      await parseSSEStream(new Response(data), (delta) => {
-        result += delta;
-      });
-      return result;
+    if (!response.body) {
+      throw new Error('No response body received');
     }
 
-    // Handle non-streaming response
-    if (typeof data === 'string') return data;
-    if (data?.choices?.[0]?.message?.content) return data.choices[0].message.content;
-    if (data?.response) return data.response;
-    if (data?.error) throw new Error(data.error);
-
-    return JSON.stringify(data);
+    // Parse the streaming response
+    let result = '';
+    await parseSSEStream(response, (delta) => {
+      result += delta;
+    });
+    
+    return result;
   }, []);
 
   const generateText = useCallback(async (prompt: string, maxLength: number = 250): Promise<string> => {
