@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { pipeline, env, TextGenerationPipeline } from '@huggingface/transformers';
+import { pipeline, env } from '@huggingface/transformers';
+import type { TextGenerationPipeline } from '@huggingface/transformers';
 
 // Configure transformers.js for browser/mobile usage
 env.allowLocalModels = false;
