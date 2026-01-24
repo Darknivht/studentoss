@@ -1,63 +1,88 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import * as webllm from '@mlc-ai/web-llm';
+import { pipeline, env, TextGenerationPipeline } from '@huggingface/transformers';
+
+// Configure transformers.js for browser/mobile usage
+env.allowLocalModels = false;
+env.useBrowserCache = true;
 
 // Device capability detection
 export interface DeviceCapabilities {
-  supportsWebGPU: boolean;
-  gpuVendor: string | null;
-  gpuDevice: string | null;
   estimatedMemoryGB: number;
   isMobile: boolean;
   isLowEnd: boolean;
   recommendedModelId: ModelId;
-  webGPUError: string | null;
+  supportsWasm: boolean;
+  browserName: string;
 }
 
-// Available models for user selection - using correct WebLLM model IDs
+// Available models optimized for mobile with ONNX Runtime (works everywhere!)
 export const AVAILABLE_MODELS = [
   {
-    id: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-    name: "Qwen 0.5B (Lite)",
-    description: "Smallest model, works on low-end devices",
-    size: "~350MB",
-    sizeBytes: 350 * 1024 * 1024,
+    id: "Xenova/Qwen2.5-0.5B-Instruct",
+    name: "Qwen 2.5 0.5B (Fast)",
+    description: "Compact & fast, great for mobile",
+    size: "~500MB",
+    sizeBytes: 500 * 1024 * 1024,
     minMemoryGB: 2,
-    recommended: "Low-end phones & tablets"
+    recommended: "Mobile & low-end devices",
+    quality: 3,
   },
   {
-    id: "Llama-3.2-1B-Instruct-q4f16_1-MLC",
-    name: "Llama 3.2 1B (Standard)",
-    description: "Good balance of speed and quality",
-    size: "~1.1GB",
-    sizeBytes: 1.1 * 1024 * 1024 * 1024,
+    id: "Xenova/Qwen2.5-1.5B-Instruct",
+    name: "Qwen 2.5 1.5B (Balanced)",
+    description: "Best balance of speed & quality",
+    size: "~1.5GB",
+    sizeBytes: 1.5 * 1024 * 1024 * 1024,
     minMemoryGB: 4,
-    recommended: "Most devices"
+    recommended: "Most devices",
+    quality: 7,
   },
   {
-    id: "Llama-3.2-3B-Instruct-q4f16_1-MLC",
-    name: "Llama 3.2 3B (Pro)",
-    description: "Best quality, requires more resources",
+    id: "Xenova/Phi-3-mini-4k-instruct",
+    name: "Phi-3 Mini 4K (Smart)",
+    description: "Microsoft's most capable small model",
+    size: "~2.3GB",
+    sizeBytes: 2.3 * 1024 * 1024 * 1024,
+    minMemoryGB: 6,
+    recommended: "High-end devices",
+    quality: 9,
+  },
+  {
+    id: "Xenova/Phi-3.5-mini-instruct",
+    name: "Phi-3.5 Mini (Best)",
+    description: "Latest Phi model, excellent reasoning",
     size: "~2.5GB",
     sizeBytes: 2.5 * 1024 * 1024 * 1024,
-    minMemoryGB: 6,
-    recommended: "High-end devices"
+    minMemoryGB: 8,
+    recommended: "Powerful devices only",
+    quality: 10,
   }
 ] as const;
 
 export type ModelId = typeof AVAILABLE_MODELS[number]['id'];
 
-// AI Mode - offline (WebLLM) or cloud (Lovable AI)
+// AI Mode - offline (local model) or cloud (Lovable AI)
 export type AIMode = 'offline' | 'cloud';
+
+interface DownloadProgress {
+  status: 'initiate' | 'download' | 'progress' | 'done' | 'ready';
+  name?: string;
+  file?: string;
+  progress?: number;
+  loaded?: number;
+  total?: number;
+}
 
 interface OfflineAIContextType {
   isDownloading: boolean;
   progress: number;
   progressText: string;
+  downloadedBytes: number;
+  totalBytes: number;
   isModelLoaded: boolean;
   isModelCached: boolean;
   cachedModelId: ModelId | null;
-  supportsWebGPU: boolean;
   error: string | null;
   modelName: string | null;
   selectedModelId: ModelId;
@@ -71,73 +96,85 @@ interface OfflineAIContextType {
   deleteModel: (modelId?: ModelId) => Promise<void>;
   setSelectedModelId: (id: ModelId) => void;
   checkDeviceCapabilities: () => Promise<DeviceCapabilities>;
-  engine: webllm.MLCEngine | null;
+  generateText: (prompt: string, maxTokens?: number) => Promise<string>;
 }
 
 const OfflineAIContext = createContext<OfflineAIContextType | undefined>(undefined);
 
-const DEFAULT_MODEL: ModelId = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+const DEFAULT_MODEL: ModelId = "Xenova/Qwen2.5-0.5B-Instruct";
+const CACHE_KEY = 'offline_ai_cached_model';
 
 // Helper to detect device capabilities
 async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   
-  let supportsWebGPU = false;
-  let gpuVendor: string | null = null;
-  let gpuDevice: string | null = null;
-  let webGPUError: string | null = null;
-  
-  // Check WebGPU support
-  if ('gpu' in navigator) {
-    try {
-      const adapter = await (navigator as any).gpu.requestAdapter();
-      if (adapter) {
-        supportsWebGPU = true;
-        const info = await adapter.requestAdapterInfo?.();
-        if (info) {
-          gpuVendor = info.vendor || null;
-          gpuDevice = info.device || info.description || null;
-        }
-      } else {
-        webGPUError = "No GPU adapter found. Your browser may not support WebGPU, or your device's GPU may not be compatible.";
-      }
-    } catch (e: any) {
-      webGPUError = e.message || "Failed to initialize WebGPU. Your device may not have a compatible GPU.";
-    }
-  } else {
-    webGPUError = "WebGPU is not supported in this browser. Try Chrome, Edge, or a modern browser on a device with a GPU.";
-  }
-  
+  // Detect browser
+  const ua = navigator.userAgent;
+  let browserName = 'Unknown';
+  if (ua.includes('Chrome')) browserName = 'Chrome';
+  else if (ua.includes('Firefox')) browserName = 'Firefox';
+  else if (ua.includes('Safari')) browserName = 'Safari';
+  else if (ua.includes('Edge')) browserName = 'Edge';
+
+  // WebAssembly is widely supported
+  const supportsWasm = typeof WebAssembly !== 'undefined';
+
   // Estimate device memory
-  let estimatedMemoryGB = 4; // Default assumption
+  let estimatedMemoryGB = 4;
   if ('deviceMemory' in navigator) {
     estimatedMemoryGB = (navigator as any).deviceMemory || 4;
   }
-  
-  // Determine if low-end device
-  const isLowEnd = isMobile || estimatedMemoryGB < 4 || !supportsWebGPU;
-  
-  // Recommend model based on capabilities
-  let recommendedModelId: ModelId = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
-  
-  if (supportsWebGPU) {
-    if (estimatedMemoryGB >= 6 && !isMobile) {
-      recommendedModelId = "Llama-3.2-3B-Instruct-q4f16_1-MLC";
-    } else if (estimatedMemoryGB >= 4) {
-      recommendedModelId = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
-    }
+
+  // On iOS, estimate based on device
+  if (/iPhone|iPad|iPod/.test(ua)) {
+    // Modern iPhones have 4-6GB, iPads up to 16GB
+    estimatedMemoryGB = isMobile ? 4 : 6;
   }
-  
+
+  // Determine if low-end device
+  const isLowEnd = estimatedMemoryGB < 4;
+
+  // Recommend model based on capabilities
+  let recommendedModelId: ModelId = "Xenova/Qwen2.5-0.5B-Instruct";
+
+  if (estimatedMemoryGB >= 8 && !isMobile) {
+    recommendedModelId = "Xenova/Phi-3.5-mini-instruct";
+  } else if (estimatedMemoryGB >= 6) {
+    recommendedModelId = "Xenova/Phi-3-mini-4k-instruct";
+  } else if (estimatedMemoryGB >= 4) {
+    recommendedModelId = "Xenova/Qwen2.5-1.5B-Instruct";
+  }
+
   return {
-    supportsWebGPU,
-    gpuVendor,
-    gpuDevice,
     estimatedMemoryGB,
     isMobile,
     isLowEnd,
     recommendedModelId,
-    webGPUError,
+    supportsWasm,
+    browserName,
   };
+}
+
+// Check if model is cached in IndexedDB
+async function isModelCached(modelId: string): Promise<boolean> {
+  try {
+    // Check localStorage for our tracking
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached === modelId) {
+      // Also verify through cache API if available
+      if ('caches' in window) {
+        const cache = await caches.open('transformers-cache');
+        const keys = await cache.keys();
+        // If we have any cached files for this model, consider it cached
+        return keys.some(k => k.url.includes(modelId.split('/')[1]));
+      }
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error("Error checking model cache:", e);
+    return false;
+  }
 }
 
 export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -145,30 +182,34 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
+  const [downloadedBytes, setDownloadedBytes] = useState(0);
+  const [totalBytes, setTotalBytes] = useState(0);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isModelCached, setIsModelCached] = useState(false);
+  const [isModelCachedState, setIsModelCached] = useState(false);
   const [cachedModelId, setCachedModelId] = useState<ModelId | null>(null);
-  const [supportsWebGPU, setSupportsWebGPU] = useState(false);
   const [modelName, setModelName] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<ModelId>(DEFAULT_MODEL);
   const [deviceCapabilities, setDeviceCapabilities] = useState<DeviceCapabilities | null>(null);
   const [isCheckingDevice, setIsCheckingDevice] = useState(true);
-  const [aiMode, setAIMode] = useState<AIMode>('cloud'); // Default to cloud, switch to offline if WebGPU available
+  const [aiMode, setAIMode] = useState<AIMode>('cloud');
 
-  const engineRef = useRef<webllm.MLCEngine | null>(null);
+  const pipelineRef = useRef<TextGenerationPipeline | null>(null);
   const isCancelledRef = useRef<boolean>(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Check cache on mount
   const checkCache = useCallback(async () => {
     try {
       for (const model of AVAILABLE_MODELS) {
-        const cached = await webllm.hasModelInCache(model.id);
+        const cached = await isModelCached(model.id);
         if (cached) {
           setIsModelCached(true);
           setCachedModelId(model.id);
           setSelectedModelId(model.id);
+          const modelInfo = AVAILABLE_MODELS.find(m => m.id === model.id);
+          setModelName(modelInfo?.name || model.id);
           return model.id;
         }
       }
@@ -181,20 +222,19 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  // Check device capabilities function
+  // Check device capabilities
   const checkDeviceCapabilities = useCallback(async (): Promise<DeviceCapabilities> => {
     setIsCheckingDevice(true);
     try {
       const capabilities = await detectDeviceCapabilities();
       setDeviceCapabilities(capabilities);
-      setSupportsWebGPU(capabilities.supportsWebGPU);
-      
+
       // Auto-select recommended model if no cached model
       const cachedModel = await checkCache();
       if (!cachedModel) {
         setSelectedModelId(capabilities.recommendedModelId);
       }
-      
+
       return capabilities;
     } finally {
       setIsCheckingDevice(false);
@@ -202,7 +242,6 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [checkCache]);
 
   useEffect(() => {
-    // Check device capabilities on mount
     checkDeviceCapabilities();
 
     // Load saved model preference
@@ -212,61 +251,91 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [checkDeviceCapabilities]);
 
-  const initProgressCallback = useCallback((report: webllm.InitProgressReport) => {
-    // Check if cancelled
-    if (isCancelledRef.current) {
-      throw new Error('Download cancelled');
-    }
-    
-    setProgress(report.progress * 100);
-    setProgressText(report.text);
+  // Progress callback for transformers.js
+  const progressCallback = useCallback((data: DownloadProgress) => {
+    if (isCancelledRef.current) return;
 
-    if (report.progress === 1) {
-      setIsDownloading(false);
-      setIsLoading(false);
-      setIsModelLoaded(true);
-      setIsModelCached(true);
-      setCachedModelId(selectedModelId);
-      
-      const model = AVAILABLE_MODELS.find(m => m.id === selectedModelId);
-      setModelName(model?.name || selectedModelId);
-      
-      toast({
-        title: "AI Model Ready",
-        description: "You can now use the AI Tutor offline!",
-      });
+    if (data.status === 'initiate') {
+      setProgressText(`Preparing ${data.file || 'model'}...`);
+    } else if (data.status === 'download') {
+      setProgressText(`Downloading ${data.file || 'model'}...`);
+    } else if (data.status === 'progress' && data.progress !== undefined) {
+      setProgress(data.progress);
+      if (data.loaded && data.total) {
+        setDownloadedBytes(data.loaded);
+        setTotalBytes(data.total);
+        const mb = (data.loaded / 1024 / 1024).toFixed(1);
+        const totalMb = (data.total / 1024 / 1024).toFixed(1);
+        setProgressText(`Downloading: ${mb}MB / ${totalMb}MB`);
+      }
+    } else if (data.status === 'done') {
+      setProgressText(`Loaded ${data.file || 'component'}`);
+    } else if (data.status === 'ready') {
+      setProgress(100);
+      setProgressText('Model ready!');
     }
-  }, [selectedModelId, toast]);
+  }, []);
 
   const startDownload = useCallback(async (modelId?: ModelId) => {
     const targetModel = modelId || selectedModelId;
-    
-    // Reset cancel flag
-    isCancelledRef.current = false;
 
-    // Create new engine instance
-    if (!engineRef.current) {
-      engineRef.current = new webllm.MLCEngine();
-    }
+    // Reset state
+    isCancelledRef.current = false;
+    abortControllerRef.current = new AbortController();
 
     setIsDownloading(true);
     setIsLoading(true);
     setError(null);
     setProgress(0);
     setProgressText('Initializing...');
+    setDownloadedBytes(0);
+    setTotalBytes(0);
 
     // Save preference
     localStorage.setItem('offline_ai_model', targetModel);
     setSelectedModelId(targetModel);
 
     try {
-      engineRef.current.setInitProgressCallback(initProgressCallback);
+      console.log(`Starting download for model: ${targetModel}`);
 
-      // Use the model ID directly - WebLLM will fetch from its built-in model list
-      await engineRef.current.reload(targetModel);
+      // Create the text generation pipeline
+      // This will download the model if not cached
+      const pipe = await pipeline(
+        'text-generation',
+        targetModel,
+        {
+          progress_callback: progressCallback,
+          // Use quantized model for better mobile performance
+          dtype: 'q4',
+        }
+      );
+
+      if (isCancelledRef.current) {
+        console.log('Download was cancelled');
+        return;
+      }
+
+      pipelineRef.current = pipe;
+      
+      // Mark as cached
+      localStorage.setItem(CACHE_KEY, targetModel);
+
+      setIsDownloading(false);
+      setIsLoading(false);
+      setIsModelLoaded(true);
+      setIsModelCached(true);
+      setCachedModelId(targetModel);
+
+      const model = AVAILABLE_MODELS.find(m => m.id === targetModel);
+      setModelName(model?.name || targetModel);
+
+      toast({
+        title: "AI Model Ready! 🧠",
+        description: "You can now use AI offline without internet!",
+      });
 
     } catch (err: any) {
-      if (err.message === 'Download cancelled' || isCancelledRef.current) {
+      if (isCancelledRef.current) {
         console.log('Download cancelled by user');
         setIsDownloading(false);
         setIsLoading(false);
@@ -274,31 +343,37 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setProgressText('');
         return;
       }
+
       console.error("Download error:", err);
-      setError(err.message || "Failed to download model");
+      const errorMsg = err.message || "Failed to download model";
+      setError(errorMsg);
       setIsDownloading(false);
       setIsLoading(false);
+
       toast({
         title: "Download Failed",
-        description: err.message || "Could not download the AI model.",
+        description: errorMsg,
         variant: "destructive",
       });
     }
-  }, [selectedModelId, toast, initProgressCallback]);
+  }, [selectedModelId, toast, progressCallback]);
 
   const cancelDownload = useCallback(() => {
     isCancelledRef.current = true;
     
-    // Reset engine
-    if (engineRef.current) {
-      engineRef.current = null;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
-    
+
+    pipelineRef.current = null;
+
     setIsDownloading(false);
     setIsLoading(false);
     setProgress(0);
     setProgressText('');
-    
+    setDownloadedBytes(0);
+    setTotalBytes(0);
+
     toast({
       title: "Download Cancelled",
       description: "The model download was cancelled.",
@@ -307,29 +382,38 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const deleteModel = useCallback(async (modelId?: ModelId) => {
     const targetModel = modelId || cachedModelId || selectedModelId;
-    
+
     try {
-      // Delete from WebLLM cache
-      await webllm.deleteModelInCache(targetModel);
-      
-      // Reset state
-      if (engineRef.current) {
-        engineRef.current = null;
+      // Clear from cache API
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+          if (name.includes('transformers') || name.includes('huggingface')) {
+            await caches.delete(name);
+          }
+        }
       }
-      
+
+      // Clear IndexedDB
+      const databases = await indexedDB.databases?.() || [];
+      for (const db of databases) {
+        if (db.name && (db.name.includes('transformers') || db.name.includes('huggingface') || db.name.includes('onnx'))) {
+          indexedDB.deleteDatabase(db.name);
+        }
+      }
+
+      // Reset state
+      pipelineRef.current = null;
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem('offline_ai_model');
+
       setIsModelLoaded(false);
       setIsModelCached(false);
       setCachedModelId(null);
       setModelName(null);
       setProgress(0);
       setProgressText('');
-      
-      // Remove from localStorage
-      localStorage.removeItem('offline_ai_model');
-      
-      // Re-check cache to update state
-      await checkCache();
-      
+
       toast({
         title: "Model Deleted",
         description: "The AI model has been removed from your device.",
@@ -342,7 +426,64 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         variant: "destructive",
       });
     }
-  }, [cachedModelId, selectedModelId, toast, checkCache]);
+  }, [cachedModelId, selectedModelId, toast]);
+
+  // Generate text using the loaded model
+  const generateText = useCallback(async (prompt: string, maxTokens: number = 256): Promise<string> => {
+    if (!pipelineRef.current) {
+      // Try to load the cached model
+      if (cachedModelId) {
+        setIsLoading(true);
+        try {
+          const pipe = await pipeline('text-generation', cachedModelId, {
+            dtype: 'q4',
+          });
+          pipelineRef.current = pipe;
+          setIsModelLoaded(true);
+        } catch (e) {
+          setIsLoading(false);
+          throw new Error('Model not loaded. Please download it first.');
+        }
+        setIsLoading(false);
+      } else {
+        throw new Error('No model loaded. Please download an AI model first.');
+      }
+    }
+
+    try {
+      // Format prompt for instruction-tuned models
+      const formattedPrompt = `<|user|>\n${prompt}\n<|assistant|>\n`;
+
+      const result = await pipelineRef.current(formattedPrompt, {
+        max_new_tokens: maxTokens,
+        temperature: 0.7,
+        top_p: 0.9,
+        do_sample: true,
+        return_full_text: false,
+      });
+
+      // Extract generated text - handle various output formats
+      if (Array.isArray(result) && result.length > 0) {
+        const firstResult = result[0] as any;
+        if (typeof firstResult === 'string') {
+          return firstResult.trim();
+        }
+        if (firstResult?.generated_text) {
+          return String(firstResult.generated_text).trim();
+        }
+      }
+      
+      if (typeof result === 'string') {
+        return (result as string).trim();
+      }
+
+      // Fallback: stringify the result
+      return JSON.stringify(result);
+    } catch (err: any) {
+      console.error('Generation error:', err);
+      throw new Error(err.message || 'Failed to generate text');
+    }
+  }, [cachedModelId]);
 
   return (
     <OfflineAIContext.Provider
@@ -350,10 +491,11 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isDownloading,
         progress,
         progressText,
+        downloadedBytes,
+        totalBytes,
         isModelLoaded,
-        isModelCached,
+        isModelCached: isModelCachedState,
         cachedModelId,
-        supportsWebGPU,
         error,
         modelName,
         selectedModelId,
@@ -367,7 +509,7 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         deleteModel,
         setSelectedModelId,
         checkDeviceCapabilities,
-        engine: engineRef.current,
+        generateText,
       }}
     >
       {children}

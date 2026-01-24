@@ -47,7 +47,14 @@ async function parseSSEStream(
 export const useOfflineAI = () => {
   const { toast } = useToast();
   const context = useOfflineAIContext();
-  const { engine, isModelLoaded, deviceCapabilities, aiMode } = context;
+  const {
+    isModelLoaded,
+    deviceCapabilities,
+    aiMode,
+    generateText: offlineGenerateText,
+    isModelCached,
+    cachedModelId,
+  } = context;
 
   // Check if running in Capacitor (native mobile)
   const isCapacitor = typeof (window as any).Capacitor !== 'undefined';
@@ -81,131 +88,109 @@ export const useOfflineAI = () => {
     // Handle non-streaming response
     if (typeof data === 'string') return data;
     if (data?.choices?.[0]?.message?.content) return data.choices[0].message.content;
+    if (data?.response) return data.response;
     if (data?.error) throw new Error(data.error);
-    
+
     return JSON.stringify(data);
   }, []);
 
   const generateText = useCallback(async (prompt: string, maxLength: number = 250): Promise<string> => {
-    // Use cloud AI if in cloud mode or offline model not loaded
-    if (aiMode === 'cloud' || !isModelLoaded) {
+    // Use cloud AI if in cloud mode
+    if (aiMode === 'cloud') {
       return callCloudAI(prompt);
     }
 
-    if (!engine) {
-      throw new Error('Model not loaded. Please download the offline model or switch to Cloud AI.');
-    }
-
-    try {
-      const reply = await engine.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: maxLength,
-        temperature: 0.7,
-      });
-
-      return reply.choices[0]?.message?.content || "";
-    } catch (error) {
-      console.error('Offline AI generation error:', error);
-      // Fallback to cloud if offline fails
-      if (aiMode === 'offline') {
-        console.log('Falling back to cloud AI...');
+    // Try offline AI
+    if (isModelLoaded || isModelCached) {
+      try {
+        return await offlineGenerateText(prompt, maxLength);
+      } catch (error) {
+        console.error('Offline AI error, falling back to cloud:', error);
+        // Fallback to cloud
         return callCloudAI(prompt);
       }
-      throw error;
     }
-  }, [engine, isModelLoaded, aiMode, callCloudAI]);
+
+    // No offline model, use cloud
+    return callCloudAI(prompt);
+  }, [aiMode, isModelLoaded, isModelCached, offlineGenerateText, callCloudAI]);
 
   const summarize = useCallback(async (text: string): Promise<string> => {
-    // Use cloud AI if in cloud mode or offline model not loaded
-    if (aiMode === 'cloud' || !isModelLoaded) {
-      return callCloudAI(text, 'summarize');
+    // Truncate input for mobile to avoid memory issues
+    const maxInputLength = isMobile ? 1000 : 2000;
+    const truncatedText = text.length > maxInputLength
+      ? text.slice(0, maxInputLength) + '...'
+      : text;
+
+    const prompt = `Summarize the following text in a clear, concise way. Keep the summary under 200 words:\n\n${truncatedText}`;
+
+    // Use cloud AI if in cloud mode
+    if (aiMode === 'cloud') {
+      return callCloudAI(truncatedText, 'summarize');
     }
 
-    if (!engine) {
-      throw new Error('Model not loaded.');
+    // Try offline AI
+    if (isModelLoaded || isModelCached) {
+      try {
+        return await offlineGenerateText(prompt, 300);
+      } catch (error) {
+        console.error('Offline summarization error:', error);
+        return callCloudAI(truncatedText, 'summarize');
+      }
     }
 
-    try {
-      // Truncate input for mobile to avoid memory issues
-      const maxInputLength = isMobile ? 1000 : 2000;
-      const truncatedText = text.length > maxInputLength
-        ? text.slice(0, maxInputLength) + '...'
-        : text;
-
-      const prompt = `Summarize the following text in a clear, concise way:\n\n${truncatedText}`;
-
-      const reply = await engine.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 300,
-        temperature: 0.5,
-      });
-
-      return reply.choices[0]?.message?.content || "";
-    } catch (error) {
-      console.error('Offline summarization error:', error);
-      return callCloudAI(text, 'summarize');
-    }
-  }, [engine, isModelLoaded, isMobile, aiMode, callCloudAI]);
+    return callCloudAI(truncatedText, 'summarize');
+  }, [aiMode, isModelLoaded, isModelCached, isMobile, offlineGenerateText, callCloudAI]);
 
   const answerQuestion = useCallback(async (question: string, noteContext: string): Promise<string> => {
-    // Use cloud AI if in cloud mode or offline model not loaded
-    if (aiMode === 'cloud' || !isModelLoaded) {
-      return callCloudAI(`Context:\n${noteContext}\n\nQuestion: ${question}`);
+    const maxContextLength = isMobile ? 800 : 1500;
+    const truncatedContext = noteContext.length > maxContextLength
+      ? noteContext.slice(0, maxContextLength) + '...'
+      : noteContext;
+
+    const prompt = `Context:\n${truncatedContext}\n\nQuestion: ${question}\n\nProvide a clear, accurate answer based on the context.`;
+
+    // Use cloud AI if in cloud mode
+    if (aiMode === 'cloud') {
+      return callCloudAI(prompt);
     }
 
-    if (!engine) {
-      throw new Error('Model not loaded.');
+    // Try offline AI
+    if (isModelLoaded || isModelCached) {
+      try {
+        return await offlineGenerateText(prompt, 200);
+      } catch (error) {
+        console.error('Offline QA error:', error);
+        return callCloudAI(prompt);
+      }
     }
 
-    try {
-      const maxContextLength = isMobile ? 800 : 1500;
-      const truncatedContext = noteContext.length > maxContextLength
-        ? noteContext.slice(0, maxContextLength) + '...'
-        : noteContext;
-
-      const prompt = `Context:\n${truncatedContext}\n\nQuestion: ${question}\n\nAnswer the question based on the context provided.`;
-
-      const reply = await engine.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 200,
-        temperature: 0.7,
-      });
-
-      return reply.choices[0]?.message?.content || "";
-    } catch (error) {
-      console.error('Offline QA error:', error);
-      return callCloudAI(`Context:\n${noteContext}\n\nQuestion: ${question}`);
-    }
-  }, [engine, isModelLoaded, isMobile, aiMode, callCloudAI]);
+    return callCloudAI(prompt);
+  }, [aiMode, isModelLoaded, isModelCached, isMobile, offlineGenerateText, callCloudAI]);
 
   const generateFlashcardHint = useCallback(async (front: string, back: string): Promise<string> => {
-    const prompt = `Flashcard Question: ${front}\nFlashcard Answer: ${back}\n\nGenerate a helpful hint for the answer without revealing it directly. Keep it short.`;
-    
-    // Use cloud AI if in cloud mode or offline model not loaded
-    if (aiMode === 'cloud' || !isModelLoaded) {
+    const prompt = `Flashcard Question: ${front}\nFlashcard Answer: ${back}\n\nGenerate a helpful hint for the answer without revealing it directly. Keep it very short (1-2 sentences).`;
+
+    // Use cloud AI if in cloud mode
+    if (aiMode === 'cloud') {
       return callCloudAI(prompt);
     }
 
-    if (!engine) {
-      throw new Error('Model not loaded.');
+    // Try offline AI
+    if (isModelLoaded || isModelCached) {
+      try {
+        return await offlineGenerateText(prompt, 50);
+      } catch (error) {
+        console.error('Offline hint error:', error);
+        return callCloudAI(prompt);
+      }
     }
 
-    try {
-      const reply = await engine.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 50,
-        temperature: 0.8,
-      });
+    return callCloudAI(prompt);
+  }, [aiMode, isModelLoaded, isModelCached, offlineGenerateText, callCloudAI]);
 
-      return reply.choices[0]?.message?.content || "";
-    } catch (error) {
-      console.error('Offline hint generation error:', error);
-      return callCloudAI(prompt);
-    }
-  }, [engine, isModelLoaded, aiMode, callCloudAI]);
-
-  // Check if AI is available (either cloud or offline)
-  const isAIAvailable = aiMode === 'cloud' || isModelLoaded;
+  // Check if AI is available (cloud is always available, offline needs model)
+  const isAIAvailable = aiMode === 'cloud' || isModelLoaded || isModelCached;
 
   return {
     ...context,
