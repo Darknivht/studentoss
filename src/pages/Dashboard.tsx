@@ -10,6 +10,7 @@ import StreakCard from '@/components/dashboard/StreakCard';
 import StudyProgressWidget from '@/components/dashboard/StudyProgressWidget';
 import { Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { checkAndResetStreak } from '@/lib/streak';
 
 interface Course {
   id: string;
@@ -42,6 +43,9 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
+      // First check and reset streak if needed
+      const streakResult = await checkAndResetStreak(user!.id);
+      
       const { data: profileData } = await supabase
         .from('profiles')
         .select('full_name, total_xp, current_streak, longest_streak')
@@ -49,7 +53,12 @@ const Dashboard = () => {
         .single();
 
       if (profileData) {
-        setProfile(profileData);
+        // Use the checked streak values to ensure accuracy
+        setProfile({
+          ...profileData,
+          current_streak: streakResult.currentStreak,
+          longest_streak: streakResult.longestStreak,
+        });
       }
 
       const { data: coursesData } = await supabase
