@@ -18,48 +18,48 @@ export interface DeviceCapabilities {
 }
 
 // Available models optimized for mobile with ONNX Runtime (works everywhere!)
-// Using publicly accessible models only (no gated/auth-required models)
+// Using publicly accessible ONNX models - no authentication required
 export const AVAILABLE_MODELS = [
+  {
+    id: "onnx-community/Llama-3.2-1B-Instruct-ONNX",
+    name: "Llama 3.2 1B (Recommended)",
+    description: "Meta's latest compact model - very smart!",
+    size: "~1GB",
+    sizeBytes: 1 * 1024 * 1024 * 1024,
+    minMemoryGB: 3,
+    recommended: "Most mobile devices",
+    quality: 8,
+  },
+  {
+    id: "onnx-community/Llama-3.2-3B-Instruct-ONNX",
+    name: "Llama 3.2 3B (Best)",
+    description: "Smartest small model, excellent reasoning",
+    size: "~2GB",
+    sizeBytes: 2 * 1024 * 1024 * 1024,
+    minMemoryGB: 6,
+    recommended: "High-end devices",
+    quality: 10,
+  },
   {
     id: "Xenova/Qwen1.5-0.5B-Chat",
     name: "Qwen 1.5 0.5B (Fast)",
-    description: "Compact & fast, great for mobile",
+    description: "Ultra-compact for low-end devices",
     size: "~350MB",
     sizeBytes: 350 * 1024 * 1024,
     minMemoryGB: 2,
-    recommended: "Mobile & low-end devices",
+    recommended: "Low-end mobile",
     quality: 3,
   },
   {
-    id: "Xenova/Qwen1.5-1.8B-Chat",
-    name: "Qwen 1.5 1.8B (Balanced)",
-    description: "Best balance of speed & quality",
-    size: "~1.2GB",
-    sizeBytes: 1.2 * 1024 * 1024 * 1024,
-    minMemoryGB: 4,
-    recommended: "Most devices",
-    quality: 7,
-  },
-  {
     id: "Xenova/Phi-2",
-    name: "Phi-2 (Smart)",
+    name: "Phi-2 (Balanced)",
     description: "Microsoft's efficient reasoning model",
     size: "~1.5GB",
     sizeBytes: 1.5 * 1024 * 1024 * 1024,
     minMemoryGB: 4,
     recommended: "Mid-range devices",
-    quality: 8,
+    quality: 7,
   },
-  {
-    id: "HuggingFaceTB/SmolLM2-1.7B-Instruct",
-    name: "SmolLM2 1.7B (Best)",
-    description: "Latest compact model, excellent quality",
-    size: "~1.8GB",
-    sizeBytes: 1.8 * 1024 * 1024 * 1024,
-    minMemoryGB: 6,
-    recommended: "High-end devices",
-    quality: 9,
-  }
 ] as const;
 
 export type ModelId = typeof AVAILABLE_MODELS[number]['id'];
@@ -103,8 +103,8 @@ interface OfflineAIContextType {
 
 const OfflineAIContext = createContext<OfflineAIContextType | undefined>(undefined);
 
-const DEFAULT_MODEL: ModelId = "Xenova/Qwen1.5-0.5B-Chat";
-const CACHE_KEY = 'offline_ai_cached_model';
+const DEFAULT_MODEL: ModelId = "onnx-community/Llama-3.2-1B-Instruct-ONNX";
+const CACHE_KEY = 'offline_ai_cached_model_v2'; // Cache bust for model update
 
 // Helper to detect device capabilities
 async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
@@ -140,9 +140,11 @@ async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
   let recommendedModelId: ModelId = "Xenova/Qwen1.5-0.5B-Chat";
 
   if (estimatedMemoryGB >= 6 && !isMobile) {
-    recommendedModelId = "HuggingFaceTB/SmolLM2-1.7B-Instruct";
-  } else if (estimatedMemoryGB >= 4) {
-    recommendedModelId = "Xenova/Qwen1.5-1.8B-Chat";
+    recommendedModelId = "onnx-community/Llama-3.2-3B-Instruct-ONNX";
+  } else if (estimatedMemoryGB >= 3) {
+    recommendedModelId = "onnx-community/Llama-3.2-1B-Instruct-ONNX";
+  } else if (estimatedMemoryGB >= 2) {
+    recommendedModelId = "Xenova/Qwen1.5-0.5B-Chat";
   }
 
   return {
@@ -451,8 +453,11 @@ export const OfflineAIProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     try {
-      // Format prompt for instruction-tuned models
-      const formattedPrompt = `<|user|>\n${prompt}\n<|assistant|>\n`;
+      // Format prompt based on model type
+      const isLlama = cachedModelId?.includes('Llama');
+      const formattedPrompt = isLlama 
+        ? `<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n${prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`
+        : `<|user|>\n${prompt}\n<|assistant|>\n`;
 
       const result = await pipelineRef.current(formattedPrompt, {
         max_new_tokens: maxTokens,
