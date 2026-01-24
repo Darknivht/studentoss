@@ -22,12 +22,14 @@ import {
   Sparkles,
   X,
   RefreshCw,
-  AlertTriangle,
   Smartphone,
   Monitor,
   Zap,
   Cloud,
-  Wifi
+  Wifi,
+  CheckCircle,
+  AlertCircle,
+  Star
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -237,16 +239,6 @@ const OfflineMode = () => {
 
   const handleTestAI = async () => {
     if (!testPrompt.trim()) return;
-    
-    // Check if AI is available (cloud is always available, offline needs model loaded)
-    if (offlineAI.aiMode === 'offline' && !offlineAI.isModelLoaded) {
-      toast({
-        title: 'Model Not Loaded',
-        description: 'Please download the offline AI model first, or switch to Cloud AI.',
-        variant: 'destructive',
-      });
-      return;
-    }
 
     setIsTesting(true);
     setTestResponse('');
@@ -263,6 +255,27 @@ const OfflineMode = () => {
     } finally {
       setIsTesting(false);
     }
+  };
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const getQualityStars = (quality: number) => {
+    const stars = [];
+    for (let i = 0; i < 5; i++) {
+      stars.push(
+        <Star
+          key={i}
+          className={`w-3 h-3 ${i < Math.ceil(quality / 2) ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'}`}
+        />
+      );
+    }
+    return stars;
   };
 
   if (loading) {
@@ -296,12 +309,12 @@ const OfflineMode = () => {
         <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-xl">
           <WifiOff className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
           <p className="text-sm text-muted-foreground">
-            Download study packs to access them without internet. Perfect for studying on the go!
+            Download study packs and AI models to access them without internet. Perfect for studying on the go!
           </p>
         </div>
       </Card>
 
-      {/* AI Mode Selection */}
+      {/* AI Assistant Section */}
       <Card className="p-6 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-purple-500/20">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
@@ -314,11 +327,11 @@ const OfflineMode = () => {
           <div className="flex-1">
             <h3 className="font-semibold text-foreground">AI Assistant</h3>
             <p className="text-sm text-muted-foreground">
-              {offlineAI.aiMode === 'cloud' 
+              {offlineAI.aiMode === 'cloud'
                 ? 'Using Cloud AI (requires internet)'
-                : offlineAI.isModelLoaded
-                  ? `Offline model: ${offlineAI.modelName}`
-                  : 'Download AI model to use without internet'}
+                : offlineAI.isModelLoaded || offlineAI.isModelCached
+                  ? `Offline: ${offlineAI.modelName}`
+                  : 'Download AI model for offline use'}
             </p>
           </div>
           {/* Device indicator */}
@@ -340,9 +353,7 @@ const OfflineMode = () => {
         {/* AI Mode Toggle */}
         <div className="mb-4 p-4 bg-background/50 rounded-xl border border-border">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <Label htmlFor="ai-mode" className="text-sm font-medium">AI Mode</Label>
-            </div>
+            <Label htmlFor="ai-mode" className="text-sm font-medium">AI Mode</Label>
             <div className="flex items-center gap-2">
               <span className={`text-xs ${offlineAI.aiMode === 'cloud' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
                 <Cloud className="w-3 h-3 inline mr-1" />
@@ -352,7 +363,6 @@ const OfflineMode = () => {
                 id="ai-mode"
                 checked={offlineAI.aiMode === 'offline'}
                 onCheckedChange={(checked) => offlineAI.setAIMode(checked ? 'offline' : 'cloud')}
-                disabled={!offlineAI.deviceCapabilities?.supportsWebGPU && offlineAI.aiMode === 'cloud'}
               />
               <span className={`text-xs ${offlineAI.aiMode === 'offline' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
                 <WifiOff className="w-3 h-3 inline mr-1" />
@@ -360,7 +370,7 @@ const OfflineMode = () => {
               </span>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className={`p-3 rounded-lg border ${offlineAI.aiMode === 'cloud' ? 'border-primary bg-primary/5' : 'border-border bg-muted/30'}`}>
               <div className="flex items-center gap-2 mb-1">
@@ -368,33 +378,255 @@ const OfflineMode = () => {
                 <span className="font-medium text-foreground">Cloud AI</span>
               </div>
               <ul className="text-muted-foreground space-y-0.5">
-                <li>• Powerful AI models</li>
-                <li>• No download required</li>
+                <li>• Most powerful models</li>
+                <li>• No download needed</li>
                 <li>• Requires internet</li>
               </ul>
             </div>
-            <div className={`p-3 rounded-lg border ${offlineAI.aiMode === 'offline' ? 'border-primary bg-primary/5' : 'border-border bg-muted/30'} ${!offlineAI.deviceCapabilities?.supportsWebGPU ? 'opacity-50' : ''}`}>
+            <div className={`p-3 rounded-lg border ${offlineAI.aiMode === 'offline' ? 'border-primary bg-primary/5' : 'border-border bg-muted/30'}`}>
               <div className="flex items-center gap-2 mb-1">
                 <WifiOff className="w-4 h-4 text-green-500" />
                 <span className="font-medium text-foreground">Offline AI</span>
               </div>
               <ul className="text-muted-foreground space-y-0.5">
-                <li>• Works without internet</li>
+                <li>• Works anywhere</li>
                 <li>• Privacy-focused</li>
-                <li>• Requires WebGPU</li>
+                <li>• One-time download</li>
               </ul>
             </div>
           </div>
-          
-          {offlineAI.aiMode === 'cloud' && (
-            <div className="mt-3 space-y-3">
-              <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
-                <Wifi className="w-3 h-3" />
-                <span>Cloud AI is ready to use!</span>
+        </div>
+
+        {/* Cloud AI Test Section */}
+        {offlineAI.aiMode === 'cloud' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+              <CheckCircle className="w-4 h-4" />
+              <span>Cloud AI is ready to use!</span>
+            </div>
+
+            <div className="p-3 bg-background/50 rounded-lg border border-border space-y-3">
+              <textarea
+                value={testPrompt}
+                onChange={(e) => setTestPrompt(e.target.value)}
+                placeholder="Ask a study question..."
+                className="w-full p-3 rounded-xl bg-background border border-border text-foreground text-sm resize-none h-20"
+              />
+              <Button
+                onClick={handleTestAI}
+                disabled={isTesting || !testPrompt.trim()}
+                className="w-full"
+              >
+                {isTesting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Thinking...
+                  </>
+                ) : (
+                  <>
+                    <Cloud className="w-4 h-4 mr-2" />
+                    Ask Cloud AI
+                  </>
+                )}
+              </Button>
+
+              {testResponse && (
+                <div className="p-3 bg-muted rounded-xl">
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{testResponse}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Offline AI Section */}
+        {offlineAI.aiMode === 'offline' && (
+          <div className="space-y-4">
+            {/* Device Capabilities */}
+            {offlineAI.isCheckingDevice ? (
+              <div className="p-4 bg-muted/50 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">Detecting device capabilities...</span>
+                </div>
               </div>
-              
-              {/* Cloud AI Test Section */}
+            ) : offlineAI.deviceCapabilities && (
+              <div className="p-4 bg-muted/50 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">Device Info</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => offlineAI.checkDeviceCapabilities()}
+                    className="h-7 px-2"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-3 h-3 text-green-500" />
+                    <span className="text-muted-foreground">
+                      {offlineAI.deviceCapabilities.supportsWasm ? 'WebAssembly Ready' : 'Limited Support'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      ~{offlineAI.deviceCapabilities.estimatedMemoryGB}GB RAM
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 col-span-2">
+                    <Monitor className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      {offlineAI.deviceCapabilities.browserName}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Model Status */}
+            {offlineAI.isModelCached && (
+              <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{offlineAI.modelName}</p>
+                      <p className="text-xs text-muted-foreground">Downloaded & ready to use</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => offlineAI.deleteModel()}
+                    className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Download Progress */}
+            {offlineAI.isDownloading && (
+              <div className="p-4 bg-muted/50 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <span className="text-sm font-medium text-foreground">Downloading Model</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => offlineAI.cancelDownload()}
+                    className="h-7 px-2 text-red-500 hover:text-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <Progress value={offlineAI.progress} className="h-2" />
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{offlineAI.progressText}</span>
+                  <span>{Math.round(offlineAI.progress)}%</span>
+                </div>
+
+                {offlineAI.totalBytes > 0 && (
+                  <div className="text-xs text-muted-foreground text-center">
+                    {formatBytes(offlineAI.downloadedBytes)} / {formatBytes(offlineAI.totalBytes)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Model Selection */}
+            {!offlineAI.isModelCached && !offlineAI.isDownloading && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Select AI Model</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Choose a model based on your device. Larger models are smarter but need more storage.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {AVAILABLE_MODELS.map((model) => {
+                    const isRecommended = offlineAI.deviceCapabilities?.recommendedModelId === model.id;
+                    const isSelected = offlineAI.selectedModelId === model.id;
+                    const memoryOk = (offlineAI.deviceCapabilities?.estimatedMemoryGB || 4) >= model.minMemoryGB;
+
+                    return (
+                      <button
+                        key={model.id}
+                        onClick={() => offlineAI.setSelectedModelId(model.id)}
+                        className={`w-full p-4 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border bg-background hover:border-primary/50'
+                        } ${!memoryOk ? 'opacity-60' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-sm text-foreground">{model.name}</span>
+                              {isRecommended && (
+                                <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs">
+                                  Recommended
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">{model.description}</p>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <HardDrive className="w-3 h-3" />
+                                {model.size}
+                              </span>
+                              <span className="flex items-center gap-0.5">
+                                {getQualityStars(model.quality)}
+                              </span>
+                            </div>
+                            {!memoryOk && (
+                              <div className="flex items-center gap-1 mt-2 text-xs text-orange-500">
+                                <AlertCircle className="w-3 h-3" />
+                                Requires {model.minMemoryGB}GB+ RAM
+                              </div>
+                            )}
+                          </div>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30'
+                          }`}>
+                            {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  onClick={handleLoadAI}
+                  className="w-full"
+                  size="lg"
+                  disabled={offlineAI.isDownloading}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download {AVAILABLE_MODELS.find(m => m.id === offlineAI.selectedModelId)?.name}
+                </Button>
+
+                <p className="text-xs text-muted-foreground text-center">
+                  ⚡ Uses ONNX Runtime - works on all devices including mobile!
+                </p>
+              </div>
+            )}
+
+            {/* Test Offline AI */}
+            {(offlineAI.isModelLoaded || offlineAI.isModelCached) && !offlineAI.isDownloading && (
               <div className="p-3 bg-background/50 rounded-lg border border-border space-y-3">
+                <Label className="text-sm font-medium">Test Offline AI</Label>
                 <textarea
                   value={testPrompt}
                   onChange={(e) => setTestPrompt(e.target.value)}
@@ -413,8 +645,8 @@ const OfflineMode = () => {
                     </>
                   ) : (
                     <>
-                      <Cloud className="w-4 h-4 mr-2" />
-                      Ask Cloud AI
+                      <Brain className="w-4 h-4 mr-2" />
+                      Ask Offline AI
                     </>
                   )}
                 </Button>
@@ -425,429 +657,68 @@ const OfflineMode = () => {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Only show offline AI sections when in offline mode */}
-        {offlineAI.aiMode === 'offline' && (
-          <>
-
-        {/* Device Capabilities Card */}
-        {offlineAI.isCheckingDevice ? (
-          <div className="mb-4 p-4 bg-muted/50 rounded-xl">
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">Detecting device capabilities...</span>
-            </div>
-          </div>
-        ) : offlineAI.deviceCapabilities && (
-          <div className="mb-4 p-4 bg-muted/50 rounded-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">Device Capabilities</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => offlineAI.checkDeviceCapabilities()}
-                className="h-7 px-2"
-              >
-                <RefreshCw className="w-3 h-3" />
-              </Button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${offlineAI.deviceCapabilities.supportsWebGPU ? 'bg-green-500' : 'bg-red-500'}`} />
-                <span className="text-muted-foreground">
-                  WebGPU: {offlineAI.deviceCapabilities.supportsWebGPU ? 'Supported' : 'Not Available'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Zap className="w-3 h-3 text-muted-foreground" />
-                <span className="text-muted-foreground">
-                  Memory: ~{offlineAI.deviceCapabilities.estimatedMemoryGB}GB
-                </span>
-              </div>
-              {offlineAI.deviceCapabilities.gpuDevice && (
-                <div className="col-span-2 flex items-center gap-2">
-                  <Cpu className="w-3 h-3 text-muted-foreground" />
-                  <span className="text-muted-foreground truncate">
-                    GPU: {offlineAI.deviceCapabilities.gpuDevice}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Recommended Model */}
-            {!offlineAI.isModelCached && offlineAI.deviceCapabilities.supportsWebGPU && (
-              <div className="flex items-center gap-2 pt-2 border-t border-border">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <span className="text-xs text-primary font-medium">
-                  Recommended: {AVAILABLE_MODELS.find(m => m.id === offlineAI.deviceCapabilities?.recommendedModelId)?.name}
-                </span>
-              </div>
             )}
           </div>
-        )}
-
-        {/* WebGPU Not Supported Warning */}
-        {offlineAI.deviceCapabilities && !offlineAI.deviceCapabilities.supportsWebGPU && (
-          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-xl">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-              <div className="space-y-2">
-                <p className="font-medium text-destructive">WebGPU Not Available</p>
-                <p className="text-sm text-muted-foreground">
-                  {offlineAI.deviceCapabilities.webGPUError || "Your device doesn't support WebGPU, which is required for offline AI."}
-                </p>
-                <div className="text-sm text-muted-foreground space-y-1 mt-3">
-                  <p className="font-medium">How to fix:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Use Chrome, Edge, or a modern browser</li>
-                    <li>On Android, try Chrome or Samsung Internet</li>
-                    <li>Ensure your device has a compatible GPU</li>
-                    <li>Some older devices may not support WebGPU</li>
-                  </ul>
-                </div>
-                <a 
-                  href="https://webgpureport.org/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-block text-xs text-primary underline mt-2"
-                >
-                  Check WebGPU compatibility →
-                </a>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Mobile Device Info - only show if WebGPU is supported */}
-        {offlineAI.isMobile && !offlineAI.isModelLoaded && !offlineAI.isLoading && offlineAI.deviceCapabilities?.supportsWebGPU && (
-          <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-            <div className="flex items-start gap-2">
-              <span className="text-amber-500">📱</span>
-              <div className="text-sm">
-                <p className="font-medium text-amber-600 dark:text-amber-400">Mobile Device Detected</p>
-                <p className="text-muted-foreground mt-1">
-                  {offlineAI.isCapacitor
-                    ? 'Running as native app. AI will work offline after download.'
-                    : 'AI model works in mobile browsers. Download on WiFi for best results.'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-
-        {offlineAI.isDownloading ? (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Downloading AI model...</span>
-              </div>
-              <span className="font-medium text-foreground">{Math.round(offlineAI.progress)}%</span>
-            </div>
-            <Progress value={offlineAI.progress} className="h-3" />
-            <p className="text-xs text-muted-foreground">
-              {offlineAI.progressText || 'This may take a while. Please stay on this page.'}
-            </p>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={offlineAI.cancelDownload}
-              className="w-full"
-            >
-              <X className="w-4 h-4 mr-2" />
-              Cancel Download
-            </Button>
-          </div>
-        ) : offlineAI.isModelLoaded ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-green-500">
-                <Check className="w-4 h-4" />
-                <span>AI ready for offline use!</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-500 text-xs">WebGPU</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => offlineAI.deleteModel()}
-                  className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <textarea
-                value={testPrompt}
-                onChange={(e) => setTestPrompt(e.target.value)}
-                placeholder="Ask a study question..."
-                className="w-full p-3 rounded-xl bg-background border border-border text-foreground text-sm resize-none h-20"
-              />
-              <Button
-                onClick={handleTestAI}
-                disabled={isTesting || !testPrompt.trim()}
-                className="w-full"
-              >
-                {isTesting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {offlineAI.isMobile ? 'Processing...' : 'Thinking...'}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Ask Offline AI
-                  </>
-                )}
-              </Button>
-
-              {testResponse && (
-                <div className="p-3 bg-muted rounded-xl">
-                  <p className="text-sm text-foreground">{testResponse}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : offlineAI.isModelCached ? (
-          /* Cached model - show load or delete options */
-          <div className="space-y-4">
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                  <Check className="w-4 h-4" />
-                  <span>Model downloaded: {AVAILABLE_MODELS.find(m => m.id === offlineAI.cachedModelId)?.name}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex gap-2">
-              <Button onClick={() => offlineAI.startDownload()} className="flex-1">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Load Model
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => offlineAI.deleteModel()}
-                className="text-destructive border-destructive/30 hover:bg-destructive/10"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            <p className="text-xs text-muted-foreground text-center">
-              Or download a different model below
-            </p>
-            
-            {/* Model Selection for switching */}
-            <div className="space-y-2">
-              <Select
-                value={offlineAI.selectedModelId}
-                onValueChange={(value) => offlineAI.setSelectedModelId(value as any)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a different model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_MODELS.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">{model.size} • {model.recommended}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        ) : offlineAI.deviceCapabilities?.supportsWebGPU === false ? (
-          /* WebGPU not supported - show disabled state */
-          <div className="space-y-4 opacity-50">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Select Model</label>
-              <Select disabled value={offlineAI.selectedModelId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_MODELS.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">{model.size} • {model.recommended}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <Button disabled className="w-full">
-              <Download className="w-4 h-4 mr-2" />
-              WebGPU Required for Offline AI
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Model Selection */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-foreground">Select Model</label>
-                {offlineAI.deviceCapabilities && (
-                  <span className="text-xs text-primary">
-                    ✨ {offlineAI.selectedModelId === offlineAI.deviceCapabilities.recommendedModelId ? 'Recommended for your device' : ''}
-                  </span>
-                )}
-              </div>
-              <Select
-                value={offlineAI.selectedModelId}
-                onValueChange={(value) => offlineAI.setSelectedModelId(value as any)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_MODELS.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col items-start">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{model.name}</span>
-                          {offlineAI.deviceCapabilities?.recommendedModelId === model.id && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary">Recommended</span>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground">{model.size} • {model.recommended}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              {/* Selected model info */}
-              {(() => {
-                const selected = AVAILABLE_MODELS.find(m => m.id === offlineAI.selectedModelId);
-                const deviceMem = offlineAI.deviceCapabilities?.estimatedMemoryGB || 4;
-                const isCompatible = selected && deviceMem >= selected.minMemoryGB;
-                
-                return selected ? (
-                  <div className={`p-3 rounded-lg text-sm ${isCompatible ? 'bg-muted/50' : 'bg-amber-500/10 border border-amber-500/20'}`}>
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-foreground">{selected.name}</p>
-                      {!isCompatible && (
-                        <span className="text-xs text-amber-600 dark:text-amber-400">May be slow on your device</span>
-                      )}
-                    </div>
-                    <p className="text-muted-foreground">{selected.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Size: {selected.size} • Requires ~{selected.minMemoryGB}GB RAM
-                    </p>
-                  </div>
-                ) : null;
-              })()}
-            </div>
-
-            <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-              <li>• Answer complex study questions</li>
-              <li>• Summarize notes with high accuracy</li>
-              <li>• Generate flashcard hints</li>
-              <li>• Explain difficult concepts</li>
-              {offlineAI.isMobile && <li>• Works offline on your phone</li>}
-            </ul>
-            
-            <Button onClick={() => offlineAI.startDownload()} className="w-full">
-              <Download className="w-4 h-4 mr-2" />
-              {offlineAI.progress > 0 ? 'Resume Download' : 'Download Offline AI Model'}
-            </Button>
-            
-            {offlineAI.error && (
-              <p className="text-xs text-destructive">{offlineAI.error}</p>
-            )}
-          </div>
-        )}
-        </>
         )}
       </Card>
 
-      {/* Study Packs */}
-      <div>
-        <h3 className="font-semibold text-foreground mb-3">Available Study Packs</h3>
-
+      {/* Study Packs Section */}
+      <div className="space-y-3">
+        <h3 className="font-semibold text-foreground">Study Packs</h3>
         {studyPacks.length === 0 ? (
-          <Card className="p-8 bg-card border-border text-center">
-            <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-            <p className="text-muted-foreground">No study packs available yet</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Create notes or flashcards to enable offline mode
+          <Card className="p-6 bg-card border-border text-center">
+            <p className="text-muted-foreground text-sm">
+              No study packs available yet. Create some notes or flashcards first!
             </p>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {studyPacks.map((pack) => (
-              <motion.div
-                key={pack.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-              >
-                <Card className="p-4 bg-card border-border">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-                        {getPackIcon(pack.type)}
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-foreground">{pack.name}</h4>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{pack.itemCount} items</span>
-                          <span>•</span>
-                          <span>{pack.size}</span>
-                        </div>
-                      </div>
-                    </div>
+          studyPacks.map((pack) => (
+            <Card
+              key={pack.id}
+              className="p-4 bg-card border-border"
+            >
+              <div className="flex items-center gap-3">
+                {getPackIcon(pack.type)}
+                <div className="flex-1">
+                  <p className="font-medium text-foreground text-sm">{pack.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {pack.itemCount} items • {pack.size}
+                  </p>
+                </div>
 
-                    {downloading === pack.id ? (
-                      <div className="w-24">
-                        <Progress value={progress} className="h-2" />
-                        <p className="text-xs text-muted-foreground mt-1 text-center">
-                          {progress}%
-                        </p>
-                      </div>
-                    ) : pack.downloaded ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-green-500 flex items-center gap-1">
-                          <Check className="w-4 h-4" />
-                          Saved
-                        </span>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => deletePack(pack.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => downloadPack(pack)}
-                      >
-                        <Download className="w-4 h-4 mr-1" />
-                        Download
-                      </Button>
-                    )}
+                {downloading === pack.id ? (
+                  <div className="w-24">
+                    <Progress value={progress} className="h-2" />
                   </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
+                ) : pack.downloaded ? (
+                  <div className="flex gap-2">
+                    <span className="text-xs text-green-500 flex items-center gap-1">
+                      <Check className="w-3 h-3" />
+                      Saved
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deletePack(pack.id)}
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadPack(pack)}
+                    className="h-8"
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    Save
+                  </Button>
+                )}
+              </div>
+            </Card>
+          ))
         )}
       </div>
     </motion.div>
