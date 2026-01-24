@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",
+    "@capacitor/local-notifications": "^8.0.0",
     "@hookform/resolvers": "^3.10.0",
     "@huggingface/transformers": "^3.8.1",
     "@mlc-ai/web-llm": "^0.2.80",
