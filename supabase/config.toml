@@ -1,7 +1,7 @@
 project_id = "aubastwqendcpwwbusgs"
 
 [functions.ai-study]
-verify_jwt = true
+verify_jwt = false
 
 [functions.extract-pdf-text]
 verify_jwt = false
