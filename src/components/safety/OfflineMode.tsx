@@ -523,29 +523,76 @@ const OfflineMode = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => offlineAI.cancelDownload()}
-                    className="h-7 px-2 text-red-500 hover:text-red-600"
+                    className="h-7 px-2 text-orange-500 hover:text-orange-600"
                   >
+                    <span className="text-xs mr-1">Pause</span>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
 
-                <Progress value={offlineAI.progress} className="h-2" />
+                <Progress value={offlineAI.progress} className="h-3" />
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{offlineAI.progressText}</span>
-                  <span>{Math.round(offlineAI.progress)}%</span>
+                {/* Current file being downloaded */}
+                {offlineAI.currentFile && (
+                  <div className="text-xs text-muted-foreground truncate">
+                    <Download className="w-3 h-3 inline mr-1" />
+                    {offlineAI.currentFile}
+                  </div>
+                )}
+
+                {/* Progress stats */}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-foreground">
+                    {formatBytes(offlineAI.downloadedBytes)} / {formatBytes(offlineAI.totalBytes)}
+                  </span>
+                  <span className="text-primary font-bold">
+                    {offlineAI.progress.toFixed(1)}%
+                  </span>
                 </div>
 
-                {offlineAI.totalBytes > 0 && (
-                  <div className="text-xs text-muted-foreground text-center">
-                    {formatBytes(offlineAI.downloadedBytes)} / {formatBytes(offlineAI.totalBytes)}
+                {/* Files progress */}
+                {offlineAI.totalFiles > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    Files: {offlineAI.filesCompleted} / {offlineAI.totalFiles} completed
                   </div>
                 )}
               </div>
             )}
 
+            {/* Resume Download */}
+            {offlineAI.canResume && !offlineAI.isDownloading && !offlineAI.isModelCached && (
+              <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Download Paused</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatBytes(offlineAI.downloadedBytes)} downloaded - tap to continue
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => offlineAI.resumeDownload()}
+                    className="flex-1"
+                    variant="default"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Resume Download
+                  </Button>
+                  <Button
+                    onClick={() => offlineAI.deleteModel()}
+                    variant="outline"
+                    className="text-red-500 hover:text-red-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Model Selection */}
-            {!offlineAI.isModelCached && !offlineAI.isDownloading && (
+            {!offlineAI.isModelCached && !offlineAI.isDownloading && !offlineAI.canResume && (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Select AI Model</Label>
