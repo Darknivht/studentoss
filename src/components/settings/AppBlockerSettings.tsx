@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
   Shield, Plus, Trash2, Clock, Target, 
-  Smartphone, Lock, Unlock, Info, ArrowLeft
+  Smartphone, Lock, Unlock, Info, ArrowLeft,
+  KeyRound, Zap, Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +12,17 @@ import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
 import { useStudyTimeTracker } from '@/hooks/useStudyTimeTracker';
+import { useFocusLock } from '@/hooks/useFocusLock';
+import { getPlatformCapabilities } from '@/plugins/FocusModePlugin';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import AppSelector from '@/components/focus/AppSelector';
+import PermissionsSetup from '@/components/focus/PermissionsSetup';
 
 interface BlockedApp {
   id: string;
@@ -38,13 +51,27 @@ const POPULAR_APPS = [
 ];
 
 const AppBlockerSettings = ({ onBack }: AppBlockerSettingsProps) => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { dailyGoalMinutes, setDailyGoal, todayMinutes, isGoalMet } = useStudyTimeTracker();
+  const { 
+    blockedApps: nativeBlockedApps, 
+    parentPinHash, 
+    setParentPin,
+    permissionsGranted,
+    platform,
+  } = useFocusLock();
+  const capabilities = getPlatformCapabilities();
   
   const [blockerEnabled, setBlockerEnabled] = useState(false);
   const [blockedApps, setBlockedApps] = useState<BlockedApp[]>([]);
   const [customAppName, setCustomAppName] = useState('');
   const [goalMinutes, setGoalMinutes] = useState(dailyGoalMinutes);
+  const [showAppSelector, setShowAppSelector] = useState(false);
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
 
   // Load settings from localStorage
   useEffect(() => {
@@ -103,6 +130,22 @@ const AppBlockerSettings = ({ onBack }: AppBlockerSettingsProps) => {
     await setDailyGoal(newGoal);
   };
 
+  const handleSetPin = async () => {
+    if (newPin.length < 4) {
+      toast({ title: 'PIN too short', description: 'PIN must be at least 4 digits', variant: 'destructive' });
+      return;
+    }
+    if (newPin !== confirmPin) {
+      toast({ title: 'PINs do not match', description: 'Please make sure both PINs match', variant: 'destructive' });
+      return;
+    }
+    await setParentPin(newPin);
+    setShowPinSetup(false);
+    setNewPin('');
+    setConfirmPin('');
+    toast({ title: 'PIN Set', description: 'Parent PIN has been configured' });
+  };
+
   const formatTime = (minutes: number) => {
     if (minutes < 60) return `${minutes} minutes`;
     const hrs = Math.floor(minutes / 60);
@@ -125,6 +168,20 @@ const AppBlockerSettings = ({ onBack }: AppBlockerSettingsProps) => {
           <p className="text-muted-foreground text-sm">Block distracting apps until study goal is met</p>
         </div>
       </motion.header>
+
+      {/* Quick Launch Focus Session */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <Button 
+          onClick={() => navigate('/focus-session')}
+          className="w-full h-14 text-lg gradient-primary text-primary-foreground"
+        >
+          <Zap className="w-5 h-5 mr-2" />
+          Start Focus Session
+        </Button>
+      </motion.div>
 
       {/* Info Banner */}
       <motion.div
@@ -331,16 +388,142 @@ const AppBlockerSettings = ({ onBack }: AppBlockerSettingsProps) => {
         </AnimatePresence>
       </motion.div>
 
-      {/* Native App Note */}
+      {/* Parent PIN Setup */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
+        className="p-4 rounded-2xl bg-card border border-border"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+              <KeyRound className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Parent PIN</h3>
+              <p className="text-xs text-muted-foreground">
+                {parentPinHash ? 'PIN configured' : 'Set a PIN for emergency exit'}
+              </p>
+            </div>
+          </div>
+          <Dialog open={showPinSetup} onOpenChange={setShowPinSetup}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                {parentPinHash ? 'Change' : 'Set PIN'}
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Set Parent PIN</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <p className="text-sm text-muted-foreground">
+                  This PIN allows emergency exit from focus sessions.
+                </p>
+                <Input
+                  type="password"
+                  placeholder="Enter PIN (min 4 digits)"
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                  maxLength={6}
+                />
+                <Input
+                  type="password"
+                  placeholder="Confirm PIN"
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                  maxLength={6}
+                />
+                <Button onClick={handleSetPin} className="w-full">
+                  Save PIN
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </motion.div>
+
+      {/* Permissions Setup (Native only) */}
+      {capabilities.isNative && !permissionsGranted && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+        >
+          <Dialog open={showPermissions} onOpenChange={setShowPermissions}>
+            <DialogTrigger asChild>
+              <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 cursor-pointer">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Settings className="w-5 h-5 text-destructive" />
+                    <div>
+                      <h3 className="font-semibold">Permissions Required</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Grant permissions for full app blocking
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="destructive" size="sm">Setup</Button>
+                </div>
+              </div>
+            </DialogTrigger>
+            <DialogContent>
+              <PermissionsSetup onComplete={() => setShowPermissions(false)} />
+            </DialogContent>
+          </Dialog>
+        </motion.div>
+      )}
+
+      {/* Native App Selector (Android) */}
+      {capabilities.canBlockApps && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <Dialog open={showAppSelector} onOpenChange={setShowAppSelector}>
+            <DialogTrigger asChild>
+              <div className="p-4 rounded-2xl bg-card border border-border cursor-pointer hover:border-primary/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Smartphone className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Native App Selection</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {nativeBlockedApps.length} apps configured for native blocking
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm">Configure</Button>
+                </div>
+              </div>
+            </DialogTrigger>
+            <DialogContent className="max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Select Apps to Block</DialogTitle>
+              </DialogHeader>
+              <AppSelector onClose={() => setShowAppSelector(false)} />
+            </DialogContent>
+          </Dialog>
+        </motion.div>
+      )}
+
+      {/* Native App Note */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
         className="p-4 rounded-2xl bg-muted/50 text-sm text-muted-foreground"
       >
         <p>
-          <strong>Note:</strong> Full app blocking requires the native mobile app. 
-          In the web version, we'll show you a study reminder when you open distracting websites.
+          <strong>Note:</strong> {capabilities.isNative 
+            ? (platform === 'android' 
+              ? 'Full app blocking is available on Android. Apps in your block list will be restricted during focus sessions.'
+              : 'iOS uses Guided Access for app locking. Enable it in Settings → Accessibility → Guided Access.')
+            : 'Full app blocking requires the native mobile app. In the web version, we\'ll show you a study reminder when you open distracting websites.'}
         </p>
       </motion.div>
     </div>

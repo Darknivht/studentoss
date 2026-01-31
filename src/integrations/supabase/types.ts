@@ -44,6 +44,36 @@ export type Database = {
         }
         Relationships: []
       }
+      blocked_app_list: {
+        Row: {
+          app_icon: string | null
+          app_name: string
+          created_at: string
+          id: string
+          is_active: boolean
+          package_name: string
+          user_id: string
+        }
+        Insert: {
+          app_icon?: string | null
+          app_name: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          package_name: string
+          user_id: string
+        }
+        Update: {
+          app_icon?: string | null
+          app_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          package_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -171,6 +201,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      focus_sessions: {
+        Row: {
+          actual_duration_minutes: number | null
+          blocked_apps: Json | null
+          created_at: string
+          end_time: string | null
+          id: string
+          start_time: string
+          status: string
+          target_duration_minutes: number
+          user_id: string
+        }
+        Insert: {
+          actual_duration_minutes?: number | null
+          blocked_apps?: Json | null
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          start_time?: string
+          status?: string
+          target_duration_minutes?: number
+          user_id: string
+        }
+        Update: {
+          actual_duration_minutes?: number | null
+          blocked_apps?: Json | null
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          start_time?: string
+          status?: string
+          target_duration_minutes?: number
+          user_id?: string
+        }
+        Relationships: []
       }
       friendships: {
         Row: {
