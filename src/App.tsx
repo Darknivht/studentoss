@@ -26,6 +26,8 @@ import Upgrade from "./pages/Upgrade";
 import Chat from "./pages/Chat";
 import GroupChat from "./pages/GroupChat";
 import NotFound from "./pages/NotFound";
+import FocusSession from "./pages/FocusSession";
+import BlockingOverlay from "./components/focus/BlockingOverlay";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +59,8 @@ const App = () => (
               <Route path="/upgrade" element={<AppLayout><Upgrade /></AppLayout>} />
               <Route path="/chat" element={<AppLayout><Chat /></AppLayout>} />
               <Route path="/group/:groupId" element={<AppLayout><GroupChat /></AppLayout>} />
+              <Route path="/focus-session" element={<AppLayout><FocusSession /></AppLayout>} />
+              <Route path="/blocking-overlay" element={<BlockingOverlay />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </OfflineAIProvider>
