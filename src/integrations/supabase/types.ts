@@ -77,6 +77,7 @@ export type Database = {
       chat_messages: {
         Row: {
           content: string
+          course_id: string | null
           created_at: string | null
           id: string
           note_id: string | null
@@ -85,6 +86,7 @@ export type Database = {
         }
         Insert: {
           content: string
+          course_id?: string | null
           created_at?: string | null
           id?: string
           note_id?: string | null
@@ -93,6 +95,7 @@ export type Database = {
         }
         Update: {
           content?: string
+          course_id?: string | null
           created_at?: string | null
           id?: string
           note_id?: string | null
@@ -100,6 +103,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "chat_messages_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chat_messages_note_id_fkey"
             columns: ["note_id"]

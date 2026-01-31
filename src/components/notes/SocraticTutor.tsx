@@ -50,23 +50,31 @@ const SocraticTutor = ({ note, courseId, courseName, allNotes = [], initialConte
   }, [messages]);
 
   const loadHistory = async () => {
-    // If we have a courseId, we load chat for the course. 
-    // Otherwise we fall back to note.id (legacy or single note mode)
+    if (!user?.id) return;
+    
+    // Build query based on mode: course_id for Course Mode, note_id for Note Mode
     let query = supabase
       .from('chat_messages')
       .select('role, content')
-      .eq('user_id', user?.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: true });
 
     if (courseId) {
-      if (note?.id) {
-        query = query.eq('note_id', note.id);
-      }
+      // Course Mode: filter by course_id
+      query = query.eq('course_id', courseId);
     } else if (note?.id) {
+      // Note Mode: filter by note_id
       query = query.eq('note_id', note.id);
+    } else {
+      // No context, skip loading
+      return;
     }
 
-    const { data } = await query;
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error loading chat history:', error);
+    }
 
     if (data && data.length > 0) {
       setMessages(data.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
@@ -95,14 +103,37 @@ What would you like to explore today?`;
   };
 
   const saveMessage = async (role: 'user' | 'assistant', content: string) => {
-    if (!note?.id) return; // Only save if we have a note context for now
+    if (!user?.id) return;
+    
+    // Must have either courseId or note.id to save
+    if (!courseId && !note?.id) return;
 
-    await supabase.from('chat_messages').insert({
-      user_id: user?.id,
-      note_id: note.id,
+    const insertData: {
+      user_id: string;
+      role: string;
+      content: string;
+      note_id?: string;
+      course_id?: string;
+    } = {
+      user_id: user.id,
       role,
       content,
-    });
+    };
+
+    // Course Mode: save with course_id
+    if (courseId) {
+      insertData.course_id = courseId;
+    }
+    // Note Mode: save with note_id  
+    if (note?.id) {
+      insertData.note_id = note.id;
+    }
+
+    const { error } = await supabase.from('chat_messages').insert(insertData);
+    
+    if (error) {
+      console.error('Error saving message:', error);
+    }
   };
 
   const handleSend = async () => {
