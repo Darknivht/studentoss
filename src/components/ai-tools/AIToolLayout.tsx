@@ -8,6 +8,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse } from '@/lib/formatters';
 
 interface AIToolLayoutProps {
   title: string;
@@ -200,17 +202,15 @@ const AIToolLayout = ({
               </Button>
             )}
           </div>
-          <ScrollArea className="max-h-[50vh]">
-            <div className="p-4">
+          <ScrollArea className="h-[50vh]">
+            <div className="p-4 overflow-hidden">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : (
                 <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
-                    {result}
-                  </pre>
+                  <ReactMarkdown>{formatAIResponse(result || '')}</ReactMarkdown>
                 </div>
               )}
             </div>

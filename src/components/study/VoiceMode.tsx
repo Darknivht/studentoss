@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Mic, MicOff, Volume2, Loader2, StopCircle } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Volume2, Loader2, StopCircle, AlertCircle, Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse, stripMarkdown } from '@/lib/formatters';
 
 // Type declarations for Web Speech API
 interface SpeechRecognitionEvent extends Event {
@@ -32,6 +35,9 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [isSupported, setIsSupported] = useState(true);
+  const [useTextInput, setUseTextInput] = useState(false);
+  const [textInput, setTextInput] = useState('');
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -39,38 +45,49 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
     
-    // Initialize speech recognition
+    // Check for speech recognition support
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const current = event.resultIndex;
-        const result = event.results[current];
-        setTranscript(result[0].transcript);
-        
-        if (result.isFinal) {
-          handleUserInput(result[0].transcript);
-        }
-      };
-      
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-      
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-        if (event.error !== 'no-speech') {
-          toast({ title: 'Error', description: 'Speech recognition failed', variant: 'destructive' });
-        }
-      };
-      
-      recognitionRef.current = recognition;
+    if (!SpeechRecognition) {
+      setIsSupported(false);
+      setUseTextInput(true);
+      return;
     }
+    
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const current = event.resultIndex;
+      const result = event.results[current];
+      setTranscript(result[0].transcript);
+      
+      if (result.isFinal) {
+        handleUserInput(result[0].transcript);
+      }
+    };
+    
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'not-allowed') {
+        toast({ 
+          title: 'Microphone Access Denied', 
+          description: 'Please allow microphone access to use voice mode, or use text input instead.',
+          variant: 'destructive' 
+        });
+        setUseTextInput(true);
+      } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        toast({ title: 'Error', description: `Speech recognition failed: ${event.error}`, variant: 'destructive' });
+      }
+    };
+    
+    recognitionRef.current = recognition;
     
     return () => {
       recognitionRef.current?.abort();
@@ -82,9 +99,10 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (!recognitionRef.current) {
-      toast({ title: 'Error', description: 'Speech recognition not supported', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Speech recognition not supported. Use text input instead.', variant: 'destructive' });
+      setUseTextInput(true);
       return;
     }
     
@@ -92,11 +110,18 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
+      // Stop any ongoing speech
       synthRef.current?.cancel();
       setIsSpeaking(false);
       setTranscript('');
-      recognitionRef.current.start();
-      setIsListening(true);
+      
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (error) {
+        console.error('Failed to start recognition:', error);
+        toast({ title: 'Error', description: 'Failed to start listening. Try refreshing the page.', variant: 'destructive' });
+      }
     }
   };
 
@@ -106,6 +131,7 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
     const userMessage: Message = { role: 'user', content: text };
     setMessages(prev => [...prev, userMessage]);
     setTranscript('');
+    setTextInput('');
     setIsProcessing(true);
     
     let response = '';
@@ -136,11 +162,17 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
     });
   };
 
+  const handleTextSubmit = () => {
+    if (textInput.trim()) {
+      handleUserInput(textInput.trim());
+    }
+  };
+
   const speakText = (text: string) => {
     if (!synthRef.current) return;
     
     // Clean text for speech
-    const cleanText = text.replace(/\*\*/g, '').replace(/\*/g, '').replace(/#/g, '');
+    const cleanText = stripMarkdown(text);
     
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = 0.95;
@@ -178,23 +210,53 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
           <h1 className="text-lg font-display font-bold text-foreground">Voice Mode</h1>
           <p className="text-muted-foreground text-xs">Talk to AI like a real tutor</p>
         </div>
-        {isSpeaking && (
-          <Button size="icon" variant="outline" onClick={stopSpeaking}>
-            <StopCircle className="w-4 h-4" />
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {isSupported && (
+            <Button 
+              size="icon" 
+              variant={useTextInput ? 'default' : 'outline'} 
+              onClick={() => setUseTextInput(!useTextInput)}
+            >
+              <Keyboard className="w-4 h-4" />
+            </Button>
+          )}
+          {isSpeaking && (
+            <Button size="icon" variant="outline" onClick={stopSpeaking}>
+              <StopCircle className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       </motion.header>
+
+      {/* Browser Not Supported Warning */}
+      {!isSupported && (
+        <div className="p-4 bg-amber-500/10 border-b border-amber-500/20">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-700 text-sm">Speech Recognition Not Supported</p>
+              <p className="text-xs text-amber-600">Your browser doesn't support voice input. Use text input below to chat.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
           {messages.length === 0 && (
             <div className="text-center py-12">
               <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <Mic className="w-8 h-8 text-primary" />
+                {useTextInput ? (
+                  <Keyboard className="w-8 h-8 text-primary" />
+                ) : (
+                  <Mic className="w-8 h-8 text-primary" />
+                )}
               </div>
               <h3 className="font-semibold text-lg mb-2">Ready to chat!</h3>
               <p className="text-muted-foreground text-sm">
-                Tap the microphone and start talking
+                {useTextInput 
+                  ? 'Type your message and press Enter'
+                  : 'Tap the microphone and start talking'}
               </p>
             </div>
           )}
@@ -211,7 +273,13 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
                   ? 'bg-primary text-primary-foreground rounded-br-sm'
                   : 'bg-muted text-foreground rounded-bl-sm'
               }`}>
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                <div className={`text-sm ${msg.role === 'assistant' ? 'prose prose-sm dark:prose-invert max-w-none' : ''}`}>
+                  {msg.role === 'assistant' ? (
+                    <ReactMarkdown>{formatAIResponse(msg.content)}</ReactMarkdown>
+                  ) : (
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  )}
+                </div>
               </div>
             </motion.div>
           ))}
@@ -233,26 +301,51 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
           )}
         </AnimatePresence>
 
-        <div className="flex justify-center gap-4">
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={toggleListening}
-            disabled={isProcessing}
-            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-              isListening
-                ? 'bg-red-500 text-white animate-pulse'
-                : 'gradient-primary text-primary-foreground'
-            }`}
-          >
-            {isProcessing ? (
-              <Loader2 className="w-6 h-6 animate-spin" />
-            ) : isListening ? (
-              <MicOff className="w-6 h-6" />
-            ) : (
-              <Mic className="w-6 h-6" />
-            )}
-          </motion.button>
-        </div>
+        {useTextInput ? (
+          <div className="flex gap-2">
+            <Textarea
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleTextSubmit();
+                }
+              }}
+              placeholder="Type your message..."
+              className="min-h-[50px] max-h-[100px]"
+              disabled={isProcessing}
+            />
+            <Button
+              onClick={handleTextSubmit}
+              disabled={isProcessing || !textInput.trim()}
+              className="gradient-primary text-primary-foreground"
+            >
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send'}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex justify-center gap-4">
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={toggleListening}
+              disabled={isProcessing}
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                isListening
+                  ? 'bg-red-500 text-white animate-pulse'
+                  : 'gradient-primary text-primary-foreground'
+              }`}
+            >
+              {isProcessing ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : isListening ? (
+                <MicOff className="w-6 h-6" />
+              ) : (
+                <Mic className="w-6 h-6" />
+              )}
+            </motion.button>
+          </div>
+        )}
 
         <div className="flex justify-center gap-2 text-xs text-muted-foreground">
           {isListening && <span className="flex items-center gap-1"><Mic className="w-3 h-3" /> Listening...</span>}

@@ -126,6 +126,83 @@ Create exercises in this exact JSON format:
 - Only return valid JSON array, no other text or markdown.`;
         userMessages = [{ role: "user", content: `Create fill-in-the-blank exercises from:\n\n${content}` }];
         break;
+
+      case "mnemonic":
+        systemPrompt = `You are a mnemonic creator that helps students memorize information effectively.
+Create memorable mnemonics for the given content. Include:
+
+1. **Acronyms** - Create funny, memorable acronyms (these work best!)
+2. **Rhymes or Songs** - Musical memory aids
+3. **Visual Associations** - Vivid mental images
+4. **Memory Palace Suggestions** - How to place concepts in familiar locations
+5. **Silly Sentences** - Using first letters of words to remember
+
+Make them FUNNY and MEMORABLE. Students remember humor better than dry facts!
+
+Format with clear headers and bullet points. Use markdown for emphasis.
+Do NOT include greetings or introductions - just provide the mnemonics directly.`;
+        userMessages = [{ role: "user", content: `Create memorable mnemonics for:\n\n${content}` }];
+        break;
+
+      case "cheatsheet":
+        systemPrompt = `You are a cheat sheet creator that condenses study materials.
+Create a one-page CHEAT SHEET from the content. Make it:
+
+- **Ultra-condensed** - Fit on one printed page
+- **Bullet points** - Use short, punchy points
+- **Abbreviations** - Use common abbreviations
+- **Key formulas** - Include important equations/formulas in LaTeX where applicable
+- **Definitions** - Essential terms only
+- **Organized sections** - Clear headers for different topics
+- **Perfect for exams** - Quick reference during last-minute review
+
+Format in clean markdown that prints well. Use headers (##), bullet points, and bold for emphasis.
+Do NOT include greetings or introductions - just provide the cheat sheet directly.`;
+        userMessages = [{ role: "user", content: `Create a one-page cheat sheet from:\n\n${content}` }];
+        break;
+
+      case "debate":
+        systemPrompt = `You are a skilled debate partner who argues the OPPOSITE view.
+Your goal is to help the student strengthen their arguments by challenging them.
+
+Your approach:
+1. **Argue the opposite position** - Be persuasive and use logic
+2. **Challenge assumptions** - Point out logical fallacies or weak points
+3. **Use evidence** - Provide counter-examples and evidence
+4. **Stay respectful** - Be challenging but not dismissive
+5. **Keep responses focused** - 2-3 paragraphs maximum
+
+Use rhetorical techniques to make strong counter-arguments.
+Format with clear paragraphs and use **bold** for key points.
+Do NOT include greetings - dive straight into the debate.`;
+        // Messages will contain the topic and user's position
+        break;
+
+      case "concept_map":
+        systemPrompt = `You are a concept map generator that creates visual mind maps.
+Analyze the content and create a concept map with 5-8 key concepts.
+
+Return ONLY valid JSON in this exact format:
+{
+  "nodes": [
+    {"id": "1", "label": "Main Concept"},
+    {"id": "2", "label": "Related Concept"}
+  ],
+  "connections": [
+    {"from": "1", "to": "2", "label": "relates to"}
+  ]
+}
+
+Rules:
+- The first node should be the main/central concept
+- Each node must have a unique "id" (string) and a "label"
+- Connections show relationships between concepts
+- Connection labels should be short (2-3 words)
+- Only return valid JSON, no other text or markdown fences.`;
+        userMessages = [{ role: "user", content: `Create a concept map from:\n\n${content}` }];
+        break;
+
+      case "math_solver":
         systemPrompt = `You are an expert math tutor. When given a math problem:
 1. Identify what type of problem it is
 2. Explain each step of the solution clearly

@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse } from '@/lib/formatters';
 
 interface Source {
   id: string;
@@ -145,9 +147,11 @@ Output the formatted bibliography ready to copy-paste.`,
               {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             </Button>
           </div>
-          <ScrollArea className="max-h-[40vh]">
-            <div className="p-4">
-              <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">{bibliography}</pre>
+          <ScrollArea className="h-[40vh]">
+            <div className="p-4 overflow-hidden">
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown>{formatAIResponse(bibliography)}</ReactMarkdown>
+              </div>
             </div>
           </ScrollArea>
         </motion.div>
