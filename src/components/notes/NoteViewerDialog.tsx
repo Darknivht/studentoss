@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
   FileText, Download, Loader2, RefreshCw, Sparkles, Eye, Type,
-  MessageCircle, BookOpen, ClipboardList, Brain, Copy, Share2, Pencil
+  MessageCircle, BookOpen, ClipboardList, Brain, Copy, Share2, Pencil, Menu, X
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { streamAIChat } from '@/lib/ai';
 import { updateCourseProgress } from '@/hooks/useCourseProgress';
 import DocumentViewer from '@/components/documents/DocumentViewer';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Note {
   id: string;
@@ -59,12 +61,14 @@ const NoteViewerDialog = ({
 }: NoteViewerDialogProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [reextracting, setReextracting] = useState(false);
   const [ocrExtracting, setOcrExtracting] = useState(false);
   const [localContent, setLocalContent] = useState<string | null>(note.content);
   const [activeTab, setActiveTab] = useState<string>('content');
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   useEffect(() => {
     setLocalContent(note.content);
@@ -398,23 +402,89 @@ const NoteViewerDialog = ({
     },
   ];
 
+  // Render quick actions content (reusable for both desktop sidebar and mobile sheet)
+  const QuickActionsContent = () => (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" />
+          Quick Actions
+        </h3>
+        <div className="space-y-2">
+          {quickActions.map((action) => (
+            <button
+              key={action.label}
+              onClick={() => {
+                action.onClick();
+                if (isMobile) setActionsOpen(false);
+              }}
+              disabled={action.disabled}
+              className={`w-full p-3 rounded-lg text-left transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${action.color} border border-transparent hover:border-border/50`}
+            >
+              <div className="flex items-center gap-3">
+                {action.loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <action.icon className="w-5 h-5" />
+                )}
+                <div>
+                  <p className="font-medium text-sm">{action.label}</p>
+                  <p className="text-xs opacity-70">{action.description}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Utility Actions */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Utilities</h3>
+        <div className="flex gap-2 flex-wrap">
+          {utilityActions.map((action) => (
+            <Button
+              key={action.label}
+              variant="outline"
+              size="sm"
+              onClick={action.onClick}
+              disabled={action.disabled}
+              className="flex-1 min-w-[100px]"
+            >
+              <action.icon className="w-4 h-4 mr-1" />
+              {action.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tip */}
+      {!hasContent && (
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            <strong>Tip:</strong> Extract text from your document first to enable AI features.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <div className="flex items-center justify-between gap-4 pr-8">
-            <DialogTitle className="flex items-center gap-2 truncate">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0">
+        <DialogHeader className="p-4 pb-0">
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <DialogTitle className="flex items-center gap-2 truncate text-base">
               <FileText className="w-5 h-5 text-primary flex-shrink-0" />
               <span className="truncate">{note.title}</span>
             </DialogTitle>
 
-            {onCourseChange && (
-              <div className="flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {onCourseChange && !isMobile && (
                 <Select
                   value={note.course_id || 'none'}
                   onValueChange={(value) => onCourseChange(value === 'none' ? null : value)}
                 >
-                  <SelectTrigger className="w-[180px] h-8 text-xs">
+                  <SelectTrigger className="w-[140px] h-8 text-xs">
                     <SelectValue placeholder="Select course" />
                   </SelectTrigger>
                   <SelectContent>
@@ -429,194 +499,194 @@ const NoteViewerDialog = ({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            )}
+              )}
+
+              {/* Mobile: Quick Actions button */}
+              {isMobile && (
+                <Sheet open={actionsOpen} onOpenChange={setActionsOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <Sparkles className="w-4 h-4" />
+                      Actions
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="bottom" className="h-[70vh] rounded-t-2xl">
+                    <SheetHeader className="pb-4">
+                      <SheetTitle className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-primary" />
+                        Note Actions
+                      </SheetTitle>
+                    </SheetHeader>
+                    <ScrollArea className="h-[calc(70vh-80px)]">
+                      <div className="pr-4">
+                        {/* Mobile course selector */}
+                        {onCourseChange && (
+                          <div className="mb-4">
+                            <label className="text-sm font-medium mb-2 block">Course</label>
+                            <Select
+                              value={note.course_id || 'none'}
+                              onValueChange={(value) => onCourseChange(value === 'none' ? null : value)}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select course" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">No Course</SelectItem>
+                                {courses.map((course) => (
+                                  <SelectItem key={course.id} value={course.id}>
+                                    <span className="flex items-center gap-2">
+                                      <span>{course.icon}</span>
+                                      <span className="truncate">{course.name}</span>
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        <QuickActionsContent />
+                      </div>
+                    </ScrollArea>
+                  </SheetContent>
+                </Sheet>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr,280px] gap-4 overflow-hidden">
-          {/* Main Content Area */}
-          <div className="space-y-4 overflow-hidden">
-            {/* File Info & Extraction Actions */}
-            {note.original_filename && (
-              <div className="flex items-center justify-between p-3 rounded-lg bg-muted gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">{note.original_filename}</span>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {isPdf && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleReextract}
-                        disabled={isProcessing}
-                      >
-                        {reextracting ? (
-                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-4 h-4 mr-1" />
-                        )}
-                        Re-extract
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleOcrExtract}
-                        disabled={isProcessing}
-                      >
-                        {ocrExtracting ? (
-                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-4 h-4 mr-1" />
-                        )}
-                        OCR
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Content with Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                {canPreview && fileUrl && (
-                  <TabsTrigger value="preview" className="flex items-center gap-2">
-                    <Eye className="w-4 h-4" />
-                    Preview
-                  </TabsTrigger>
-                )}
-                <TabsTrigger value="content" className="flex items-center gap-2">
-                  <Type className="w-4 h-4" />
-                  Content
-                </TabsTrigger>
-                <TabsTrigger value="summary" className="flex items-center gap-2">
-                  <Brain className="w-4 h-4" />
-                  Summary
-                </TabsTrigger>
-              </TabsList>
-
-              {canPreview && fileUrl && (
-                <TabsContent value="preview" className="mt-4">
-                  <DocumentViewer
-                    fileUrl={fileUrl}
-                    filename={note.original_filename || ''}
-                    className="max-h-[45vh]"
-                  />
-                </TabsContent>
-              )}
-
-              <TabsContent value="content" className="mt-4">
-                <ScrollArea className="h-[45vh] rounded-lg border border-border p-4">
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    {localContent ? (
-                      <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
-                        {localContent}
-                      </pre>
-                    ) : (
-                      <p className="text-muted-foreground text-center py-8">
-                        No text content available
-                      </p>
-                    )}
+        <div className="p-4 pt-2 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr,260px] gap-4 overflow-hidden">
+            {/* Main Content Area */}
+            <div className="space-y-3 overflow-hidden">
+              {/* File Info & Extraction Actions */}
+              {note.original_filename && (
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm font-medium truncate">{note.original_filename}</span>
                   </div>
-                </ScrollArea>
-              </TabsContent>
-
-              <TabsContent value="summary" className="mt-4">
-                <ScrollArea className="h-[45vh] rounded-lg border border-border p-4">
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    {note.summary ? (
-                      <ReactMarkdown>{note.summary}</ReactMarkdown>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <Brain className="w-12 h-12 text-muted-foreground/30 mb-4" />
-                        <h3 className="font-semibold text-lg mb-2">No summary yet</h3>
-                        <p className="text-muted-foreground text-sm mb-6 max-w-xs">
-                          Generate an AI summary to get a quick overview of this note.
-                        </p>
-                        <Button onClick={handleQuickSummary} disabled={!hasContent}>
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Generate Summary
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {isPdf && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleReextract}
+                          disabled={isProcessing}
+                          className="h-7 text-xs px-2"
+                        >
+                          {reextracting ? (
+                            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                          )}
+                          Re-extract
                         </Button>
-                      </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleOcrExtract}
+                          disabled={isProcessing}
+                          className="h-7 text-xs px-2"
+                        >
+                          {ocrExtracting ? (
+                            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3.5 h-3.5 mr-1" />
+                          )}
+                          OCR
+                        </Button>
+                      </>
                     )}
                   </div>
-                </ScrollArea>
-              </TabsContent>
-            </Tabs>
-
-            {/* Metadata */}
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <span>Source: {note.source_type === 'file' ? 'Uploaded file' : 'Manual entry'}</span>
-              <span>•</span>
-              <span>{localContent?.length || 0} characters</span>
-            </div>
-          </div>
-
-          {/* Quick Actions Sidebar */}
-          <ScrollArea className="lg:border-l lg:pl-4 border-border max-h-[70vh] lg:max-h-none">
-            <div className="space-y-4 pr-2">
-              <div>
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                  Quick Actions
-                </h3>
-                <div className="space-y-2">
-                  {quickActions.map((action) => (
-                    <button
-                      key={action.label}
-                      onClick={action.onClick}
-                      disabled={action.disabled}
-                      className={`w-full p-3 rounded-lg text-left transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${action.color} border border-transparent hover:border-border/50`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {action.loading ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <action.icon className="w-5 h-5" />
-                        )}
-                        <div>
-                          <p className="font-medium text-sm">{action.label}</p>
-                          <p className="text-xs opacity-70">{action.description}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Utility Actions */}
-              <div>
-                <h3 className="text-sm font-semibold mb-3">Utilities</h3>
-                <div className="flex gap-2 flex-wrap">
-                  {utilityActions.map((action) => (
-                    <Button
-                      key={action.label}
-                      variant="outline"
-                      size="sm"
-                      onClick={action.onClick}
-                      disabled={action.disabled}
-                      className="flex-1 min-w-[100px]"
-                    >
-                      <action.icon className="w-4 h-4 mr-1" />
-                      {action.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tip */}
-              {!hasContent && (
-                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    <strong>Tip:</strong> Extract text from your document first to enable AI features.
-                  </p>
                 </div>
               )}
+
+              {/* Content with Tabs */}
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className={`grid w-full ${canPreview && fileUrl ? 'grid-cols-3' : 'grid-cols-2'} h-9`}>
+                  {canPreview && fileUrl && (
+                    <TabsTrigger value="preview" className="flex items-center gap-1.5 text-xs">
+                      <Eye className="w-3.5 h-3.5" />
+                      Preview
+                    </TabsTrigger>
+                  )}
+                  <TabsTrigger value="content" className="flex items-center gap-1.5 text-xs">
+                    <Type className="w-3.5 h-3.5" />
+                    Content
+                  </TabsTrigger>
+                  <TabsTrigger value="summary" className="flex items-center gap-1.5 text-xs">
+                    <Brain className="w-3.5 h-3.5" />
+                    Summary
+                  </TabsTrigger>
+                </TabsList>
+
+                {canPreview && fileUrl && (
+                  <TabsContent value="preview" className="mt-3">
+                    <DocumentViewer
+                      fileUrl={fileUrl}
+                      filename={note.original_filename || ''}
+                      className="max-h-[40vh] md:max-h-[45vh]"
+                    />
+                  </TabsContent>
+                )}
+
+                <TabsContent value="content" className="mt-3">
+                  <ScrollArea className="h-[40vh] md:h-[45vh] rounded-lg border border-border p-3">
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      {localContent ? (
+                        <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
+                          {localContent}
+                        </pre>
+                      ) : (
+                        <p className="text-muted-foreground text-center py-8">
+                          No text content available
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="summary" className="mt-3">
+                  <ScrollArea className="h-[40vh] md:h-[45vh] rounded-lg border border-border p-3">
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      {note.summary ? (
+                        <ReactMarkdown>{note.summary}</ReactMarkdown>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <Brain className="w-12 h-12 text-muted-foreground/30 mb-4" />
+                          <h3 className="font-semibold text-lg mb-2">No summary yet</h3>
+                          <p className="text-muted-foreground text-sm mb-6 max-w-xs">
+                            Generate an AI summary to get a quick overview of this note.
+                          </p>
+                          <Button onClick={handleQuickSummary} disabled={!hasContent}>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Generate Summary
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
+
+              {/* Metadata */}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>Source: {note.source_type === 'file' ? 'Uploaded file' : 'Manual entry'}</span>
+                <span>•</span>
+                <span>{localContent?.length || 0} characters</span>
+              </div>
             </div>
-          </ScrollArea>
+
+            {/* Desktop: Quick Actions Sidebar */}
+            {!isMobile && (
+              <ScrollArea className="border-l pl-4 border-border h-[55vh]">
+                <div className="pr-2">
+                  <QuickActionsContent />
+                </div>
+              </ScrollArea>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
