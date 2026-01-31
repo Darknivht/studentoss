@@ -1,186 +1,284 @@
 
 
-# Fix Study Modes - Quiz, Fill-in-the-Blanks, and All Study Tools
+# Fix Study Modes - Complete Overhaul
 
-## Problem Summary
+## Problems Identified
 
-Based on exploration, I identified these issues:
+### 1. **Mock Exam - No Question Count Selector**
+The MockExam component always generates 10 questions with no user control.
 
-1. **Quiz Generation "Failed to generate quiz"**: The AI returns a nested JSON structure `{ "questions": [...] }` but the parsing code expects a flat array `[...]`
-2. **Fill-in-the-Blanks "Failed to generate exercises"**: The parsing logic is fragile and can fail when AI returns slightly different formats
-3. **Inconsistent Error Handling**: Several study modes lack robust fallback parsing and error recovery
-4. **Missing Quiz Mode in Edge Function**: The edge function quiz prompt asks for a nested format, but frontend parsing is inconsistent
+### 2. **Study Modes Return Generic Greetings Instead of Actual Content**
+Console logs show: `"Hello there! I'm StudentOS AI..."` being returned instead of actual content. This happens because:
+- **ConceptLinking.tsx** uses `mode: 'chat'` (line 54) - gets generic greeting
+- **MnemonicGenerator.tsx** uses `mode: 'chat'` (line 29) - gets generic greeting
+- **CheatSheetCreator.tsx** uses `mode: 'chat'` (line 49) - gets generic greeting
+- **DebatePartner.tsx** uses `mode: 'chat'` (line 33, 70) - gets generic greeting
+
+The edge function `ai-study/index.ts` has a `chat` mode that gives a generic "StudentOS AI" introduction when no content is provided in the messages.
+
+### 3. **Scrolling Issues in Reply Components**
+Multiple components use `ScrollArea` with `max-h-[50vh]` or similar, but some content overflows or doesn't scroll properly. The issue is likely that:
+- Some components use `pre` tags with `whitespace-pre-wrap` that don't respect height constraints
+- Missing `overflow-hidden` on parent containers
+
+### 4. **Audio Notes - No Voice/Speed Controls**
+AudioNotes.tsx uses hardcoded `rate = 0.9` and auto-selects a voice. Users need:
+- Voice selection dropdown
+- Speed slider (0.5x - 2x)
+
+### 5. **Voice Mode Not Working**
+VoiceMode.tsx implementation looks correct but may fail due to:
+- Speech recognition not being supported on all browsers
+- No fallback for unsupported browsers
+- Missing error handling for microphone permissions
+
+### 6. **Text Formatting Inconsistency**
+Different components format AI responses differently:
+- Some use `<pre>` tags (loses markdown)
+- Some use ReactMarkdown
+- Some use custom MarkdownRenderer
+Need a unified formatter that's used everywhere.
 
 ---
 
-## Root Cause Analysis
+## Phase 1: Create Dedicated Edge Function Modes
 
-### Quiz Generation Issue
-- Edge function returns: `{ "questions": [{ "question": "...", "options": [...], "correct": 0, "explanation": "..." }] }`
-- Frontend tries: `JSON.parse(response)` as array directly
-- Fix needed: Handle both nested `{ questions: [...] }` and flat array `[...]` formats
+### Add New Modes to `supabase/functions/ai-study/index.ts`
 
-### Fill-in-the-Blanks Issue
-- AI response format varies (block-based, pipe-based, or JSON)
-- Current parsing splits on `---|___|\*\*\*` which breaks sentences containing `___` blanks
-- Fix needed: Better regex that doesn't split on `___` within sentences
-
----
-
-## Phase 1: Fix Quiz Generation (Quizzes.tsx)
-
-### Changes to `generateQuizFromCourse` and `generateQuizFromNote`:
-
-Update the JSON parsing in both functions to handle nested structures:
+Add these specialized modes that include the content directly in the system prompt:
 
 ```text
-Current parsing (lines ~184-192, ~267-275):
-const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```/);
-let quizData: QuizQuestion[];
-if (jsonMatch) {
-  quizData = JSON.parse(jsonMatch[1]);
-} else {
-  quizData = JSON.parse(fullResponse);
-}
+case "mnemonic":
+  - System prompt specialized for creating mnemonics
+  - Takes content parameter and returns actual mnemonics
+  - No greeting, just the content
 
-New parsing:
-// Strategy 1: Try fenced JSON block
-// Strategy 2: Try raw JSON object/array
-// Handle both { questions: [...] } and [...] formats
-// Add detailed console.error for debugging
-```
+case "cheatsheet":
+  - System prompt for creating condensed study guides
+  - Takes content parameter, returns formatted cheat sheet
 
-**Key improvement**: Check if parsed result has a `questions` property and extract it.
+case "debate":
+  - System prompt for debate partner
+  - Takes topic and position, argues opposite view
 
----
-
-## Phase 2: Fix Fill-in-the-Blanks (FillBlanks.tsx)
-
-### Update `generateBlanks` parsing:
-
-Current issue: Line 83 splits on `---|___|\*\*\*` which incorrectly splits sentences containing blanks.
-
-**Fix**:
-1. Remove `___` from the split regex (only split on `---` or `***` as block separators)
-2. Add more robust pattern matching for the sentence extraction
-3. Better JSON fallback parsing
-4. Add structured prompt to edge function
-
-### Updated parsing logic:
-
-```text
-1. First try: Parse JSON array if response is pure JSON
-2. Second try: Parse block format with --- separators
-3. Third try: Parse numbered list format (1. Sentence: ... Answer: ...)
-4. Add better error messages and console logging
+case "concept_map":
+  - System prompt for creating mind maps
+  - Returns strict JSON format for nodes/connections
 ```
 
 ---
 
-## Phase 3: Add Dedicated Fill-in-the-Blanks Mode to Edge Function
+## Phase 2: Mock Exam - Add Question Count Selector
 
-### Add new mode `fill_blanks` to `supabase/functions/ai-study/index.ts`:
+### Changes to `src/components/study/MockExam.tsx`
 
-```text
-case "fill_blanks":
-  systemPrompt = `Create 5 fill-in-the-blank exercises from the provided content.
-Return ONLY valid JSON array format:
-[
-  {
-    "sentence": "The ___ is the powerhouse of the cell.",
-    "blank": "mitochondria", 
-    "hint": "Organelle responsible for energy production"
-  }
-]
-Replace exactly one key term with ___ in each sentence.
-Only return valid JSON, no other text.`;
-```
+1. Add state for question count:
+   ```typescript
+   const [questionCount, setQuestionCount] = useState(10);
+   ```
 
-This ensures consistent, parseable output.
+2. Add a selector UI in the note selection screen:
+   - Slider or dropdown: 5, 10, 15, 20 questions
+   - Show estimated time (1 min per question)
+
+3. Update `generateExam` to use the selected count:
+   - Change prompt to request `questionCount` questions
+   - Update timer: `questionCount * 60` seconds
 
 ---
 
-## Phase 4: Improve MockExam (MockExam.tsx)
+## Phase 3: Fix Study Mode Context Issues
 
-### Current issue:
-Mock exam uses `mode: 'chat'` instead of a dedicated mode, leading to inconsistent output.
+### 3.1 Update MnemonicGenerator.tsx
 
-**Fix**: Update to use `mode: 'quiz'` and handle the nested format:
-
-```text
-Current (line 70-76):
+Current:
+```typescript
 mode: 'chat',
-content: `Create a 10-question multiple choice exam...`
-
-Updated:
-mode: 'quiz',
-content: `Create a 10-question exam from this content: ${note.content}`
-// Then parse result to handle nested { questions: [...] } format
+content: `Create memorable mnemonics...`
 ```
+
+Fix:
+- Change to `mode: 'mnemonic'`
+- The edge function will have a dedicated prompt that returns actual mnemonics
+
+### 3.2 Update CheatSheetCreator.tsx
+
+Current:
+```typescript
+mode: 'chat',
+content: `Create a one-page CHEAT SHEET...`
+```
+
+Fix:
+- Change to `mode: 'cheatsheet'`
+- Edge function returns formatted content, not greetings
+
+### 3.3 Update DebatePartner.tsx
+
+Current:
+```typescript
+mode: 'chat',
+content: `You are a skilled debate partner...`
+```
+
+Fix:
+- Change to `mode: 'debate'`
+- Edge function handles the debate persona
+
+### 3.4 Update ConceptLinking.tsx
+
+Current:
+```typescript
+mode: 'chat',
+content: `Analyze this content and create a concept map...`
+```
+
+Fix:
+- Change to `mode: 'concept_map'`
+- Edge function returns strict JSON format
 
 ---
 
-## Phase 5: Create Shared JSON Parsing Utility
+## Phase 4: Fix Scrolling Issues
 
-### New file: `src/lib/parseAIResponse.ts`
+### Create a Reusable AI Response Container
 
-Consolidate the scattered `extractJsonFromAI` functions into one utility:
+Create a new component or update how ScrollArea is used:
 
-```text
-export function extractJsonFromAI(raw: string): string {
-  // 1. Try ```json fenced block
-  // 2. Try ```code fenced block  
-  // 3. Try raw JSON object/array detection
-  // 4. Return cleaned string ready for JSON.parse
-}
+1. Ensure parent container has fixed height
+2. Add `overflow-hidden` to parent
+3. Use proper ScrollArea with explicit height
+4. Replace `pre` tags with proper markdown rendering
 
-export function parseQuizResponse(raw: string): QuizQuestion[] {
-  const json = extractJsonFromAI(raw);
-  const parsed = JSON.parse(json);
-  // Handle { questions: [...] } or [...] format
-  return Array.isArray(parsed) ? parsed : (parsed.questions || []);
-}
-
-export function parseFillBlanksResponse(raw: string): FillBlank[] {
-  // Robust parsing with multiple strategies
-}
-
-export function parseFlashcardsResponse(raw: string): Flashcard[] {
-  // Handle { flashcards: [...] } or [...] format
-}
-```
+### Files to Update:
+- `MnemonicGenerator.tsx` - Line 133-145
+- `CheatSheetCreator.tsx` - Line 143-155
+- `AIToolLayout.tsx` - Line 203-211
 
 ---
 
-## Phase 6: Review and Fix Other Study Modes
+## Phase 5: Audio Notes - Voice & Speed Controls
 
-### Cram Mode (CramMode.tsx)
-- Status: Works correctly - uses existing flashcards from database
-- No changes needed
+### Changes to `src/components/study/AudioNotes.tsx`
 
-### Mnemonic Generator (MnemonicGenerator.tsx)
-- Status: Works correctly - streams markdown text
-- No changes needed
+1. Add state for voice and speed:
+   ```typescript
+   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+   const [speed, setSpeed] = useState(1.0);
+   ```
 
-### Audio Notes (AudioNotes.tsx)
-- Status: Works correctly - uses Web Speech API
-- No changes needed
+2. Load available voices on mount:
+   ```typescript
+   useEffect(() => {
+     const loadVoices = () => {
+       const availableVoices = synthRef.current?.getVoices() || [];
+       setVoices(availableVoices);
+       // Set default voice
+       const defaultVoice = availableVoices.find(v => v.default) || availableVoices[0];
+       setSelectedVoice(defaultVoice);
+     };
+     // Voices load async
+     speechSynthesis.onvoiceschanged = loadVoices;
+     loadVoices();
+   }, []);
+   ```
 
-### Voice Mode (VoiceMode.tsx)
-- Status: Works correctly - uses Web Speech Recognition
-- No changes needed
+3. Add UI controls:
+   - Voice dropdown (Select component)
+   - Speed slider (0.5x - 2x) with Slider component
 
-### Debate Partner (DebatePartner.tsx)
-- Status: Works correctly - chat-based conversation
-- No changes needed
+4. Update `speakText` to use selected voice and speed
 
-### Cheat Sheet Creator (CheatSheetCreator.tsx)
-- Status: Works correctly - streams markdown text
-- No changes needed
+---
 
-### Concept Linking (ConceptLinking.tsx)
-- Status: Needs minor fix - JSON parsing could be more robust
-- Add fallback handling for malformed JSON
+## Phase 6: Fix Voice Mode
+
+### Changes to `src/components/study/VoiceMode.tsx`
+
+1. Add better browser support detection:
+   ```typescript
+   const [isSupported, setIsSupported] = useState(true);
+   
+   useEffect(() => {
+     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+     if (!SpeechRecognition) {
+       setIsSupported(false);
+     }
+   }, []);
+   ```
+
+2. Show fallback UI when not supported:
+   - Text input alternative
+   - Message explaining browser requirements
+
+3. Add microphone permission handling:
+   - Request permission explicitly before starting
+   - Show helpful error if denied
+
+4. Use the `socratic` mode with context for better responses
+
+---
+
+## Phase 7: Universal Text Formatting
+
+### Create `src/lib/formatters.ts`
+
+```typescript
+/**
+ * Universal text formatting utilities
+ * Called before displaying any AI-generated content
+ */
+
+// Clean and format AI response text
+export function formatAIResponse(content: string): string {
+  if (!content) return '';
+  
+  let formatted = content;
+  
+  // Remove excessive whitespace
+  formatted = formatted.replace(/\n{3,}/g, '\n\n');
+  
+  // Ensure proper markdown spacing
+  formatted = formatted.replace(/^(#+)([^\s])/gm, '$1 $2');
+  
+  // Clean up list formatting
+  formatted = formatted.replace(/^[-*•]\s*/gm, '- ');
+  
+  return formatted.trim();
+}
+
+// Strip markdown for plain text contexts (audio, etc.)
+export function stripMarkdown(content: string): string {
+  return content
+    .replace(/\*\*(.+?)\*\*/g, '$1')  // Bold
+    .replace(/\*(.+?)\*/g, '$1')       // Italic
+    .replace(/#{1,6}\s/g, '')          // Headers
+    .replace(/`(.+?)`/g, '$1')         // Inline code
+    .replace(/```[\s\S]*?```/g, '')    // Code blocks
+    .trim();
+}
+```
+
+### Update All Components to Use ReactMarkdown
+
+Replace all instances of `<pre className="whitespace-pre-wrap">` with:
+```tsx
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse } from '@/lib/formatters';
+
+// In render:
+<div className="prose prose-sm dark:prose-invert max-w-none">
+  <ReactMarkdown>{formatAIResponse(content)}</ReactMarkdown>
+</div>
+```
+
+Files to update:
+- `MnemonicGenerator.tsx` (line 140)
+- `CheatSheetCreator.tsx` (line 150)
+- `AIToolLayout.tsx` (line 205)
+- `BibliographyBuilder.tsx` (line 150)
+- `ResearchAssistant.tsx` (line 90)
 
 ---
 
@@ -188,76 +286,64 @@ export function parseFlashcardsResponse(raw: string): Flashcard[] {
 
 | File | Purpose |
 |------|---------|
-| `src/lib/parseAIResponse.ts` | Shared JSON parsing utilities |
+| `src/lib/formatters.ts` | Universal text formatting utilities |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/Quizzes.tsx` | Fix quiz JSON parsing to handle nested format |
-| `src/components/study/FillBlanks.tsx` | Fix parsing regex, use new mode, add better error handling |
-| `src/components/study/MockExam.tsx` | Use quiz mode, fix JSON parsing |
-| `src/components/study/ConceptLinking.tsx` | Add robust JSON parsing fallback |
-| `supabase/functions/ai-study/index.ts` | Add fill_blanks mode for consistent output |
-| `src/pages/SmartNotes.tsx` | Use shared parsing utility |
-| `src/pages/CoursePage.tsx` | Use shared parsing utility |
-| `src/components/notes/NoteViewerDialog.tsx` | Use shared parsing utility |
+| `supabase/functions/ai-study/index.ts` | Add mnemonic, cheatsheet, debate, concept_map modes |
+| `src/components/study/MockExam.tsx` | Add question count selector UI and state |
+| `src/components/study/MnemonicGenerator.tsx` | Use new mode, fix formatting and scrolling |
+| `src/components/study/CheatSheetCreator.tsx` | Use new mode, fix formatting and scrolling |
+| `src/components/study/DebatePartner.tsx` | Use new mode |
+| `src/components/study/ConceptLinking.tsx` | Use new mode |
+| `src/components/study/AudioNotes.tsx` | Add voice selection and speed controls |
+| `src/components/study/VoiceMode.tsx` | Add fallback UI and better error handling |
+| `src/components/ai-tools/AIToolLayout.tsx` | Use ReactMarkdown for formatting |
+| `src/components/academic/BibliographyBuilder.tsx` | Use ReactMarkdown for formatting |
+| `src/components/academic/ResearchAssistant.tsx` | Use ReactMarkdown for formatting |
 
 ---
 
-## Technical Details
+## Technical Implementation Details
 
-### Quiz Parsing Fix (Quizzes.tsx)
+### Edge Function Mode Prompts
 
-```typescript
-// In onDone callback
-const extractQuizData = (raw: string): QuizQuestion[] => {
-  // Try fenced JSON first
-  const fenceMatch = raw.match(/```json\s*([\s\S]*?)\s*```/i);
-  const jsonStr = fenceMatch ? fenceMatch[1].trim() : raw.trim();
-  
-  // Try to find JSON object or array
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
-  
-  let parsed;
-  if (objectMatch) {
-    parsed = JSON.parse(objectMatch[0]);
-  } else if (arrayMatch) {
-    parsed = JSON.parse(arrayMatch[0]);
-  } else {
-    throw new Error('No valid JSON found in response');
-  }
-  
-  // Handle nested { questions: [...] } format
-  if (parsed.questions && Array.isArray(parsed.questions)) {
-    return parsed.questions;
-  }
-  
-  // Handle flat array format
-  if (Array.isArray(parsed)) {
-    return parsed;
-  }
-  
-  throw new Error('Invalid quiz format');
-};
+**Mnemonic Mode:**
+```text
+Create memorable mnemonics for the given content. Include:
+1. Acronyms (funny ones work best!)
+2. Rhymes or songs
+3. Visual associations
+4. Memory palace suggestions
+5. Silly sentences using first letters
+
+Make them FUNNY and MEMORABLE. Students remember humor!
+Return only the mnemonics, no greetings or introductions.
 ```
 
-### Fill-in-the-Blanks Parsing Fix
+**Cheatsheet Mode:**
+```text
+Create a one-page CHEAT SHEET from this content. Make it:
+- Ultra-condensed (fit on one printed page)
+- Use bullet points, abbreviations
+- Include key formulas, definitions, dates
+- Use sections for different topics
+- Perfect for quick reference during exams
 
-```typescript
-// Strategy 1: Try JSON first
-const jsonMatch = fullResponse.match(/\[[\s\S]*?\]/);
-if (jsonMatch) {
-  const parsed = JSON.parse(jsonMatch[0]);
-  if (Array.isArray(parsed) && parsed.length > 0) {
-    return parsed;
-  }
+Format in clean markdown. No greetings, just the content.
+```
+
+**Concept Map Mode:**
+```text
+Analyze this content and create a concept map with 5-8 key concepts.
+Return ONLY valid JSON in this exact format:
+{
+  "nodes": [{"id": "1", "label": "Main Concept"}],
+  "connections": [{"from": "1", "to": "2", "label": "relates to"}]
 }
-
-// Strategy 2: Block-based parsing (only split on --- not ___)
-const blocks = fullResponse.split(/\n---\n|\n\*\*\*\n/);
-// ... rest of parsing
+No other text, just JSON.
 ```
 
 ---
@@ -265,9 +351,10 @@ const blocks = fullResponse.split(/\n---\n|\n\*\*\*\n/);
 ## Expected Outcome
 
 After these fixes:
-1. Quiz generation will work reliably from both courses and notes
-2. Fill-in-the-blanks will generate exercises correctly
-3. Mock exams will generate properly
-4. All study modes will have consistent error handling
-5. JSON parsing will be centralized and robust
+1. Mock exams allow choosing 5/10/15/20 questions
+2. All study modes (Mnemonics, Cheat Sheets, Debate, Mind Maps) return actual content, not greetings
+3. Scrolling works properly in all response areas
+4. Audio notes have voice selection and speed control
+5. Voice mode has fallback for unsupported browsers
+6. All AI responses are consistently formatted with markdown
 
