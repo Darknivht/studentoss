@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { parseQuizResponse } from '@/lib/parseAIResponse';
+import { Slider } from '@/components/ui/slider';
 
 interface ExamQuestion {
   question: string;
@@ -29,6 +30,8 @@ const MockExam = ({ onBack }: MockExamProps) => {
   const [examStarted, setExamStarted] = useState(false);
   const [examFinished, setExamFinished] = useState(false);
   const [score, setScore] = useState(0);
+  const [questionCount, setQuestionCount] = useState(10);
+  const [selectedNote, setSelectedNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) fetchNotes();
@@ -59,25 +62,25 @@ const MockExam = ({ onBack }: MockExamProps) => {
     setNotes(data || []);
   };
 
-  const generateExam = async (noteId: string) => {
+  const generateExam = async () => {
+    if (!selectedNote) return;
     setLoading(true);
 
     try {
-      const { data: note } = await supabase.from('notes').select('content').eq('id', noteId).single();
+      const { data: note } = await supabase.from('notes').select('content').eq('id', selectedNote).single();
       if (!note?.content) throw new Error('No content');
 
       let fullResponse = '';
       await streamAIChat({
         messages: [],
-        mode: 'quiz', // Use dedicated quiz mode for consistent output
-        content: `Create a challenging 10-question exam from this content:\n\n${note.content}`,
+        mode: 'quiz',
+        content: `Create a challenging ${questionCount}-question exam from this content:\n\n${note.content}`,
         onDelta: (chunk) => { fullResponse += chunk; },
         onDone: () => {
           try {
             const parsed = parseQuizResponse(fullResponse);
             if (parsed.length > 0) {
-              // Take up to 10 questions
-              const examQuestions = parsed.slice(0, 10).map(q => ({
+              const examQuestions = parsed.slice(0, questionCount).map(q => ({
                 question: q.question,
                 options: q.options,
                 correct: q.correct,
@@ -132,7 +135,7 @@ const MockExam = ({ onBack }: MockExamProps) => {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[60vh]">
         <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground">Generating mock exam...</p>
+        <p className="text-muted-foreground">Generating {questionCount}-question mock exam...</p>
       </div>
     );
   }
@@ -217,14 +220,43 @@ const MockExam = ({ onBack }: MockExamProps) => {
         </div>
       </div>
 
+      {/* Question Count Selector */}
+      <div className="p-4 rounded-2xl bg-card border border-border space-y-4">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-foreground">Number of Questions</label>
+          <span className="text-lg font-bold text-primary">{questionCount}</span>
+        </div>
+        <Slider
+          value={[questionCount]}
+          onValueChange={(value) => setQuestionCount(value[0])}
+          min={5}
+          max={20}
+          step={5}
+          className="w-full"
+        />
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>5 questions</span>
+          <span>10</span>
+          <span>15</span>
+          <span>20 questions</span>
+        </div>
+        <p className="text-sm text-muted-foreground text-center">
+          ⏱️ Estimated time: <span className="font-medium">{questionCount} minutes</span>
+        </p>
+      </div>
+
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-muted-foreground">Select a note for your exam:</h3>
         {notes.map((note) => (
           <motion.button
             key={note.id}
             whileTap={{ scale: 0.98 }}
-            onClick={() => generateExam(note.id)}
-            className="w-full p-4 rounded-2xl bg-card border border-border text-left hover:border-primary/50 transition-all"
+            onClick={() => setSelectedNote(note.id)}
+            className={`w-full p-4 rounded-2xl bg-card border text-left transition-all ${
+              selectedNote === note.id
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/50'
+            }`}
           >
             <span className="font-medium text-foreground">{note.title}</span>
           </motion.button>
@@ -233,6 +265,15 @@ const MockExam = ({ onBack }: MockExamProps) => {
           <p className="text-center text-muted-foreground py-8">No notes yet. Create notes first!</p>
         )}
       </div>
+
+      {selectedNote && (
+        <Button 
+          onClick={generateExam} 
+          className="w-full gradient-primary text-primary-foreground"
+        >
+          Start {questionCount}-Question Exam
+        </Button>
+      )}
     </div>
   );
 };

@@ -51,22 +51,8 @@ const ConceptLinking = ({ onBack }: ConceptLinkingProps) => {
       let fullResponse = '';
       await streamAIChat({
         messages: [],
-        mode: 'chat',
-        content: `Analyze this content and create a concept map with 5-8 key concepts and their relationships.
-
-Return ONLY valid JSON:
-{
-  "nodes": [
-    { "id": "1", "label": "Main Concept" },
-    { "id": "2", "label": "Related Concept" }
-  ],
-  "connections": [
-    { "from": "1", "to": "2", "label": "relates to" }
-  ]
-}
-
-Content:
-${note.content.substring(0, 3000)}`,
+        mode: 'concept_map',
+        content: note.content.substring(0, 3000),
         onDelta: (chunk) => { fullResponse += chunk; },
         onDone: () => {
           try {

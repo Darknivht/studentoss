@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Volume2, Pause, Play, StopCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, Volume2, Pause, Play, StopCircle, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { stripMarkdown } from '@/lib/formatters';
 
 interface AudioNotesProps {
   onBack: () => void;
@@ -20,12 +23,37 @@ const AudioNotes = ({ onBack }: AudioNotesProps) => {
   const [speaking, setSpeaking] = useState(false);
   const [paused, setPaused] = useState(false);
   const [currentNote, setCurrentNote] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  
+  // Voice settings
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number>(0);
+  const [speed, setSpeed] = useState(1.0);
+  
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
     if (user) fetchNotes();
     synthRef.current = window.speechSynthesis;
+    
+    // Load voices
+    const loadVoices = () => {
+      const availableVoices = synthRef.current?.getVoices() || [];
+      setVoices(availableVoices);
+      
+      // Find a good default voice
+      const preferredIndex = availableVoices.findIndex(v => 
+        v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.lang.startsWith('en')
+      );
+      setSelectedVoiceIndex(preferredIndex >= 0 ? preferredIndex : 0);
+    };
+    
+    // Voices may load asynchronously
+    if (synthRef.current) {
+      loadVoices();
+      synthRef.current.onvoiceschanged = loadVoices;
+    }
     
     return () => {
       synthRef.current?.cancel();
@@ -100,16 +128,17 @@ const AudioNotes = ({ onBack }: AudioNotesProps) => {
     
     synthRef.current.cancel();
     
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9;
+    // Strip markdown for cleaner speech
+    const cleanText = stripMarkdown(text);
+    
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = speed;
     utterance.pitch = 1;
     
-    // Try to get a natural voice
-    const voices = synthRef.current.getVoices();
-    const preferredVoice = voices.find(v => 
-      v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha')
-    );
-    if (preferredVoice) utterance.voice = preferredVoice;
+    // Use selected voice
+    if (voices[selectedVoiceIndex]) {
+      utterance.voice = voices[selectedVoiceIndex];
+    }
     
     utterance.onstart = () => setSpeaking(true);
     utterance.onend = () => {
@@ -167,10 +196,67 @@ const AudioNotes = ({ onBack }: AudioNotesProps) => {
           <h1 className="text-xl font-display font-bold text-foreground">Audio Notes</h1>
           <p className="text-muted-foreground text-sm">AI reads your summaries aloud</p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-          <Volume2 className="w-5 h-5 text-primary" />
-        </div>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => setShowSettings(!showSettings)}
+          className={showSettings ? 'bg-primary/10' : ''}
+        >
+          <Settings className="w-5 h-5" />
+        </Button>
       </motion.header>
+
+      {/* Voice Settings Panel */}
+      {showSettings && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="p-4 rounded-2xl bg-card border border-border space-y-4"
+        >
+          <h3 className="font-medium text-foreground">Voice Settings</h3>
+          
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Voice</label>
+            <Select 
+              value={selectedVoiceIndex.toString()} 
+              onValueChange={(val) => setSelectedVoiceIndex(parseInt(val))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a voice" />
+              </SelectTrigger>
+              <SelectContent>
+                {voices.map((voice, index) => (
+                  <SelectItem key={index} value={index.toString()}>
+                    {voice.name} ({voice.lang})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-muted-foreground">Speed</label>
+              <span className="text-sm font-medium">{speed.toFixed(1)}x</span>
+            </div>
+            <Slider
+              value={[speed]}
+              onValueChange={(val) => setSpeed(val[0])}
+              min={0.5}
+              max={2}
+              step={0.1}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>0.5x</span>
+              <span>1x</span>
+              <span>1.5x</span>
+              <span>2x</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {speaking && (
         <motion.div
@@ -182,7 +268,10 @@ const AudioNotes = ({ onBack }: AudioNotesProps) => {
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               <Volume2 className="w-5 h-5 animate-pulse" />
             </div>
-            <span className="font-medium">Playing audio...</span>
+            <div>
+              <span className="font-medium block">Playing audio...</span>
+              <span className="text-sm opacity-80">{speed.toFixed(1)}x speed</span>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button

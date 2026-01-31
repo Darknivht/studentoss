@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, FileText, Download, Printer } from 'lucide-react';
+import { ArrowLeft, Loader2, FileText, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse, stripMarkdown } from '@/lib/formatters';
 
 interface CheatSheetCreatorProps {
   onBack: () => void;
@@ -46,18 +48,8 @@ const CheatSheetCreator = ({ onBack }: CheatSheetCreatorProps) => {
 
       await streamAIChat({
         messages: [],
-        mode: 'chat',
-        content: `Create a one-page CHEAT SHEET from these notes. Make it:
-- Ultra-condensed (fit on one printed page)
-- Use bullet points, abbreviations
-- Include key formulas, definitions, dates
-- Use columns/sections for different topics
-- Perfect for quick reference during exams
-
-Format in clean markdown that prints well.
-
-Notes to condense:
-${note.content}`,
+        mode: 'cheatsheet',
+        content: note.content,
         onDelta: (chunk) => setCheatSheet(c => c + chunk),
         onDone: () => setGenerating(false),
         onError: (err) => {
@@ -74,6 +66,8 @@ ${note.content}`,
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (printWindow) {
+      // Convert markdown to basic HTML for printing
+      const plainText = stripMarkdown(cheatSheet);
       printWindow.document.write(`
         <html>
           <head>
@@ -88,7 +82,7 @@ ${note.content}`,
             </style>
           </head>
           <body>
-            <pre>${cheatSheet}</pre>
+            <pre>${plainText}</pre>
           </body>
         </html>
       `);
@@ -140,14 +134,16 @@ ${note.content}`,
               </Button>
             )}
           </div>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="p-4">
+          <ScrollArea className="h-[60vh]">
+            <div className="p-4 overflow-hidden">
               {generating ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : (
-                <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">{cheatSheet}</pre>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown>{formatAIResponse(cheatSheet)}</ReactMarkdown>
+                </div>
               )}
             </div>
           </ScrollArea>

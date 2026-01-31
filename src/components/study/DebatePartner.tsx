@@ -6,6 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse } from '@/lib/formatters';
 
 interface DebatePartnerProps {
   onBack: () => void;
@@ -29,15 +31,11 @@ const DebatePartner = ({ onBack }: DebatePartnerProps) => {
 
     let response = '';
     await streamAIChat({
-      messages: [],
-      mode: 'chat',
-      content: `You are a skilled debate partner. The topic is: "${topic}"
-
-The user's position is: "${userPosition}"
-
-Your job is to argue the OPPOSITE view. Be persuasive, use logic, evidence, and rhetorical techniques. Challenge their assumptions. Keep responses concise (2-3 paragraphs max).
-
-Start your counter-argument now:`,
+      messages: [
+        { role: 'user', content: `Topic: ${topic}\n\nMy position: ${userPosition}` }
+      ],
+      mode: 'debate',
+      content: `Topic: ${topic}\n\nOpponent's position: ${userPosition}\n\nArgue the opposite view convincingly.`,
       onDelta: (chunk) => {
         response += chunk;
         setDebate([
@@ -69,8 +67,8 @@ Start your counter-argument now:`,
 
     await streamAIChat({
       messages,
-      mode: 'chat',
-      content: `Continue arguing the opposite position. Be persuasive and challenge their points. Keep it concise.`,
+      mode: 'debate',
+      content: `Topic: ${topic}\n\nContinue arguing the opposite position. Challenge their latest point: "${userInput}"`,
       onDelta: (chunk) => {
         response += chunk;
         setDebate([...newDebate, { role: 'ai', content: response }]);
@@ -148,7 +146,13 @@ Start your counter-argument now:`,
                   ? 'bg-primary text-primary-foreground rounded-br-sm'
                   : 'bg-muted text-foreground rounded-bl-sm'
               }`}>
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                <div className={`text-sm ${msg.role === 'ai' ? 'prose prose-sm dark:prose-invert max-w-none' : ''}`}>
+                  {msg.role === 'ai' ? (
+                    <ReactMarkdown>{formatAIResponse(msg.content)}</ReactMarkdown>
+                  ) : (
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  )}
+                </div>
               </div>
             </motion.div>
           ))}

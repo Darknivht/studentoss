@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse } from '@/lib/formatters';
 
 interface ResearchAssistantProps {
   onBack: () => void;
@@ -85,9 +87,11 @@ Format clearly with headers and bullet points.`,
           <div className="p-3 bg-muted border-b border-border">
             <h3 className="font-medium text-sm">Research Guide</h3>
           </div>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="p-4">
-              <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">{results}</pre>
+          <ScrollArea className="h-[60vh]">
+            <div className="p-4 overflow-hidden">
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown>{formatAIResponse(results)}</ReactMarkdown>
+              </div>
             </div>
           </ScrollArea>
         </motion.div>

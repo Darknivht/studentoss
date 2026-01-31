@@ -6,6 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse } from '@/lib/formatters';
 
 interface MnemonicGeneratorProps {
   onBack: () => void;
@@ -26,18 +28,8 @@ const MnemonicGenerator = ({ onBack }: MnemonicGeneratorProps) => {
 
     await streamAIChat({
       messages: [],
-      mode: 'chat',
-      content: `Create memorable mnemonics for these terms/concepts. Include:
-1. Acronyms (funny ones work best!)
-2. Rhymes or songs
-3. Visual associations
-4. Memory palace suggestions
-5. Silly sentences using first letters
-
-Make them FUNNY and MEMORABLE. Students remember humor!
-
-Terms to memorize:
-${input}`,
+      mode: 'mnemonic',
+      content: input,
       onDelta: (chunk) => setResult(r => r + chunk),
       onDone: () => setLoading(false),
       onError: (err) => {
@@ -130,16 +122,16 @@ Example:
               </Button>
             )}
           </div>
-          <ScrollArea className="max-h-[50vh]">
-            <div className="p-4">
+          <ScrollArea className="h-[50vh]">
+            <div className="p-4 overflow-hidden">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : (
-                <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
-                  {result}
-                </pre>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown>{formatAIResponse(result)}</ReactMarkdown>
+                </div>
               )}
             </div>
           </ScrollArea>
