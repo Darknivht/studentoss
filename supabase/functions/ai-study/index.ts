@@ -109,7 +109,23 @@ Create flashcards in this exact JSON format:
         userMessages = [{ role: "user", content: `Create flashcards from:\n\n${content}` }];
         break;
 
-      case "math_solver":
+      case "fill_blanks":
+        systemPrompt = `You are a fill-in-the-blank exercise generator for effective studying.
+Create exercises in this exact JSON format:
+[
+  {
+    "sentence": "The ___ is the powerhouse of the cell.",
+    "blank": "mitochondria",
+    "hint": "Organelle responsible for energy production"
+  }
+]
+- Generate 5-8 exercises from the content
+- Replace exactly ONE key term with ___ in each sentence
+- The sentence must make sense and test understanding of an important concept
+- Provide a helpful hint that guides without giving away the answer
+- Only return valid JSON array, no other text or markdown.`;
+        userMessages = [{ role: "user", content: `Create fill-in-the-blank exercises from:\n\n${content}` }];
+        break;
         systemPrompt = `You are an expert math tutor. When given a math problem:
 1. Identify what type of problem it is
 2. Explain each step of the solution clearly

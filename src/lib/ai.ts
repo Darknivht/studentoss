@@ -8,6 +8,7 @@ export type AIMode =
   | "socratic" 
   | "quiz" 
   | "flashcards" 
+  | "fill_blanks"
   | "chat"
   | "math_solver"
   | "ocr_latex"
