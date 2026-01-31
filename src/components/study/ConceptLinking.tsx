@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Network, Plus, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
+import { parseConceptMapResponse } from '@/lib/parseAIResponse';
 
 interface Node {
   id: string;
@@ -70,30 +70,28 @@ ${note.content.substring(0, 3000)}`,
         onDelta: (chunk) => { fullResponse += chunk; },
         onDone: () => {
           try {
-            const jsonMatch = fullResponse.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              const data = JSON.parse(jsonMatch[0]);
-              const centerX = 150;
-              const centerY = 150;
-              const radius = 120;
-              
-              const mappedNodes: Node[] = data.nodes.map((n: any, i: number) => {
-                const angle = (i * 2 * Math.PI) / data.nodes.length;
-                const isCenter = i === 0;
-                return {
-                  id: n.id,
-                  label: n.label,
-                  x: isCenter ? centerX : centerX + radius * Math.cos(angle),
-                  y: isCenter ? centerY : centerY + radius * Math.sin(angle),
-                  connections: data.connections
-                    .filter((c: any) => c.from === n.id)
-                    .map((c: any) => c.to),
-                };
-              });
-              setNodes(mappedNodes);
-            }
+            const data = parseConceptMapResponse(fullResponse);
+            const centerX = 150;
+            const centerY = 150;
+            const radius = 120;
+            
+            const mappedNodes: Node[] = data.nodes.map((n, i) => {
+              const angle = (i * 2 * Math.PI) / data.nodes.length;
+              const isCenter = i === 0;
+              return {
+                id: n.id,
+                label: n.label,
+                x: isCenter ? centerX : centerX + radius * Math.cos(angle),
+                y: isCenter ? centerY : centerY + radius * Math.sin(angle),
+                connections: data.connections
+                  .filter((c) => c.from === n.id)
+                  .map((c) => c.to),
+              };
+            });
+            setNodes(mappedNodes);
           } catch (e) {
-            toast({ title: 'Error', description: 'Failed to parse mind map', variant: 'destructive' });
+            console.error('Failed to parse concept map:', e, fullResponse);
+            toast({ title: 'Error', description: 'Failed to parse mind map. Please try again.', variant: 'destructive' });
           }
           setGenerating(false);
         },

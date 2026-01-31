@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
+import { parseQuizResponse } from '@/lib/parseAIResponse';
 
 interface ExamQuestion {
   question: string;
@@ -68,35 +69,29 @@ const MockExam = ({ onBack }: MockExamProps) => {
       let fullResponse = '';
       await streamAIChat({
         messages: [],
-        mode: 'chat',
-        content: `Create a 10-question multiple choice exam from this content. Make it challenging.
-Return ONLY a valid JSON array, no markdown, no explanation:
-[
-  { "question": "Question?", "options": ["A", "B", "C", "D"], "correct": 0 }
-]
-
-Content:
-${note.content}`,
+        mode: 'quiz', // Use dedicated quiz mode for consistent output
+        content: `Create a challenging 10-question exam from this content:\n\n${note.content}`,
         onDelta: (chunk) => { fullResponse += chunk; },
         onDone: () => {
           try {
-            const jsonMatch = fullResponse.match(/\[[\s\S]*?\]/);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setQuestions(parsed);
-                setAnswers(new Array(parsed.length).fill(null));
-                setTimeLeft(parsed.length * 60);
-                setExamStarted(true);
-              } else {
-                throw new Error('Invalid format');
-              }
+            const parsed = parseQuizResponse(fullResponse);
+            if (parsed.length > 0) {
+              // Take up to 10 questions
+              const examQuestions = parsed.slice(0, 10).map(q => ({
+                question: q.question,
+                options: q.options,
+                correct: q.correct,
+              }));
+              setQuestions(examQuestions);
+              setAnswers(new Array(examQuestions.length).fill(null));
+              setTimeLeft(examQuestions.length * 60); // 1 minute per question
+              setExamStarted(true);
             } else {
-              throw new Error('No JSON found');
+              throw new Error('No questions parsed');
             }
           } catch (e) {
             console.error('Parse error:', e, fullResponse);
-            toast({ title: 'Error', description: 'Failed to generate exam', variant: 'destructive' });
+            toast({ title: 'Error', description: 'Failed to generate exam. Please try again.', variant: 'destructive' });
           }
           setLoading(false);
         },

@@ -14,6 +14,7 @@ import { useActivityTracking } from '@/hooks/useActivityTracking';
 import { QuizHistory } from '@/components/quiz/QuizHistory';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { parseQuizResponse, QuizQuestion } from '@/lib/parseAIResponse';
 
 interface QuizAttempt {
   id: string;
@@ -24,12 +25,7 @@ interface QuizAttempt {
   course_id?: string;
 }
 
-interface QuizQuestion {
-  question: string;
-  options: string[];
-  correct: number;
-  explanation: string;
-}
+// QuizQuestion interface is imported from parseAIResponse
 
 interface Course {
   id: string;
@@ -182,27 +178,15 @@ const Quizzes = () => {
         },
         onDone: () => {
           try {
-            const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```/);
-            let quizData: QuizQuestion[];
-
-            if (jsonMatch) {
-              quizData = JSON.parse(jsonMatch[1]);
-            } else {
-              quizData = JSON.parse(fullResponse);
-            }
-
-            if (Array.isArray(quizData) && quizData.length > 0) {
-              setActiveQuiz(quizData);
-              setUserAnswers([]);
-              startTracking();
-            } else {
-              throw new Error('Invalid quiz format');
-            }
+            const quizData = parseQuizResponse(fullResponse);
+            setActiveQuiz(quizData);
+            setUserAnswers([]);
+            startTracking();
           } catch (e) {
             console.error('Failed to parse quiz:', e, fullResponse);
             toast({
               title: 'Error',
-              description: 'Failed to generate quiz.',
+              description: 'Failed to generate quiz. Please try again.',
               variant: 'destructive',
             });
           }
@@ -263,24 +247,10 @@ const Quizzes = () => {
         },
         onDone: () => {
           try {
-            // Parse the quiz JSON from the response
-            const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```/);
-            let quizData: QuizQuestion[];
-
-            if (jsonMatch) {
-              quizData = JSON.parse(jsonMatch[1]);
-            } else {
-              // Try parsing the whole response as JSON
-              quizData = JSON.parse(fullResponse);
-            }
-
-            if (Array.isArray(quizData) && quizData.length > 0) {
-              setActiveQuiz(quizData);
-              setUserAnswers([]);
-              startTracking(); // Start activity tracking when quiz begins
-            } else {
-              throw new Error('Invalid quiz format');
-            }
+            const quizData = parseQuizResponse(fullResponse);
+            setActiveQuiz(quizData);
+            setUserAnswers([]);
+            startTracking();
           } catch (e) {
             console.error('Failed to parse quiz:', e, fullResponse);
             toast({
