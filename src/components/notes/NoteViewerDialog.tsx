@@ -604,22 +604,26 @@ const NoteViewerDialog = ({
 
               {/* Content with Tabs */}
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className={`grid w-full ${canPreview && fileUrl ? 'grid-cols-3' : 'grid-cols-2'} h-9`}>
-                  {canPreview && fileUrl && (
-                    <TabsTrigger value="preview" className="flex items-center gap-1.5 text-xs">
-                      <Eye className="w-3.5 h-3.5" />
-                      Preview
+                <div className="overflow-x-auto -mx-1 px-1">
+                  <TabsList className={`inline-flex w-auto min-w-full sm:grid sm:w-full ${canPreview && fileUrl ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} h-9`}>
+                    {canPreview && fileUrl && (
+                      <TabsTrigger value="preview" className="flex items-center gap-1.5 text-xs px-3 whitespace-nowrap">
+                        <Eye className="w-3.5 h-3.5" />
+                        <span className="hidden xs:inline">Preview</span>
+                        <span className="xs:hidden">View</span>
+                      </TabsTrigger>
+                    )}
+                    <TabsTrigger value="content" className="flex items-center gap-1.5 text-xs px-3 whitespace-nowrap">
+                      <Type className="w-3.5 h-3.5" />
+                      <span className="hidden xs:inline">Content</span>
+                      <span className="xs:hidden">Text</span>
                     </TabsTrigger>
-                  )}
-                  <TabsTrigger value="content" className="flex items-center gap-1.5 text-xs">
-                    <Type className="w-3.5 h-3.5" />
-                    Content
-                  </TabsTrigger>
-                  <TabsTrigger value="summary" className="flex items-center gap-1.5 text-xs">
-                    <Brain className="w-3.5 h-3.5" />
-                    Summary
-                  </TabsTrigger>
-                </TabsList>
+                    <TabsTrigger value="summary" className="flex items-center gap-1.5 text-xs px-3 whitespace-nowrap">
+                      <Brain className="w-3.5 h-3.5" />
+                      <span>Summary</span>
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 {canPreview && fileUrl && (
                   <TabsContent value="preview" className="mt-3">
