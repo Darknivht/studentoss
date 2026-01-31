@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Brain, FileText, BookOpen, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import SocraticTutor from '@/components/notes/SocraticTutor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -27,8 +27,20 @@ interface Course {
 
 type TutorMode = 'course' | 'note';
 
+interface LocationState {
+  quizContext?: string;
+  courseId?: string;
+  noteId?: string;
+  courseName?: string;
+  noteName?: string;
+  autoStart?: boolean;
+}
+
 const AITutor = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  const locationState = location.state as LocationState | null;
+  
   const [notes, setNotes] = useState<Note[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
@@ -37,12 +49,51 @@ const AITutor = () => {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<TutorMode>('course');
   const [tutorActive, setTutorActive] = useState(false);
+  const [initialContext, setInitialContext] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (user) {
       fetchData();
     }
   }, [user]);
+
+  // Handle navigation state from quiz results
+  useEffect(() => {
+    if (locationState?.autoStart && notes.length > 0 && courses.length > 0) {
+      const { quizContext, courseId, noteId, courseName, noteName } = locationState;
+      
+      if (quizContext) {
+        setInitialContext(quizContext);
+      }
+
+      // If note-based quiz, open Note Mode tutor
+      if (noteId) {
+        const targetNote = notes.find(n => n.id === noteId);
+        if (targetNote) {
+          setMode('note');
+          handleNoteSelect(targetNote);
+        } else if (courseId) {
+          // Fallback to course mode if note not found
+          const targetCourse = courses.find(c => c.id === courseId);
+          if (targetCourse) {
+            setMode('course');
+            handleCourseSelect(targetCourse);
+          }
+        }
+      } 
+      // If course-based quiz, open Course Mode tutor
+      else if (courseId) {
+        const targetCourse = courses.find(c => c.id === courseId);
+        if (targetCourse) {
+          setMode('course');
+          handleCourseSelect(targetCourse);
+        }
+      }
+
+      // Clear the location state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [locationState, notes, courses]);
 
   const fetchData = async () => {
     try {
@@ -89,6 +140,7 @@ const AITutor = () => {
     setSelectedNote(null);
     setSelectedCourse(null);
     setCourseNotes([]);
+    setInitialContext(undefined);
   };
 
   // Show tutor when active
@@ -99,6 +151,7 @@ const AITutor = () => {
           courseId={selectedCourse.id}
           courseName={selectedCourse.name}
           allNotes={courseNotes}
+          initialContext={initialContext}
           onBack={handleBack}
         />
       );
@@ -107,6 +160,7 @@ const AITutor = () => {
       return (
         <SocraticTutor
           note={selectedNote}
+          initialContext={initialContext}
           onBack={handleBack}
         />
       );
