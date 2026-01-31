@@ -76,26 +76,33 @@ const SocraticTutor = ({ note, courseId, courseName, allNotes = [], initialConte
       console.error('Error loading chat history:', error);
     }
 
-    if (data && data.length > 0) {
-      setMessages(data.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+    const contextTitle = courseName || note?.title || "your studies";
 
+    if (data && data.length > 0) {
+      const loadedMessages = data.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+      
+      // If we have quiz context, add it as a new message to continue the conversation
       if (initialContext) {
-        setMessages(prev => [...prev, {
+        const quizResultMessage: Message = {
           role: 'assistant',
-          content: `I see you've been studying! 🧠\n\n${initialContext}\n\nHow can I help you clarify these topics?`
-        }]);
+          content: `Welcome back! 🎓 I see you just took a quiz on **${contextTitle}**.\n\nHere are your results:\n\n${initialContext}\n\nLet's review together! Which questions would you like me to help explain? Or ask me anything about the topics you struggled with.`
+        };
+        setMessages([...loadedMessages, quizResultMessage]);
+      } else {
+        setMessages(loadedMessages);
       }
     } else {
-      // Initial greeting
-      const contextTitle = courseName || note?.title || "your studies";
-      let greeting = `Hello! 🎓 I'm your Socratic tutor for **${contextTitle}**. 
+      // Initial greeting - customize based on whether we have quiz context
+      let greeting: string;
+
+      if (initialContext) {
+        greeting = `Hello! 🎓 I'm your Socratic tutor for **${contextTitle}**.\n\nI see you just completed a quiz! Here are your results:\n\n${initialContext}\n\nLet's work through any questions you found challenging. What would you like to understand better?`;
+      } else {
+        greeting = `Hello! 🎓 I'm your Socratic tutor for **${contextTitle}**. 
       
 I've reviewed your notes. Instead of giving you direct answers, I'll guide you with questions to help you truly understand the material.
 
 What would you like to explore today?`;
-
-      if (initialContext) {
-        greeting = `Hello! 🎓 I see you've just completed a study session.\n\n${initialContext}\n\nI'm here to help you master these concepts. Let's go through them step-by-step. What was most confusing?`;
       }
 
       setMessages([{ role: 'assistant', content: greeting }]);
