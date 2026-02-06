@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, Shield, AlertTriangle, CheckCircle, RotateCcw, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse } from '@/lib/formatters';
 
 interface PlagiarismCheckerProps {
   onBack: () => void;
@@ -16,9 +19,19 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
   const [text, setText] = useState('');
   const [result, setResult] = useState<{ score: number; analysis: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
 
   const checkPlagiarism = async () => {
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      toast({ title: 'Text required', description: 'Please paste text to check.', variant: 'destructive' });
+      return;
+    }
+    if (wordCount < 30) {
+      toast({ title: 'Too short', description: 'Please enter at least 30 words for a meaningful check.', variant: 'destructive' });
+      return;
+    }
     
     setLoading(true);
     setResult(null);
@@ -27,18 +40,24 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
     await streamAIChat({
       messages: [],
       mode: 'chat',
-      content: `Analyze this text for originality. Check for:
-1. Common phrases that might be copied
-2. Inconsistent writing style (suggesting multiple sources)
-3. Overly formal or Wikipedia-like passages
-4. Technical terms used without proper context
+      content: `Analyze this text for originality and potential plagiarism indicators. Check for:
+1. Common phrases that might be copied from textbooks or Wikipedia
+2. Inconsistent writing style (suggesting multiple sources were stitched together)
+3. Overly formal or encyclopedic passages that don't match the overall tone
+4. Technical terms used without proper context or explanation
+5. Abrupt changes in vocabulary level or sentence structure
 
-Return JSON first, then analysis:
-{"originality_score": X} (0-100, where 100 is fully original)
+Return JSON first, then detailed analysis:
+{"originality_score": 85}
+(Score 0-100, where 100 is fully original)
 
-Then explain your findings, flag suspicious passages, and suggest improvements.
+Then provide a detailed markdown-formatted analysis with:
+- **Overall Assessment**: Summary of originality
+- **Suspicious Passages**: Quote specific phrases that seem potentially copied
+- **Style Inconsistencies**: Where writing style shifts
+- **Suggestions**: How to make the text more original
 
-Text to check:
+Text to check (${wordCount} words):
 ${text}`,
       onDelta: (chunk) => {
         fullResponse += chunk;
@@ -68,18 +87,25 @@ ${text}`,
   const getScoreLabel = (score: number) => {
     if (score >= 80) return 'High Originality';
     if (score >= 60) return 'Moderate Originality';
-    return 'Low Originality';
+    return 'Low Originality — Review Needed';
+  };
+
+  const handleCopy = async () => {
+    if (!result) return;
+    await navigator.clipboard.writeText(`Originality: ${result.score}%\n\n${result.analysis}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="p-6 space-y-6 min-h-screen">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 min-h-screen pb-24">
       <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
         <div className="flex-1">
           <h1 className="text-xl font-display font-bold text-foreground">Plagiarism Checker</h1>
-          <p className="text-muted-foreground text-sm">Basic originality analysis</p>
+          <p className="text-muted-foreground text-sm">AI originality analysis</p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
           <Shield className="w-5 h-5 text-primary" />
         </div>
       </motion.header>
@@ -93,9 +119,10 @@ ${text}`,
             className="min-h-[250px]"
           />
           <p className="text-xs text-muted-foreground">
-            Note: This is an AI-based analysis, not a database check. For academic submissions, use official plagiarism detection tools.
+            {wordCount} words {wordCount > 0 && wordCount < 30 ? '(minimum 30 words)' : ''}
+            {' • '}Note: This is an AI-based analysis. For academic submissions, also use official plagiarism detection tools.
           </p>
-          <Button onClick={checkPlagiarism} disabled={!text.trim()} className="w-full gradient-primary text-primary-foreground">
+          <Button onClick={checkPlagiarism} disabled={!text.trim() || wordCount < 30} className="w-full gradient-primary text-primary-foreground">
             <Shield className="w-4 h-4 mr-2" />
             Check Originality
           </Button>
@@ -119,19 +146,31 @@ ${text}`,
             <Progress value={result.score} className="mt-4 h-3" />
           </div>
 
-          <div className="rounded-2xl bg-card border border-border p-4">
-            <h3 className="font-medium mb-3 flex items-center gap-2">
-              {result.score >= 80 ? (
-                <CheckCircle className="w-5 h-5 text-emerald-500" />
-              ) : (
-                <AlertTriangle className="w-5 h-5 text-amber-500" />
-              )}
-              Analysis
-            </h3>
-            <pre className="whitespace-pre-wrap font-sans text-sm text-muted-foreground">{result.analysis}</pre>
+          <div className="rounded-2xl bg-card border border-border overflow-hidden">
+            <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
+              <h3 className="font-medium text-sm flex items-center gap-2">
+                {result.score >= 80 ? (
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                )}
+                Analysis
+              </h3>
+              <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
+                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              </Button>
+            </div>
+            <ScrollArea className="h-[40vh]">
+              <div className="p-4 overflow-hidden">
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown>{formatAIResponse(result.analysis)}</ReactMarkdown>
+                </div>
+              </div>
+            </ScrollArea>
           </div>
 
           <Button onClick={() => { setResult(null); setText(''); }} variant="outline" className="w-full">
+            <RotateCcw className="w-4 h-4 mr-2" />
             Check Another Text
           </Button>
         </motion.div>

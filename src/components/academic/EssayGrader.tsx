@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, FileCheck, AlertCircle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, FileCheck, Copy, Check, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Progress } from '@/components/ui/progress';
+import ReactMarkdown from 'react-markdown';
+import { formatAIResponse } from '@/lib/formatters';
 
 interface EssayGraderProps {
   onBack: () => void;
@@ -16,12 +19,24 @@ const EssayGrader = ({ onBack }: EssayGraderProps) => {
   const { toast } = useToast();
   const [essay, setEssay] = useState('');
   const [rubric, setRubric] = useState('');
+  const [gradeLevel, setGradeLevel] = useState('college');
+  const [essayType, setEssayType] = useState('argumentative');
   const [feedback, setFeedback] = useState('');
   const [scores, setScores] = useState<{ category: string; score: number; max: number }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const wordCount = essay.trim().split(/\s+/).filter(Boolean).length;
 
   const gradeEssay = async () => {
-    if (!essay.trim()) return;
+    if (!essay.trim()) {
+      toast({ title: 'Essay required', description: 'Please paste your essay to grade.', variant: 'destructive' });
+      return;
+    }
+    if (wordCount < 50) {
+      toast({ title: 'Too short', description: 'Essay should be at least 50 words for meaningful feedback.', variant: 'destructive' });
+      return;
+    }
     
     setLoading(true);
     setFeedback('');
@@ -33,7 +48,7 @@ const EssayGrader = ({ onBack }: EssayGraderProps) => {
     await streamAIChat({
       messages: [],
       mode: 'chat',
-      content: `Grade this essay using the following rubric: ${rubricText}
+      content: `You are an expert essay grader. Grade this ${essayType} essay at the ${gradeLevel} level using the rubric: ${rubricText}
 
 Provide:
 1. Overall score (out of 100)
@@ -41,17 +56,17 @@ Provide:
 3. Specific feedback on strengths
 4. Areas for improvement with concrete suggestions
 5. Grammar/style notes
+6. A brief summary of what the student did well and what to improve
 
-Start with JSON scores, then provide detailed feedback:
-{"scores": [{"category": "Thesis", "score": X, "max": 25}, ...], "overall": X}
+Start with JSON scores in this exact format, then provide detailed feedback:
+{"scores": [{"category": "Thesis", "score": 20, "max": 25}, {"category": "Evidence", "score": 18, "max": 25}, {"category": "Analysis", "score": 19, "max": 25}, {"category": "Organization", "score": 21, "max": 25}]}
 
-Then provide detailed feedback.
+Then provide detailed markdown-formatted feedback.
 
-Essay to grade:
+Essay (${wordCount} words):
 ${essay}`,
       onDelta: (chunk) => {
         fullResponse += chunk;
-        // Try to extract scores from JSON at the start
         try {
           const jsonMatch = fullResponse.match(/\{[\s\S]*?\}/);
           if (jsonMatch) {
@@ -59,7 +74,6 @@ ${essay}`,
             if (data.scores) setScores(data.scores);
           }
         } catch {}
-        // Show feedback after JSON
         const feedbackStart = fullResponse.indexOf('}');
         if (feedbackStart > -1) {
           setFeedback(fullResponse.substring(feedbackStart + 1).trim());
@@ -76,21 +90,55 @@ ${essay}`,
   const totalScore = scores.reduce((sum, s) => sum + s.score, 0);
   const maxScore = scores.reduce((sum, s) => sum + s.max, 0);
 
+  const copyFeedback = async () => {
+    const text = `Score: ${totalScore}/${maxScore}\n\n${feedback}`;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="p-6 space-y-6 min-h-screen">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 min-h-screen pb-24">
       <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
         <div className="flex-1">
           <h1 className="text-xl font-display font-bold text-foreground">Essay Grader</h1>
           <p className="text-muted-foreground text-sm">AI rubric feedback on drafts</p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
           <FileCheck className="w-5 h-5 text-primary" />
         </div>
       </motion.header>
 
-      {!feedback && !loading && (
+      {!feedback && !loading && scores.length === 0 && (
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Grade Level</label>
+              <Select value={gradeLevel} onValueChange={setGradeLevel}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="middle_school">Middle School</SelectItem>
+                  <SelectItem value="high_school">High School</SelectItem>
+                  <SelectItem value="college">College</SelectItem>
+                  <SelectItem value="graduate">Graduate</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Essay Type</label>
+              <Select value={essayType} onValueChange={setEssayType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="argumentative">Argumentative</SelectItem>
+                  <SelectItem value="expository">Expository</SelectItem>
+                  <SelectItem value="narrative">Narrative</SelectItem>
+                  <SelectItem value="descriptive">Descriptive</SelectItem>
+                  <SelectItem value="research">Research Paper</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">Paste your essay</label>
             <Textarea
@@ -99,6 +147,7 @@ ${essay}`,
               placeholder="Paste your essay here..."
               className="min-h-[200px]"
             />
+            <p className="text-xs text-muted-foreground mt-1">{wordCount} words {wordCount < 50 && wordCount > 0 ? '(minimum 50 words)' : ''}</p>
           </div>
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">Custom rubric (optional)</label>
@@ -109,7 +158,7 @@ ${essay}`,
               className="min-h-[60px]"
             />
           </div>
-          <Button onClick={gradeEssay} disabled={!essay.trim()} className="w-full gradient-primary text-primary-foreground">
+          <Button onClick={gradeEssay} disabled={!essay.trim() || wordCount < 50} className="w-full gradient-primary text-primary-foreground">
             <FileCheck className="w-4 h-4 mr-2" />
             Grade Essay
           </Button>
@@ -125,7 +174,6 @@ ${essay}`,
 
       {(scores.length > 0 || feedback) && !loading && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          {/* Score Summary */}
           {scores.length > 0 && (
             <div className="p-4 rounded-2xl gradient-primary text-primary-foreground">
               <div className="flex items-center justify-between mb-4">
@@ -152,21 +200,26 @@ ${essay}`,
             </div>
           )}
 
-          {/* Detailed Feedback */}
           {feedback && (
             <div className="rounded-2xl bg-card border border-border overflow-hidden">
-              <div className="p-3 bg-muted border-b border-border">
+              <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
                 <h3 className="font-medium text-sm">Detailed Feedback</h3>
+                <Button size="sm" variant="ghost" onClick={copyFeedback} className="h-7">
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                </Button>
               </div>
-              <ScrollArea className="max-h-[40vh]">
-                <div className="p-4">
-                  <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">{feedback}</pre>
+              <ScrollArea className="h-[40vh]">
+                <div className="p-4 overflow-hidden">
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>{formatAIResponse(feedback)}</ReactMarkdown>
+                  </div>
                 </div>
               </ScrollArea>
             </div>
           )}
 
           <Button onClick={() => { setFeedback(''); setScores([]); setEssay(''); }} variant="outline" className="w-full">
+            <RotateCcw className="w-4 h-4 mr-2" />
             Grade Another Essay
           </Button>
         </motion.div>
