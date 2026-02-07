@@ -1,5 +1,71 @@
 import { markdownToHtml, stripMarkdown } from '@/lib/formatters';
 
+const KATEX_CSS_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css';
+const KATEX_JS_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.js';
+const KATEX_AUTO_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/contrib/auto-render.min.js';
+
+function buildHtmlDoc(title: string, htmlContent: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<link rel="stylesheet" href="${KATEX_CSS_CDN}">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11pt; line-height: 1.5; padding: 24px; max-width: 800px; margin: 0 auto; color: #1a1a1a; }
+  h1 { font-size: 18pt; margin: 16px 0 8px; border-bottom: 2px solid #333; padding-bottom: 4px; }
+  h2 { font-size: 14pt; margin: 14px 0 6px; color: #333; }
+  h3 { font-size: 12pt; margin: 10px 0 4px; color: #444; }
+  p { margin: 6px 0; word-wrap: break-word; overflow-wrap: anywhere; }
+  ul, ol { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  strong { font-weight: 700; }
+  code { background: #f4f4f4; padding: 1px 4px; border-radius: 3px; font-size: 10pt; }
+  pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
+  pre code { background: none; padding: 0; }
+  .table-wrapper { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 400px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 10pt; word-wrap: break-word; }
+  th { background: #f0f0f0; font-weight: 600; }
+  td { word-wrap: break-word; }
+  tr:nth-child(even) { background: #fafafa; }
+  .katex-display { overflow-x: auto; max-width: 100%; }
+  @media print {
+    body { padding: 0; font-size: 9pt; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    h1, h2, h3 { page-break-after: avoid; }
+  }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 10pt; }
+    th, td { padding: 4px 6px; font-size: 9pt; }
+  }
+</style>
+</head>
+<body>
+<h1>${title}</h1>
+${htmlContent}
+<script src="${KATEX_JS_CDN}"><\/script>
+<script src="${KATEX_AUTO_CDN}"><\/script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false},
+      {left: "\\\\(", right: "\\\\)", display: false},
+      {left: "\\\\[", right: "\\\\]", display: true}
+    ],
+    throwOnError: false
+  });
+});
+<\/script>
+</body>
+</html>`;
+}
+
 interface Flashcard {
   front: string;
   back: string;
@@ -51,48 +117,8 @@ export const downloadAsText = (content: string, filename: string) => {
  */
 export const downloadAsHTML = (markdownContent: string, title: string, filename: string) => {
   const htmlContent = markdownToHtml(markdownContent);
-  const fullHtml = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11pt; line-height: 1.5; padding: 24px; max-width: 800px; margin: 0 auto; color: #1a1a1a; }
-  h1 { font-size: 18pt; margin: 16px 0 8px; border-bottom: 2px solid #333; padding-bottom: 4px; }
-  h2 { font-size: 14pt; margin: 14px 0 6px; color: #333; }
-  h3 { font-size: 12pt; margin: 10px 0 4px; color: #444; }
-  p { margin: 6px 0; }
-  ul, ol { margin: 6px 0; padding-left: 20px; }
-  li { margin: 3px 0; }
-  strong { font-weight: 700; }
-  code { background: #f4f4f4; padding: 1px 4px; border-radius: 3px; font-size: 10pt; }
-  pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
-  pre code { background: none; padding: 0; }
-  .table-wrapper { overflow-x: auto; margin: 12px 0; }
-  table { border-collapse: collapse; width: 100%; min-width: 400px; }
-  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 10pt; }
-  th { background: #f0f0f0; font-weight: 600; white-space: nowrap; }
-  td { word-wrap: break-word; }
-  tr:nth-child(even) { background: #fafafa; }
-  @media print {
-    body { padding: 0; font-size: 9pt; }
-    table { page-break-inside: auto; }
-    tr { page-break-inside: avoid; }
-    h1, h2, h3 { page-break-after: avoid; }
-  }
-  @media (max-width: 600px) {
-    body { padding: 12px; font-size: 10pt; }
-    th, td { padding: 4px 6px; font-size: 9pt; }
-  }
-</style>
-</head>
-<body>
-<h1>${title}</h1>
-${htmlContent}
-</body>
-</html>`;
+  const fullHtml = buildHtmlDoc(title, htmlContent);
+
 
   const blob = new Blob([fullHtml], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
@@ -110,40 +136,7 @@ ${htmlContent}
  */
 export const printMarkdownContent = (markdownContent: string, title: string) => {
   const htmlContent = markdownToHtml(markdownContent);
-  const fullHtml = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10pt; padding: 20px; line-height: 1.4; color: #000; }
-  h1 { font-size: 16pt; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 4px; }
-  h2 { font-size: 13pt; margin: 12px 0 6px; }
-  h3 { font-size: 11pt; margin: 8px 0 4px; }
-  p { margin: 4px 0; }
-  ul, ol { margin: 4px 0; padding-left: 18px; }
-  li { margin: 2px 0; }
-  .table-wrapper { overflow: visible; margin: 8px 0; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #333; padding: 6px 10px; text-align: left; font-size: 9pt; }
-  th { background: #e8e8e8; font-weight: 600; }
-  tr:nth-child(even) { background: #f5f5f5; }
-  code { background: #eee; padding: 1px 3px; border-radius: 2px; font-size: 9pt; }
-  pre { background: #f4f4f4; padding: 8px; border-radius: 4px; font-size: 9pt; overflow-x: auto; }
-  @media print {
-    body { padding: 0; }
-    table { page-break-inside: auto; }
-    tr { page-break-inside: avoid; }
-  }
-</style>
-</head>
-<body>
-<h1>${title}</h1>
-${htmlContent}
-</body>
-</html>`;
+  const fullHtml = buildHtmlDoc(title, htmlContent);
 
   // Use hidden iframe for mobile compatibility instead of window.open
   const iframe = document.createElement('iframe');

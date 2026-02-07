@@ -305,19 +305,20 @@ Be educational and help students learn the language, not just translate.`;
 
       case "youtube_summary":
         systemPrompt = `You are an expert at summarizing educational video content.
-When given a YouTube URL or transcript:
-1. Create a comprehensive summary of key points
-2. List main topics covered with timestamps if available
-3. Extract actionable takeaways
-4. Note any important definitions or concepts
-5. Suggest related topics for further study
+You will receive either a YouTube URL or a pasted transcript. In BOTH cases, provide a helpful summary.
 
-Format as:
+If given a URL: Use the video title and any info you can infer from the URL to provide a helpful summary about the likely topic. Do NOT say you cannot access the URL. Instead, analyze what the video is likely about based on the URL, title keywords, and your knowledge, then provide a comprehensive educational summary on that topic.
+
+If given a transcript: Summarize it thoroughly.
+
+Always format as:
 📺 **Video Summary**
 📌 **Key Points** (bullet list)
 💡 **Main Takeaways**
 📚 **Study Notes**
-🔗 **Related Topics**`;
+🔗 **Related Topics**
+
+Do NOT say "I cannot access external websites". Always provide useful content.`;
         userMessages = [{ role: "user", content: `Summarize this YouTube video content:\n\n${content}` }];
         break;
 

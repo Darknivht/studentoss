@@ -176,6 +176,22 @@
   }
 }
 
+/* Prose styling for AI content overflow fix */
+.prose {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.prose p, .prose li, .prose td, .prose th {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.prose .katex-display {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
 /* Prose table styling for markdown-rendered tables */
 .prose table {
   @apply w-full border-collapse text-sm;

@@ -15,6 +15,23 @@ import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
+/** Extract a meaningful title from AI content for file naming */
+function extractContentTitle(content: string, fallback: string): string {
+  if (!content) return fallback;
+  // Try first heading
+  const h1 = content.match(/^#\s+(.+)$/m);
+  if (h1) return h1[1].replace(/[*_`#]/g, '').trim().slice(0, 80);
+  const h2 = content.match(/^##\s+(.+)$/m);
+  if (h2) return h2[1].replace(/[*_`#]/g, '').trim().slice(0, 80);
+  // Try first bold text
+  const bold = content.match(/\*\*(.{5,60}?)\*\*/);
+  if (bold) return bold[1].trim();
+  // Use first meaningful line
+  const firstLine = content.split('\n').find(l => l.trim().length > 10 && !l.startsWith('```'));
+  if (firstLine) return firstLine.replace(/[#*_`>]/g, '').trim().slice(0, 80);
+  return fallback;
+}
+
 interface AIToolLayoutProps {
   title: string;
   description: string;
@@ -134,15 +151,15 @@ const AIToolLayout = ({
       </motion.div>
 
       {(loading || result) && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-card border border-border overflow-hidden">
-          <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
-            <h3 className="font-medium text-sm">{loading ? 'Analyzing...' : 'Result'}</h3>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-card border border-border overflow-hidden w-full min-w-0">
+          <div className="p-3 bg-muted border-b border-border flex items-center justify-between gap-2">
+            <h3 className="font-medium text-sm truncate">{loading ? 'Analyzing...' : 'Result'}</h3>
             {result && !loading && (
-              <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(result, title, `${title.toLowerCase().replace(/\s+/g, '-')}.html`)} className="h-7">
+              <div className="flex items-center gap-1 shrink-0">
+                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(result, extractContentTitle(result, title), `${extractContentTitle(result, title).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`)} className="h-7">
                   <Download className="w-3 h-3" />
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(result, title)} className="h-7">
+                <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(result, extractContentTitle(result, title))} className="h-7">
                   <Printer className="w-3 h-3" />
                 </Button>
                 <Button
@@ -158,13 +175,13 @@ const AIToolLayout = ({
             )}
           </div>
           <ScrollArea className="h-[50vh]">
-            <div className="p-4 overflow-hidden">
+            <div className="p-4 w-full min-w-0 overflow-hidden">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : (
-                <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full [&_pre]:overflow-x-auto [&_pre]:max-w-full">
+                <div className="prose prose-sm dark:prose-invert max-w-none break-words overflow-wrap-anywhere [&_*]:max-w-full [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_table]:table-fixed [&_table]:w-full [&_td]:break-words [&_th]:break-words [&_.katex-display]:overflow-x-auto [&_.katex-display]:max-w-full [&_p]:break-words [&_li]:break-words [&_.katex]:overflow-x-auto">
                   <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                     {formatAIResponse(result || '')}
                   </ReactMarkdown>
