@@ -13,6 +13,7 @@ import { Settings, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { checkAndResetStreak } from '@/lib/streak';
 import { useOfflineData, cacheDataLocally, getCachedData } from '@/hooks/useOfflineData';
+import AdBanner from '@/components/ads/AdBanner';
 
 const OFFLINE_PROFILE_KEY = 'offline_profile_cache';
 
@@ -203,6 +204,9 @@ const Dashboard = () => {
 
       {/* Study Time Tracker Widget */}
       <StudyTimeWidget />
+
+      {/* Ad Banner for free users */}
+      <AdBanner variant="inline" />
 
       {/* Study Progress Widget */}
       <StudyProgressWidget />

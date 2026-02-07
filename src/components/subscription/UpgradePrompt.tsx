@@ -2,14 +2,20 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Crown, Lock, Sparkles } from 'lucide-react';
+import { SUBSCRIPTION_ENABLED } from '@/lib/subscriptionConfig';
 
 interface UpgradePromptProps {
   feature: string;
   remaining?: number;
   compact?: boolean;
+  requiredTier?: 'plus' | 'pro';
 }
 
-const UpgradePrompt = ({ feature, remaining, compact = false }: UpgradePromptProps) => {
+const UpgradePrompt = ({ feature, remaining, compact = false, requiredTier = 'plus' }: UpgradePromptProps) => {
+  if (!SUBSCRIPTION_ENABLED) return null;
+
+  const tierLabel = requiredTier === 'pro' ? 'Pro' : 'Plus';
+
   if (compact) {
     return (
       <motion.div
@@ -29,7 +35,7 @@ const UpgradePrompt = ({ feature, remaining, compact = false }: UpgradePromptPro
         <Link to="/upgrade">
           <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white">
             <Crown className="w-3 h-3 mr-1" />
-            Pro
+            {tierLabel}
           </Button>
         </Link>
       </motion.div>
@@ -55,7 +61,7 @@ const UpgradePrompt = ({ feature, remaining, compact = false }: UpgradePromptPro
       
       <p className="text-sm text-muted-foreground mb-4">
         {remaining !== undefined && remaining > 0
-          ? 'Upgrade to Pro for unlimited access'
+          ? `Upgrade to ${tierLabel} for ${requiredTier === 'pro' ? 'unlimited' : 'more'} access`
           : `You've used all your free ${feature} for today. Upgrade to continue.`
         }
       </p>
@@ -63,7 +69,7 @@ const UpgradePrompt = ({ feature, remaining, compact = false }: UpgradePromptPro
       <Link to="/upgrade">
         <Button className="gradient-primary text-primary-foreground">
           <Sparkles className="w-4 h-4 mr-2" />
-          Upgrade to Pro
+          Upgrade to {tierLabel}
         </Button>
       </Link>
     </motion.div>

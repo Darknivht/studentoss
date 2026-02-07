@@ -14,6 +14,8 @@ import { useActivityTracking } from '@/hooks/useActivityTracking';
 import FlashcardsList from '@/components/flashcards/FlashcardsList';
 import StudyStatistics from '@/components/study/StudyStatistics';
 import { useOfflineData } from '@/hooks/useOfflineData';
+import { useSubscription } from '@/hooks/useSubscription';
+import UpgradePrompt from '@/components/subscription/UpgradePrompt';
 
 interface Flashcard {
   id: string;

@@ -2,77 +2,109 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { 
-  Crown, Check, Sparkles, Brain, Zap, Shield, 
-  MessageSquare, Users, ArrowLeft, Loader2 
+  Crown, Check, Sparkles, ArrowLeft, Loader2 
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const FREE_FEATURES = [
-  '5 AI calls per day',
-  '3 quizzes per day',
-  '10 flashcards per day',
-  '2 notes per day',
-  'Basic study tools',
-  'Leaderboard access',
-];
-
-const PRO_FEATURES = [
-  'Unlimited AI calls',
-  'Unlimited quizzes',
-  'Unlimited flashcards',
-  'Unlimited notes',
-  'Advanced study tools',
-  'Group chat & DMs',
-  'Priority support',
-  'No ads',
-  'Early access to features',
-];
-
-const PLANS = [
-  { id: 'monthly', name: 'Monthly', price: 2500, period: '/month', popular: false },
-  { id: 'yearly', name: 'Yearly', price: 20000, period: '/year', popular: true, savings: 'Save 33%' },
+const TIERS = [
+  {
+    id: 'free',
+    name: 'Free',
+    price: 0,
+    period: '',
+    description: 'Get started with basics',
+    features: [
+      '5 AI calls/day',
+      '3 quizzes/day',
+      '10 flashcards/day',
+      '2 notes/day',
+      'Direct messages',
+      '3 resume templates',
+      'Basic study tools',
+      'Ads included',
+    ],
+    cta: 'Current Plan',
+    highlight: false,
+  },
+  {
+    id: 'plus',
+    name: 'Plus',
+    price: 1500,
+    period: '/month',
+    description: 'For serious students',
+    features: [
+      '20 AI calls/day',
+      '10 quizzes/day',
+      '30 flashcards/day',
+      '8 notes/day',
+      'Direct messages',
+      'Group chat access',
+      '7 resume templates',
+      '10 job searches/day',
+      'No ads',
+    ],
+    cta: 'Upgrade to Plus',
+    highlight: true,
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 2500,
+    period: '/month',
+    description: 'Unlimited everything',
+    features: [
+      'Unlimited AI calls',
+      'Unlimited quizzes',
+      'Unlimited flashcards',
+      'Unlimited notes',
+      'Direct messages',
+      'Group chat access',
+      'All 10 resume templates',
+      'Unlimited job searches',
+      'Advanced AI tools (OCR, Code Debugger)',
+      'No ads',
+      'Priority support',
+    ],
+    cta: 'Upgrade to Pro',
+    highlight: false,
+  },
 ];
 
 const Upgrade = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedPlan, setSelectedPlan] = useState('yearly');
+  const { subscription } = useSubscription();
   const [loading, setLoading] = useState(false);
+  const [selectedTier, setSelectedTier] = useState('plus');
 
-  const handleUpgrade = async () => {
-    if (!user) {
-      toast({ title: 'Please sign in first', variant: 'destructive' });
-      return;
-    }
+  const handleUpgrade = async (tierId: string) => {
+    if (!user || tierId === 'free') return;
 
     setLoading(true);
-    
     try {
-      // Initialize Paystack
-      const plan = PLANS.find(p => p.id === selectedPlan);
-      if (!plan) return;
+      const tier = TIERS.find(t => t.id === tierId);
+      if (!tier) return;
 
       // @ts-ignore - Paystack inline script
       const handler = window.PaystackPop?.setup({
-        key: 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // Replace with actual key
+        key: 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
         email: user.email,
-        amount: plan.price * 100, // Convert to kobo
+        amount: tier.price * 100,
         currency: 'NGN',
-        ref: `pro_${user.id}_${Date.now()}`,
+        ref: `${tierId}_${user.id}_${Date.now()}`,
         metadata: {
           user_id: user.id,
-          plan: selectedPlan,
+          plan: tierId,
         },
         callback: function(response: any) {
-          // Handle success
           toast({
             title: 'Payment successful!',
-            description: 'Welcome to Pro! Enjoy unlimited access.',
+            description: `Welcome to ${tier.name}! Enjoy your new features.`,
           });
-          // TODO: Verify payment on backend and update subscription
         },
         onClose: function() {
           toast({ title: 'Payment cancelled' });
@@ -82,7 +114,6 @@ const Upgrade = () => {
       if (handler) {
         handler.openIframe();
       } else {
-        // Fallback if Paystack not loaded
         toast({
           title: 'Payment system loading...',
           description: 'Please try again in a moment.',
@@ -97,7 +128,7 @@ const Upgrade = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 pb-24">
+    <div className="p-6 space-y-6 pb-32">
       <header className="flex items-center gap-3">
         <Link to="/profile">
           <Button variant="ghost" size="icon">
@@ -105,8 +136,8 @@ const Upgrade = () => {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Upgrade to Pro</h1>
-          <p className="text-muted-foreground text-sm">Unlock unlimited study power</p>
+          <h1 className="text-2xl font-display font-bold text-foreground">Choose Your Plan</h1>
+          <p className="text-muted-foreground text-sm">Supercharge your learning</p>
         </div>
       </header>
 
@@ -119,99 +150,87 @@ const Upgrade = () => {
         <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mb-4">
           <Crown className="w-8 h-8 text-white" />
         </div>
-        <h2 className="text-xl font-bold text-foreground mb-2">StudyBuddy Pro</h2>
+        <h2 className="text-xl font-bold text-foreground mb-2">studentOS Plans</h2>
         <p className="text-muted-foreground text-sm">
-          Remove all limits and supercharge your learning
+          Pick the plan that fits your study goals
         </p>
       </motion.div>
 
-      {/* Plan Selection */}
-      <div className="grid grid-cols-2 gap-3">
-        {PLANS.map((plan) => (
-          <motion.button
-            key={plan.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={() => setSelectedPlan(plan.id)}
-            className={`relative p-4 rounded-2xl border text-left transition-all ${
-              selectedPlan === plan.id
-                ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                : 'border-border bg-card hover:bg-muted/50'
-            }`}
-          >
-            {plan.popular && (
-              <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-primary text-primary-foreground text-xs rounded-full">
-                Best Value
-              </span>
-            )}
-            <p className="font-semibold text-foreground">{plan.name}</p>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-bold text-foreground">₦{plan.price.toLocaleString()}</span>
-              <span className="text-sm text-muted-foreground">{plan.period}</span>
-            </div>
-            {plan.savings && (
-              <span className="text-xs text-primary mt-1">{plan.savings}</span>
-            )}
-          </motion.button>
-        ))}
-      </div>
+      {/* Tier Cards */}
+      <div className="space-y-4">
+        {TIERS.map((tier, index) => {
+          const isCurrent = subscription.tier === tier.id;
+          return (
+            <motion.div
+              key={tier.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <Card
+                className={`p-5 relative overflow-hidden transition-all ${
+                  tier.highlight
+                    ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
+                    : 'border-border bg-card'
+                } ${isCurrent ? 'ring-2 ring-emerald-500/30 border-emerald-500/50' : ''}`}
+              >
+                {tier.highlight && (
+                  <span className="absolute top-0 right-0 px-3 py-1 bg-primary text-primary-foreground text-xs rounded-bl-xl font-medium">
+                    Most Popular
+                  </span>
+                )}
+                {isCurrent && (
+                  <span className="absolute top-0 left-0 px-3 py-1 bg-emerald-500 text-white text-xs rounded-br-xl font-medium">
+                    Current
+                  </span>
+                )}
 
-      {/* Features Comparison */}
-      <div className="grid gap-4">
-        {/* Pro Features */}
-        <Card className="p-4 bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
-          <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-            <Crown className="w-5 h-5 text-primary" />
-            Pro Features
-          </h3>
-          <ul className="space-y-2">
-            {PRO_FEATURES.map((feature, i) => (
-              <li key={i} className="flex items-center gap-2 text-sm text-foreground">
-                <Check className="w-4 h-4 text-primary" />
-                {feature}
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        {/* Free Features */}
-        <Card className="p-4 bg-muted/30 border-border">
-          <h3 className="font-semibold text-muted-foreground mb-3">Free Tier Limits</h3>
-          <ul className="space-y-2">
-            {FREE_FEATURES.map((feature, i) => (
-              <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className="w-4 h-4 rounded-full border border-muted-foreground/30 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
+                <div className="flex items-baseline gap-2 mb-1 mt-1">
+                  <h3 className="text-lg font-bold text-foreground">{tier.name}</h3>
+                  {tier.price > 0 && (
+                    <span className="text-2xl font-bold text-foreground">₦{tier.price.toLocaleString()}</span>
+                  )}
+                  {tier.period && <span className="text-sm text-muted-foreground">{tier.period}</span>}
                 </div>
-                {feature}
-              </li>
-            ))}
-          </ul>
-        </Card>
+                <p className="text-sm text-muted-foreground mb-4">{tier.description}</p>
+
+                <ul className="space-y-2 mb-4">
+                  {tier.features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm text-foreground">
+                      <Check className={`w-4 h-4 shrink-0 ${tier.highlight ? 'text-primary' : 'text-emerald-500'}`} />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  onClick={() => handleUpgrade(tier.id)}
+                  disabled={loading || isCurrent || tier.id === 'free'}
+                  className={`w-full ${tier.highlight ? 'gradient-primary text-primary-foreground' : ''}`}
+                  variant={tier.highlight ? 'default' : 'outline'}
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : isCurrent ? (
+                    'Current Plan'
+                  ) : tier.id === 'free' ? (
+                    'Free Forever'
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      {tier.cta}
+                    </>
+                  )}
+                </Button>
+              </Card>
+            </motion.div>
+          );
+        })}
       </div>
 
-      {/* CTA */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="fixed bottom-20 left-0 right-0 p-4 bg-background/80 backdrop-blur-lg border-t border-border"
-      >
-        <Button
-          onClick={handleUpgrade}
-          disabled={loading}
-          className="w-full py-6 text-lg gradient-primary text-primary-foreground"
-        >
-          {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-          ) : (
-            <Sparkles className="w-5 h-5 mr-2" />
-          )}
-          {loading ? 'Processing...' : `Upgrade Now - ₦${PLANS.find(p => p.id === selectedPlan)?.price.toLocaleString()}`}
-        </Button>
-        <p className="text-center text-xs text-muted-foreground mt-2">
-          Secure payment via Paystack. Cancel anytime.
-        </p>
-      </motion.div>
+      <p className="text-center text-xs text-muted-foreground">
+        Secure payment via Paystack. Cancel anytime.
+      </p>
     </div>
   );
 };

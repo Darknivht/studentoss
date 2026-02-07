@@ -15,6 +15,8 @@ import { QuizHistory } from '@/components/quiz/QuizHistory';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { parseQuizResponse, QuizQuestion } from '@/lib/parseAIResponse';
+import { useSubscription } from '@/hooks/useSubscription';
+import UpgradePrompt from '@/components/subscription/UpgradePrompt';
 
 interface QuizAttempt {
   id: string;
@@ -47,6 +49,7 @@ const Quizzes = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { checkLimit, getRemainingUses, incrementUsage } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,6 +143,11 @@ const Quizzes = () => {
   };
 
   const generateQuizFromCourse = async (courseId: string, courseName?: string) => {
+    if (!checkLimit('quiz')) {
+      toast({ title: 'Daily quiz limit reached', description: 'Upgrade for more quizzes.', variant: 'destructive' });
+      return;
+    }
+    await incrementUsage('quiz');
     setGenerating(true);
     setCurrentNoteId(null);
     setCurrentCourseId(courseId);
@@ -208,6 +216,11 @@ const Quizzes = () => {
   };
 
   const generateQuizFromNote = async (noteId: string, noteName?: string) => {
+    if (!checkLimit('quiz')) {
+      toast({ title: 'Daily quiz limit reached', description: 'Upgrade for more quizzes.', variant: 'destructive' });
+      return;
+    }
+    await incrementUsage('quiz');
     setGenerating(true);
     setCurrentNoteId(noteId);
     setCurrentCourseId(null);

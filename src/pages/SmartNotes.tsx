@@ -20,6 +20,8 @@ import { updateStreak } from '@/lib/streak';
 import { useLocation } from 'react-router-dom';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useOfflineData } from '@/hooks/useOfflineData';
+import { useSubscription } from '@/hooks/useSubscription';
+import UpgradePrompt from '@/components/subscription/UpgradePrompt';
 
 interface Note {
   id: string;
@@ -46,6 +48,7 @@ const SmartNotes = () => {
   const location = useLocation();
   const offlineData = useOfflineData();
   const { queueAction, isOnline } = useOfflineSync();
+  const { checkLimit, getRemainingUses, incrementUsage } = useSubscription();
   const [notes, setNotes] = useState<Note[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,14 +120,16 @@ const SmartNotes = () => {
 
   const handleCreateNote = async () => {
     if (!newTitle.trim() || !newContent.trim()) {
-      toast({
-        title: 'Missing content',
-        description: 'Please add a title and some content.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Missing content', description: 'Please add a title and some content.', variant: 'destructive' });
       return;
     }
 
+    if (!checkLimit('note')) {
+      toast({ title: 'Daily note limit reached', description: 'Upgrade for more notes.', variant: 'destructive' });
+      return;
+    }
+
+    await incrementUsage('note');
     setSaving(true);
     try {
       const newNote = {

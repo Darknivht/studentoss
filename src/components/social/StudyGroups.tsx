@@ -11,6 +11,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Users, Plus, MessageSquare, Trash2, UserPlus, ArrowRight, Lock, Globe, Key, Copy, Check } from 'lucide-react';
+import { useSubscription } from '@/hooks/useSubscription';
+import UpgradePrompt from '@/components/subscription/UpgradePrompt';
 
 interface StudyGroup {
   id: string;
@@ -29,6 +31,7 @@ const StudyGroups = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { subscription } = useSubscription();
   const [groupName, setGroupName] = useState('');
   const [topic, setTopic] = useState('');
   const [isPublic, setIsPublic] = useState(true);
@@ -290,56 +293,60 @@ const StudyGroups = () => {
       className="space-y-6"
     >
       {/* Create Group */}
-      <Card className="p-6 bg-card border-border">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <Plus className="w-5 h-5 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground">Create Study Group</h3>
-        </div>
-
-        <div className="space-y-3">
-          <Input
-            placeholder="Group name..."
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-          />
-          <Input
-            placeholder="Study topic (optional)"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-          />
-          
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2">
-              {isPublic ? <Globe className="w-4 h-4 text-primary" /> : <Lock className="w-4 h-4 text-yellow-500" />}
-              <Label htmlFor="public-switch" className="text-sm">
-                {isPublic ? 'Public group' : 'Private (invite only)'}
-              </Label>
+      {subscription.canUseGroupChat ? (
+        <Card className="p-6 bg-card border-border">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Plus className="w-5 h-5 text-primary" />
             </div>
-            <Switch
-              id="public-switch"
-              checked={isPublic}
-              onCheckedChange={setIsPublic}
-            />
+            <h3 className="font-semibold text-foreground">Create Study Group</h3>
           </div>
 
-          <Button
-            onClick={createGroup}
-            disabled={creating || !groupName.trim()}
-            className="w-full gradient-primary text-primary-foreground"
-          >
-            {creating ? (
-              <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <Plus className="w-4 h-4 mr-2" />
-                Create Group
-              </>
-            )}
-          </Button>
-        </div>
-      </Card>
+          <div className="space-y-3">
+            <Input
+              placeholder="Group name..."
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+            />
+            <Input
+              placeholder="Study topic (optional)"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+            />
+            
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                {isPublic ? <Globe className="w-4 h-4 text-primary" /> : <Lock className="w-4 h-4 text-yellow-500" />}
+                <Label htmlFor="public-switch" className="text-sm">
+                  {isPublic ? 'Public group' : 'Private (invite only)'}
+                </Label>
+              </div>
+              <Switch
+                id="public-switch"
+                checked={isPublic}
+                onCheckedChange={setIsPublic}
+              />
+            </div>
+
+            <Button
+              onClick={createGroup}
+              disabled={creating || !groupName.trim()}
+              className="w-full gradient-primary text-primary-foreground"
+            >
+              {creating ? (
+                <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Group
+                </>
+              )}
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <UpgradePrompt feature="group chat" requiredTier="plus" compact />
+      )}
 
       {/* Join by Code */}
       <Card className="p-4 bg-card border-border">
@@ -444,11 +451,11 @@ const StudyGroups = () => {
                       ) : (
                         <Button
                           size="sm"
-                          onClick={() => joinGroup(group.id)}
+                          onClick={() => subscription.canUseGroupChat ? joinGroup(group.id) : navigate('/upgrade')}
                           disabled={(group.member_count || 0) >= group.max_members}
                         >
                           <UserPlus className="w-4 h-4 mr-1" />
-                          Join
+                          {subscription.canUseGroupChat ? 'Join' : 'Upgrade'}
                         </Button>
                       )}
                     </div>

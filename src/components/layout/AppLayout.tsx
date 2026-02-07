@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, User, Settings, Bell, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import AdBanner from '@/components/ads/AdBanner';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -100,6 +101,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       <main className="max-w-lg mx-auto">
         {children}
       </main>
+      <AdBanner variant="banner" />
       <BottomNav />
     </div>
   );
