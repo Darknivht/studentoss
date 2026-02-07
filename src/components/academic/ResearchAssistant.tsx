@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Search, ExternalLink, RotateCcw, Copy, Check, Download } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, ExternalLink, RotateCcw, Copy, Check, Download, Printer, BookOpen, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
@@ -15,10 +19,14 @@ interface ResearchAssistantProps {
   onBack: () => void;
 }
 
+type ResearchMode = 'guide' | 'full_research';
+
 const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
   const { toast } = useToast();
   const [topic, setTopic] = useState('');
   const [field, setField] = useState('general');
+  const [mode, setMode] = useState<ResearchMode>('guide');
+  const [additionalContext, setAdditionalContext] = useState('');
   const [results, setResults] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -37,11 +45,16 @@ const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
     setResults('');
 
     const fieldContext = field !== 'general' ? ` in the field of ${field}` : '';
+    const aiMode = mode === 'full_research' ? 'research_full' : 'research';
+    
+    const contentText = mode === 'full_research'
+      ? `Research topic: "${topic}"${fieldContext}\n\n${additionalContext ? `Additional context/requirements: ${additionalContext}\n\n` : ''}Conduct comprehensive, in-depth research on this topic. Provide detailed findings, analysis, and conclusions.`
+      : `Research topic: "${topic}"${fieldContext}\n\nProvide a comprehensive research guide.`;
 
     await streamAIChat({
       messages: [],
-      mode: 'research',
-      content: `Research topic: "${topic}"${fieldContext}\n\nProvide a comprehensive research guide.`,
+      mode: aiMode as any,
+      content: contentText,
       onDelta: (chunk) => setResults(r => r + chunk),
       onDone: () => setLoading(false),
       onError: (err) => {
@@ -79,6 +92,26 @@ const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
 
       {!results && !loading && (
         <>
+          {/* Mode selector */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setMode('guide')}
+              className={`p-4 rounded-2xl border-2 transition-all text-left ${mode === 'guide' ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-primary/30'}`}
+            >
+              <BookOpen className={`w-5 h-5 mb-2 ${mode === 'guide' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <h3 className="font-semibold text-sm text-foreground">Research Guide</h3>
+              <p className="text-xs text-muted-foreground mt-1">Get directions, search terms & methodology tips</p>
+            </button>
+            <button
+              onClick={() => setMode('full_research')}
+              className={`p-4 rounded-2xl border-2 transition-all text-left ${mode === 'full_research' ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-primary/30'}`}
+            >
+              <Zap className={`w-5 h-5 mb-2 ${mode === 'full_research' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <h3 className="font-semibold text-sm text-foreground">Full Research</h3>
+              <p className="text-xs text-muted-foreground mt-1">AI conducts in-depth research & provides findings</p>
+            </button>
+          </div>
+
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">Academic Field</label>
             <Select value={field} onValueChange={setField}>
@@ -97,28 +130,36 @@ const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
             </Select>
           </div>
 
-          <div className="flex gap-2">
+          <div>
+            <label className="text-sm font-medium text-foreground mb-2 block">Research Topic</label>
             <Input
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="Enter your research topic..."
               onKeyDown={(e) => e.key === 'Enter' && searchResearch()}
-              className="flex-1"
             />
-            <Button onClick={searchResearch} disabled={loading || !topic.trim() || topic.trim().length < 5} className="gradient-primary text-primary-foreground">
-              <Search className="w-4 h-4" />
-            </Button>
           </div>
+
+          {mode === 'full_research' && (
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Additional Context (optional)</label>
+              <Textarea
+                value={additionalContext}
+                onChange={(e) => setAdditionalContext(e.target.value)}
+                placeholder="Any specific focus areas, questions to answer, or requirements..."
+                className="min-h-[80px]"
+              />
+            </div>
+          )}
+
+          <Button onClick={searchResearch} disabled={loading || !topic.trim() || topic.trim().length < 5} className="w-full gradient-primary text-primary-foreground">
+            {mode === 'full_research' ? <Zap className="w-4 h-4 mr-2" /> : <Search className="w-4 h-4 mr-2" />}
+            {mode === 'full_research' ? 'Start Full Research' : 'Generate Research Guide'}
+          </Button>
 
           <div className="grid grid-cols-2 gap-3 pt-2">
             {databases.map((db) => (
-              <a
-                key={db.name}
-                href={db.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-4 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all flex items-center justify-between"
-              >
+              <a key={db.name} href={db.url} target="_blank" rel="noopener noreferrer" className="p-4 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all flex items-center justify-between">
                 <span className="font-medium text-foreground text-sm">{db.name}</span>
                 <ExternalLink className="w-4 h-4 text-muted-foreground" />
               </a>
@@ -130,7 +171,7 @@ const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
       {loading && (
         <div className="flex flex-col items-center justify-center py-12">
           <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-          <p className="text-muted-foreground">Researching your topic...</p>
+          <p className="text-muted-foreground">{mode === 'full_research' ? 'Conducting in-depth research...' : 'Preparing research guide...'}</p>
         </div>
       )}
 
@@ -138,28 +179,24 @@ const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="rounded-2xl bg-card border border-border overflow-hidden">
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
-              <h3 className="font-medium text-sm">Research Guide</h3>
+              <h3 className="font-medium text-sm">{mode === 'full_research' ? 'Research Findings' : 'Research Guide'}</h3>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(results, `Research: ${topic}`, `research-${topic.slice(0,20).replace(/\s+/g,'-')}.html`)} className="h-7">
-                  <Download className="w-3 h-3" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
-                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                </Button>
+                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(results, `Research: ${topic}`, `research-${topic.slice(0,20).replace(/\s+/g,'-')}.html`)} className="h-7"><Download className="w-3 h-3" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(results, `Research: ${topic}`)} className="h-7"><Printer className="w-3 h-3" /></Button>
+                <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
               </div>
             </div>
             <ScrollArea className="h-[60vh]">
               <div className="p-4 overflow-hidden">
                 <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full [&_table]:table-fixed [&_pre]:overflow-x-auto [&_pre]:max-w-full">
-                  <ReactMarkdown>{formatAIResponse(results)}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{formatAIResponse(results)}</ReactMarkdown>
                 </div>
               </div>
             </ScrollArea>
           </div>
 
-          <Button onClick={() => { setResults(''); setTopic(''); }} variant="outline" className="w-full">
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Research Another Topic
+          <Button onClick={() => { setResults(''); setTopic(''); setAdditionalContext(''); }} variant="outline" className="w-full">
+            <RotateCcw className="w-4 h-4 mr-2" />Research Another Topic
           </Button>
         </motion.div>
       )}

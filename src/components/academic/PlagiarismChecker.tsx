@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Shield, AlertTriangle, CheckCircle, RotateCcw, Copy, Check, Download } from 'lucide-react';
+import { ArrowLeft, Loader2, Shield, AlertTriangle, CheckCircle, RotateCcw, Copy, Check, Download, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -8,6 +8,9 @@ import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
@@ -48,7 +51,6 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
       content: `Analyze this text for originality (${wordCount} words):\n\n${text}`,
       onDelta: (chunk) => {
         fullResponse += chunk;
-        
         if (!scoreParsed) {
           const jsonMatch = fullResponse.match(/\{"originality_score"\s*:\s*(\d+)\}/);
           if (jsonMatch) {
@@ -56,8 +58,6 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
             scoreParsed = true;
           }
         }
-
-        // Extract analysis after JSON
         const jsonEnd = fullResponse.search(/\}\s*\n/);
         if (jsonEnd > -1) {
           const afterJson = fullResponse.substring(jsonEnd + 1).replace(/^\s*\}\s*/, '').trim();
@@ -70,7 +70,7 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
         setLoading(false);
         if (!scoreParsed && fullResponse) {
           setAnalysis(fullResponse);
-          setScore(75); // Default if parsing fails
+          setScore(75);
         }
       },
       onError: (err) => {
@@ -115,19 +115,12 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
 
       {!hasResults && !loading && (
         <div className="space-y-4">
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Paste your text to check for originality..."
-            className="min-h-[250px]"
-          />
+          <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste your text to check for originality..." className="min-h-[250px]" />
           <p className="text-xs text-muted-foreground">
-            {wordCount} words {wordCount > 0 && wordCount < 30 ? '(minimum 30 words)' : ''}
-            {' • '}Note: AI-based analysis. For academic submissions, also use official plagiarism tools.
+            {wordCount} words {wordCount > 0 && wordCount < 30 ? '(minimum 30 words)' : ''}{' • '}Note: AI-based analysis. For academic submissions, also use official plagiarism tools.
           </p>
           <Button onClick={checkPlagiarism} disabled={!text.trim() || wordCount < 30} className="w-full gradient-primary text-primary-foreground">
-            <Shield className="w-4 h-4 mr-2" />
-            Check Originality
+            <Shield className="w-4 h-4 mr-2" />Check Originality
           </Button>
         </div>
       )}
@@ -143,9 +136,7 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           {score !== null && (
             <div className="p-6 rounded-2xl bg-card border border-border text-center">
-              <div className={`text-5xl font-bold mb-2 ${getScoreColor(score)}`}>
-                {score}%
-              </div>
+              <div className={`text-5xl font-bold mb-2 ${getScoreColor(score)}`}>{score}%</div>
               <p className={`font-medium ${getScoreColor(score)}`}>{getScoreLabel(score)}</p>
               <Progress value={score} className="mt-4 h-3" />
             </div>
@@ -154,22 +145,15 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
           <div className="rounded-2xl bg-card border border-border overflow-hidden">
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
               <h3 className="font-medium text-sm flex items-center gap-2">
-                {score !== null && score >= 80 ? (
-                  <CheckCircle className="w-4 h-4 text-emerald-500" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 text-amber-500" />
-                )}
+                {score !== null && score >= 80 ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
                 Analysis
               </h3>
               <div className="flex items-center gap-1">
                 {analysis && (
                   <>
-                    <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(analysis, 'Plagiarism Analysis', 'plagiarism-analysis.html')} className="h-7">
-                      <Download className="w-3 h-3" />
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
-                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(analysis, 'Plagiarism Analysis', 'plagiarism-analysis.html')} className="h-7"><Download className="w-3 h-3" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(analysis, 'Plagiarism Analysis')} className="h-7"><Printer className="w-3 h-3" /></Button>
+                    <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
                   </>
                 )}
               </div>
@@ -178,13 +162,10 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
               <div className="p-4 overflow-hidden">
                 {analysis ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full">
-                    <ReactMarkdown>{formatAIResponse(analysis)}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{formatAIResponse(analysis)}</ReactMarkdown>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Generating analysis...</span>
-                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /><span className="text-sm">Generating analysis...</span></div>
                 )}
               </div>
             </ScrollArea>
@@ -192,8 +173,7 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
 
           {!loading && (
             <Button onClick={() => { setScore(null); setAnalysis(''); setText(''); }} variant="outline" className="w-full">
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Check Another Text
+              <RotateCcw className="w-4 h-4 mr-2" />Check Another Text
             </Button>
           )}
         </motion.div>

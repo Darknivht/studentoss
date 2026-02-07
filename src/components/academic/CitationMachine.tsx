@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Quote, Copy, Check, RotateCcw, Download } from 'lucide-react';
+import { ArrowLeft, Loader2, Quote, Copy, Check, RotateCcw, Download, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,9 @@ import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
@@ -45,29 +48,14 @@ const SOURCE_FIELDS: Record<string, (keyof SourceForm)[]> = {
 };
 
 const FIELD_LABELS: Record<keyof SourceForm, string> = {
-  authors: 'Author(s)',
-  title: 'Title',
-  year: 'Year',
-  publisher: 'Publisher / Website / Journal',
-  url: 'URL',
-  volume: 'Volume',
-  issue: 'Issue',
-  pages: 'Pages (e.g. 12-25)',
-  doi: 'DOI',
-  accessDate: 'Date Accessed',
+  authors: 'Author(s)', title: 'Title', year: 'Year', publisher: 'Publisher / Website / Journal',
+  url: 'URL', volume: 'Volume', issue: 'Issue', pages: 'Pages (e.g. 12-25)', doi: 'DOI', accessDate: 'Date Accessed',
 };
 
 const FIELD_PLACEHOLDERS: Record<keyof SourceForm, string> = {
-  authors: 'e.g. Smith, J. & Doe, A.',
-  title: 'e.g. The Impact of AI on Education',
-  year: 'e.g. 2024',
-  publisher: 'e.g. Oxford University Press',
-  url: 'https://...',
-  volume: 'e.g. 12',
-  issue: 'e.g. 3',
-  pages: 'e.g. 45-67',
-  doi: 'e.g. 10.1000/xyz123',
-  accessDate: 'e.g. January 15, 2025',
+  authors: 'e.g. Smith, J. & Doe, A.', title: 'e.g. The Impact of AI on Education', year: 'e.g. 2024',
+  publisher: 'e.g. Oxford University Press', url: 'https://...', volume: 'e.g. 12', issue: 'e.g. 3',
+  pages: 'e.g. 45-67', doi: 'e.g. 10.1000/xyz123', accessDate: 'e.g. January 15, 2025',
 };
 
 const CitationMachine = ({ onBack }: CitationMachineProps) => {
@@ -91,25 +79,16 @@ const CitationMachine = ({ onBack }: CitationMachineProps) => {
       toast({ title: 'More info needed', description: 'Please provide at least a title and author or URL.', variant: 'destructive' });
       return;
     }
-    
     setLoading(true);
     setCitation('');
-
-    const details = visibleFields
-      .filter(f => form[f].trim())
-      .map(f => `${FIELD_LABELS[f]}: ${form[f]}`)
-      .join('\n');
-
+    const details = visibleFields.filter(f => form[f].trim()).map(f => `${FIELD_LABELS[f]}: ${form[f]}`).join('\n');
     await streamAIChat({
       messages: [],
       mode: 'citation',
       content: `Generate a ${style.toUpperCase()} citation for this ${sourceType}.\n\n${details}`,
       onDelta: (chunk) => setCitation(c => c + chunk),
       onDone: () => setLoading(false),
-      onError: (err) => {
-        toast({ title: 'Error', description: err, variant: 'destructive' });
-        setLoading(false);
-      },
+      onError: (err) => { toast({ title: 'Error', description: err, variant: 'destructive' }); setLoading(false); },
     });
   };
 
@@ -128,9 +107,7 @@ const CitationMachine = ({ onBack }: CitationMachineProps) => {
           <h1 className="text-xl font-display font-bold text-foreground">Citation Machine</h1>
           <p className="text-muted-foreground text-sm">Auto APA/MLA/Chicago citations</p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-          <Quote className="w-5 h-5 text-primary" />
-        </div>
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"><Quote className="w-5 h-5 text-primary" /></div>
       </motion.header>
 
       {!citation && !loading && (
@@ -166,23 +143,16 @@ const CitationMachine = ({ onBack }: CitationMachineProps) => {
               </Select>
             </div>
           </div>
-
           <div className="space-y-3">
             {visibleFields.map((field) => (
               <div key={field}>
                 <Label className="mb-1.5 block text-sm">{FIELD_LABELS[field]}</Label>
-                <Input
-                  value={form[field]}
-                  onChange={(e) => updateField(field, e.target.value)}
-                  placeholder={FIELD_PLACEHOLDERS[field]}
-                />
+                <Input value={form[field]} onChange={(e) => updateField(field, e.target.value)} placeholder={FIELD_PLACEHOLDERS[field]} />
               </div>
             ))}
           </div>
-
           <Button onClick={generateCitation} disabled={!hasRequiredFields} className="w-full gradient-primary text-primary-foreground">
-            <Quote className="w-4 h-4 mr-2" />
-            Generate Citation
+            <Quote className="w-4 h-4 mr-2" />Generate Citation
           </Button>
         </div>
       )}
@@ -200,26 +170,21 @@ const CitationMachine = ({ onBack }: CitationMachineProps) => {
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
               <h3 className="font-medium text-sm">Generated Citation ({style.toUpperCase()})</h3>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(citation, `Citation (${style.toUpperCase()})`, `citation-${style}.html`)} className="h-7">
-                  <Download className="w-3 h-3" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={copyToClipboard} className="h-7">
-                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                </Button>
+                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(citation, `Citation (${style.toUpperCase()})`, `citation-${style}.html`)} className="h-7"><Download className="w-3 h-3" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(citation, `Citation (${style.toUpperCase()})`)} className="h-7"><Printer className="w-3 h-3" /></Button>
+                <Button size="sm" variant="ghost" onClick={copyToClipboard} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
               </div>
             </div>
             <ScrollArea className="h-[50vh]">
               <div className="p-4 overflow-hidden">
                 <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full">
-                  <ReactMarkdown>{formatAIResponse(citation)}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{formatAIResponse(citation)}</ReactMarkdown>
                 </div>
               </div>
             </ScrollArea>
           </div>
-
           <Button onClick={() => { setCitation(''); setForm(emptyForm); }} variant="outline" className="w-full">
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Generate Another Citation
+            <RotateCcw className="w-4 h-4 mr-2" />Generate Another Citation
           </Button>
         </motion.div>
       )}
