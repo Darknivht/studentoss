@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { streamAIChat } from '@/lib/ai';
-import { Briefcase, MapPin, GraduationCap, Sparkles, RefreshCw, Plus, X, Search } from 'lucide-react';
+import { Briefcase, MapPin, ExternalLink, Sparkles, RefreshCw, Plus, X, Search } from 'lucide-react';
 import JobSearch from './JobSearch';
 
 interface Internship {
@@ -17,6 +16,7 @@ interface Internship {
   description: string;
   skills: string[];
   location: string;
+  applyUrl?: string;
 }
 
 const InternshipMatcher = () => {
@@ -56,19 +56,31 @@ const InternshipMatcher = () => {
     setInternships([]);
 
     try {
-      let fullResponse = '';
-      await streamAIChat({
-        messages: [{ role: 'user', content: `Based on a student studying: ${userSkills.join(', ')}, suggest 6 relevant internship opportunities. Return as valid JSON array only:\n[{"title":"","company":"","description":"","skills":[""],"location":""}]\nMake them realistic entry-level positions.` }],
-        onDelta: (chunk) => { fullResponse += chunk; },
-        onDone: () => {
-          const m = fullResponse.match(/\[[\s\S]*\]/);
-          if (m) { try { setInternships(JSON.parse(m[0])); } catch {} }
-          setLoading(false);
-        },
-        onError: (err) => { toast({ title: err, variant: 'destructive' }); setLoading(false); },
+      // Use JSearch API for real internship results
+      const { data, error } = await supabase.functions.invoke('job-search', {
+        body: { query: `${userSkills.join(' ')} internship`, jobType: 'internship' },
       });
+
+      if (error) throw error;
+
+      if (data?.success && data.jobs) {
+        setInternships(data.jobs.map((j: any) => ({
+          title: j.title,
+          company: j.company,
+          description: j.description,
+          skills: j.highlights || [],
+          location: j.location,
+          applyUrl: j.applyUrl || j.jobUrl,
+        })));
+        if (data.jobs.length === 0) {
+          toast({ title: 'No internships found. Try adding different skills.' });
+        }
+      } else {
+        toast({ title: data?.error || 'Search failed', variant: 'destructive' });
+      }
     } catch {
       toast({ title: 'Failed to find internships', variant: 'destructive' });
+    } finally {
       setLoading(false);
     }
   };
@@ -123,18 +135,26 @@ const InternshipMatcher = () => {
           {internships.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                ⚠️ AI-generated suggestions. Verify on actual job boards.
+                ✅ Showing {internships.length} real internship listings matching your skills.
               </p>
               {internships.map((internship, i) => (
                 <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
                   <Card className="p-4 hover:border-primary/50 transition-colors">
                     <h5 className="font-semibold text-foreground">{internship.title}</h5>
                     <p className="text-sm text-primary">{internship.company}</p>
-                    <p className="text-sm text-muted-foreground my-2">{internship.description}</p>
+                    <p className="text-sm text-muted-foreground my-2 line-clamp-2">{internship.description}</p>
                     <div className="flex flex-wrap gap-1 mb-2">
-                      {internship.skills.map((s, si) => <span key={si} className="px-2 py-0.5 bg-muted text-muted-foreground text-xs rounded">{s}</span>)}
+                      {internship.skills.slice(0, 4).map((s, si) => <span key={si} className="px-2 py-0.5 bg-muted text-muted-foreground text-xs rounded truncate max-w-[180px]">{s}</span>)}
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="w-3 h-3" />{internship.location}</div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{internship.location}</span>
+                      {internship.applyUrl && (
+                        <a href={internship.applyUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-primary font-medium hover:underline">
+                          Apply <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                   </Card>
                 </motion.div>
               ))}
