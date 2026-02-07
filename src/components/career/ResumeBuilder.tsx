@@ -13,6 +13,14 @@ import { FileText, Plus, Trash2, Download, Sparkles, Briefcase, Award, Graduatio
 import { templates, TemplateInfo, ResumeData, emptyResumeData, renderResumeHTML } from './ResumeTemplates';
 import ResumePreview from './ResumePreview';
 
+// Moved OUTSIDE ResumeBuilder to prevent re-creation on every render
+const InputRow = ({ label, value, onChange, placeholder, type }: { label: string; value: string; onChange: (v: string) => void; placeholder: string; type?: string }) => (
+  <div>
+    <label className="text-xs font-medium text-muted-foreground mb-1 block">{label}</label>
+    <Input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} type={type} />
+  </div>
+);
+
 const ResumeBuilder = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -132,13 +140,6 @@ const ResumeBuilder = () => {
     URL.revokeObjectURL(a.href);
     toast({ title: '📄 Text exported!' });
   };
-
-  const InputRow = ({ label, value, onChange, placeholder, type }: { label: string; value: string; onChange: (v: string) => void; placeholder: string; type?: string }) => (
-    <div>
-      <label className="text-xs font-medium text-muted-foreground mb-1 block">{label}</label>
-      <Input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} type={type} />
-    </div>
-  );
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">

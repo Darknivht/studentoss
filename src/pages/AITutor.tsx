@@ -7,6 +7,8 @@ import { Brain, FileText, BookOpen, ArrowRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import SocraticTutor from '@/components/notes/SocraticTutor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useSubscription } from '@/hooks/useSubscription';
+import UpgradePrompt from '@/components/subscription/UpgradePrompt';
 
 interface Note {
   id: string;
@@ -40,6 +42,7 @@ const AITutor = () => {
   const { user } = useAuth();
   const location = useLocation();
   const locationState = location.state as LocationState | null;
+  const { subscription, checkLimit, getRemainingUses, incrementUsage } = useSubscription();
   
   const [notes, setNotes] = useState<Note[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -123,14 +126,17 @@ const AITutor = () => {
   };
 
   const handleCourseSelect = async (course: Course) => {
+    if (!checkLimit('ai')) return;
+    await incrementUsage('ai');
     setSelectedCourse(course);
-    // Fetch notes for this course
     const courseNotesData = notes.filter(n => n.course_id === course.id);
     setCourseNotes(courseNotesData);
     setTutorActive(true);
   };
 
   const handleNoteSelect = (note: Note) => {
+    if (!checkLimit('ai')) return;
+    incrementUsage('ai');
     setSelectedNote(note);
     setTutorActive(true);
   };
@@ -183,6 +189,11 @@ const AITutor = () => {
           Socratic learning - discover answers through questions
         </p>
       </motion.header>
+
+      {/* Subscription gate */}
+      {!checkLimit('ai') && (
+        <UpgradePrompt feature="AI calls" remaining={getRemainingUses('ai')} compact />
+      )}
 
       {/* Info Banner */}
       <motion.div

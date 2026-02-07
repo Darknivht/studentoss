@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { SUBSCRIPTION_ENABLED } from '@/lib/subscriptionConfig';
 
 interface FeatureLimits {
   aiCallsLimit: number;
   quizzesLimit: number;
   flashcardsLimit: number;
   notesLimit: number;
+  jobSearchesLimit: number;
+  resumeTemplatesLimit: number;
 }
 
 interface SubscriptionData {
-  tier: 'free' | 'pro';
+  tier: 'free' | 'plus' | 'pro';
   isPro: boolean;
+  isPlus: boolean;
   // Usage tracking
   aiCallsToday: number;
   quizzesToday: number;
@@ -25,7 +29,9 @@ interface SubscriptionData {
   canCreateFlashcard: boolean;
   canCreateNote: boolean;
   canUseChat: boolean;
+  canUseGroupChat: boolean;
   canUseAdvancedTools: boolean;
+  showAds: boolean;
 }
 
 const FREE_LIMITS: FeatureLimits = {
@@ -33,6 +39,17 @@ const FREE_LIMITS: FeatureLimits = {
   quizzesLimit: 3,
   flashcardsLimit: 10,
   notesLimit: 2,
+  jobSearchesLimit: 3,
+  resumeTemplatesLimit: 3,
+};
+
+const PLUS_LIMITS: FeatureLimits = {
+  aiCallsLimit: 20,
+  quizzesLimit: 10,
+  flashcardsLimit: 30,
+  notesLimit: 8,
+  jobSearchesLimit: 10,
+  resumeTemplatesLimit: 7,
 };
 
 const PRO_LIMITS: FeatureLimits = {
@@ -40,6 +57,27 @@ const PRO_LIMITS: FeatureLimits = {
   quizzesLimit: Infinity,
   flashcardsLimit: Infinity,
   notesLimit: Infinity,
+  jobSearchesLimit: Infinity,
+  resumeTemplatesLimit: 10,
+};
+
+const FULL_ACCESS: SubscriptionData = {
+  tier: 'pro',
+  isPro: true,
+  isPlus: true,
+  aiCallsToday: 0,
+  quizzesToday: 0,
+  flashcardsToday: 0,
+  notesToday: 0,
+  limits: PRO_LIMITS,
+  canUseAI: true,
+  canCreateQuiz: true,
+  canCreateFlashcard: true,
+  canCreateNote: true,
+  canUseChat: true,
+  canUseGroupChat: true,
+  canUseAdvancedTools: true,
+  showAds: false,
 };
 
 export const useSubscription = () => {
@@ -47,6 +85,7 @@ export const useSubscription = () => {
   const [subscription, setSubscription] = useState<SubscriptionData>({
     tier: 'free',
     isPro: false,
+    isPlus: false,
     aiCallsToday: 0,
     quizzesToday: 0,
     flashcardsToday: 0,
@@ -56,8 +95,10 @@ export const useSubscription = () => {
     canCreateQuiz: true,
     canCreateFlashcard: true,
     canCreateNote: true,
-    canUseChat: false,
+    canUseChat: true,
+    canUseGroupChat: false,
     canUseAdvancedTools: false,
+    showAds: true,
   });
   const [loading, setLoading] = useState(true);
 
@@ -69,6 +110,13 @@ export const useSubscription = () => {
 
   const fetchSubscription = async () => {
     if (!user) return;
+
+    // Kill switch: if disabled, grant full access
+    if (!SUBSCRIPTION_ENABLED) {
+      setSubscription(FULL_ACCESS);
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -95,29 +143,36 @@ export const useSubscription = () => {
           .eq('user_id', user.id);
       }
 
-      const isPro = data?.subscription_tier === 'pro' && 
-        (!data?.subscription_expires_at || new Date(data.subscription_expires_at) > new Date());
+      const tierRaw = data?.subscription_tier || 'free';
+      const isActive = !data?.subscription_expires_at || new Date(data.subscription_expires_at) > new Date();
+      
+      const isPro = tierRaw === 'pro' && isActive;
+      const isPlus = tierRaw === 'plus' && isActive;
+      const tier: 'free' | 'plus' | 'pro' = isPro ? 'pro' : isPlus ? 'plus' : 'free';
 
-      const limits = isPro ? PRO_LIMITS : FREE_LIMITS;
+      const limits = isPro ? PRO_LIMITS : isPlus ? PLUS_LIMITS : FREE_LIMITS;
       const aiCallsToday = data?.ai_calls_reset_at === today ? (data?.ai_calls_today || 0) : 0;
       const quizzesToday = data?.ai_calls_reset_at === today ? (data?.quizzes_today || 0) : 0;
       const flashcardsToday = data?.ai_calls_reset_at === today ? (data?.flashcards_generated_today || 0) : 0;
       const notesToday = data?.ai_calls_reset_at === today ? (data?.notes_today || 0) : 0;
 
       setSubscription({
-        tier: isPro ? 'pro' : 'free',
+        tier,
         isPro,
+        isPlus,
         aiCallsToday,
         quizzesToday,
         flashcardsToday,
         notesToday,
         limits,
-        canUseAI: isPro || aiCallsToday < limits.aiCallsLimit,
-        canCreateQuiz: isPro || quizzesToday < limits.quizzesLimit,
-        canCreateFlashcard: isPro || flashcardsToday < limits.flashcardsLimit,
-        canCreateNote: isPro || notesToday < limits.notesLimit,
-        canUseChat: isPro,
+        canUseAI: isPro || isPlus || aiCallsToday < limits.aiCallsLimit,
+        canCreateQuiz: isPro || isPlus || quizzesToday < limits.quizzesLimit,
+        canCreateFlashcard: isPro || isPlus || flashcardsToday < limits.flashcardsLimit,
+        canCreateNote: isPro || isPlus || notesToday < limits.notesLimit,
+        canUseChat: true, // DMs allowed for all tiers
+        canUseGroupChat: isPro || isPlus,
         canUseAdvancedTools: isPro,
+        showAds: tier === 'free',
       });
     } catch (error) {
       console.error('Error fetching subscription:', error);
@@ -128,6 +183,7 @@ export const useSubscription = () => {
 
   const incrementUsage = async (type: 'ai' | 'quiz' | 'flashcard' | 'note') => {
     if (!user) return false;
+    if (!SUBSCRIPTION_ENABLED) return true;
 
     const fieldMap = {
       ai: 'ai_calls_today',
@@ -173,7 +229,7 @@ export const useSubscription = () => {
       setSubscription(prev => ({
         ...prev,
         [stateKey]: newCount,
-        [limitKey]: prev.isPro || newCount < limitValue,
+        [limitKey]: prev.isPro || prev.isPlus || newCount < limitValue,
       }));
 
       return true;
@@ -184,6 +240,7 @@ export const useSubscription = () => {
   };
 
   const checkLimit = (type: 'ai' | 'quiz' | 'flashcard' | 'note'): boolean => {
+    if (!SUBSCRIPTION_ENABLED) return true;
     const checks = {
       ai: subscription.canUseAI,
       quiz: subscription.canCreateQuiz,
@@ -194,7 +251,7 @@ export const useSubscription = () => {
   };
 
   const getRemainingUses = (type: 'ai' | 'quiz' | 'flashcard' | 'note'): number => {
-    if (subscription.isPro) return Infinity;
+    if (!SUBSCRIPTION_ENABLED || subscription.isPro) return Infinity;
     
     const usage = {
       ai: subscription.aiCallsToday,

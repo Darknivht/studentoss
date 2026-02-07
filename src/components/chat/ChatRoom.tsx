@@ -183,6 +183,7 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
                   return (
                     <motion.div
                       key={message.id}
+                      id={`msg-${message.id}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={`flex gap-2 mb-3 group relative ${isOwn ? 'flex-row-reverse' : ''}`}
@@ -200,9 +201,19 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
                           </p>
                         )}
 
-                        {/* Replied message quote */}
+                        {/* Replied message quote - clickable to scroll */}
                         {repliedMsg && (
-                          <div className={`mb-1 px-3 py-1.5 rounded-lg border-l-2 border-primary/60 bg-muted/50 text-xs max-w-full ${isOwn ? 'ml-auto' : ''}`}>
+                          <div
+                            onClick={() => {
+                              const el = document.getElementById(`msg-${repliedMsg.id}`);
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                el.classList.add('ring-2', 'ring-primary/50', 'rounded-xl');
+                                setTimeout(() => el.classList.remove('ring-2', 'ring-primary/50', 'rounded-xl'), 2000);
+                              }
+                            }}
+                            className={`mb-1 px-3 py-1.5 rounded-lg border-l-2 border-primary/60 bg-muted/50 text-xs max-w-full cursor-pointer hover:bg-muted/80 transition-colors ${isOwn ? 'ml-auto' : ''}`}
+                          >
                             <p className="text-primary/80 font-medium truncate">
                               {repliedMsg.sender_id === user?.id ? 'You' : (repliedMsg.sender?.username ? `@${repliedMsg.sender.username}` : repliedMsg.sender?.display_name || 'User')}
                             </p>

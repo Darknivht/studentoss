@@ -11,6 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import ChatRoom from '@/components/chat/ChatRoom';
 import NoteViewerDialog from '@/components/notes/NoteViewerDialog';
+import { useSubscription } from '@/hooks/useSubscription';
+import UpgradePrompt from '@/components/subscription/UpgradePrompt';
 
 interface GroupInfo {
   id: string;
@@ -43,6 +45,7 @@ const GroupChat = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { subscription } = useSubscription();
   
   const [group, setGroup] = useState<GroupInfo | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -55,6 +58,21 @@ const GroupChat = () => {
   useEffect(() => {
     if (groupId && user) fetchGroupData();
   }, [groupId, user]);
+
+  // Gate: Free users can't access group chat
+  if (!subscription.canUseGroupChat) {
+    return (
+      <div className="p-6 space-y-6">
+        <header className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/social')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="text-xl font-display font-bold text-foreground">Group Chat</h1>
+        </header>
+        <UpgradePrompt feature="group chat" requiredTier="plus" />
+      </div>
+    );
+  }
 
   const fetchGroupData = async () => {
     if (!groupId) return;
@@ -202,7 +220,6 @@ const GroupChat = () => {
         </div>
       )}
 
-      {/* Note Viewer Dialog */}
       {viewingNote && (
         <NoteViewerDialog
           note={viewingNote}
