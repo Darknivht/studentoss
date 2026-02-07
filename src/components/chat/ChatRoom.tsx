@@ -7,13 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Send, ArrowLeft } from 'lucide-react';
+import MediaUpload from '@/components/chat/MediaUpload';
+import { format, isToday, isYesterday } from 'date-fns';
 
 interface Message {
   id: string;
   sender_id: string;
   recipient_id?: string;
   content: string;
+  image_url?: string | null;
   created_at: string;
   sender?: {
     display_name: string | null;
@@ -24,15 +28,14 @@ interface Message {
 
 interface ChatRoomProps {
   type?: 'group' | 'dm';
-  targetId?: string; // group_id for groups, friend's user_id for DMs
+  targetId?: string;
   targetName?: string;
   onBack?: () => void;
-  groupId?: string; // Legacy support
-  recipientId?: string; // For DMs
+  groupId?: string;
+  recipientId?: string;
 }
 
 const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: ChatRoomProps) => {
-  // Support both old and new props
   const chatType = type || (groupId ? 'group' : 'dm');
   const chatTargetId = targetId || groupId || recipientId || '';
   const chatTargetName = targetName || '';
@@ -42,6 +45,7 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -50,58 +54,32 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
       fetchMessages();
       subscribeToMessages();
     }
-
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
-    };
+    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
   }, [user, chatTargetId]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  useEffect(() => { scrollToBottom(); }, [messages]);
 
   const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   };
 
   const fetchMessages = async () => {
     try {
-      let query = supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: true })
-        .limit(100);
-
+      let query = supabase.from('messages').select('*').order('created_at', { ascending: true }).limit(100);
       if (chatType === 'group') {
         query = query.eq('group_id', chatTargetId);
       } else {
-        query = query
-          .is('group_id', null)
+        query = query.is('group_id', null)
           .or(`and(sender_id.eq.${user?.id},recipient_id.eq.${chatTargetId}),and(sender_id.eq.${chatTargetId},recipient_id.eq.${user?.id})`);
       }
-
       const { data, error } = await query;
       if (error) throw error;
 
-      // Fetch sender profiles
       const senderIds = [...new Set(data?.map(m => m.sender_id) || [])];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, username, avatar_url')
-        .in('user_id', senderIds);
-
+      const { data: profiles } = await supabase.from('profiles').select('user_id, display_name, username, avatar_url').in('user_id', senderIds);
       const profileMap = new Map(profiles?.map(p => [p.user_id, p]));
-      
-      const messagesWithSenders = (data || []).map(m => ({
-        ...m,
-        sender: profileMap.get(m.sender_id) || null,
-      }));
 
-      setMessages(messagesWithSenders);
+      setMessages((data || []).map(m => ({ ...m, sender: profileMap.get(m.sender_id) || null })));
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -111,61 +89,31 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
 
   const subscribeToMessages = () => {
     const channelName = chatType === 'group' ? `group_${chatTargetId}` : `dm_${[user?.id, chatTargetId].sort().join('_')}`;
-    
-    channelRef.current = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: chatType === 'group' ? `group_id=eq.${chatTargetId}` : undefined,
-        },
+    channelRef.current = supabase.channel(channelName)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: chatType === 'group' ? `group_id=eq.${chatTargetId}` : undefined },
         async (payload) => {
           const newMsg = payload.new as Message;
-          
-          // For DMs, check if message is for this conversation
           if (chatType === 'dm') {
-            const isRelevant = 
-              (newMsg.sender_id === user?.id && newMsg.recipient_id === chatTargetId) ||
-              (newMsg.sender_id === chatTargetId && newMsg.recipient_id === user?.id);
+            const isRelevant = (newMsg.sender_id === user?.id && newMsg.recipient_id === chatTargetId) || (newMsg.sender_id === chatTargetId && newMsg.recipient_id === user?.id);
             if (!isRelevant) return;
           }
-
-          // Fetch sender profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('user_id, display_name, username, avatar_url')
-            .eq('user_id', newMsg.sender_id)
-            .single();
-
+          const { data: profile } = await supabase.from('profiles').select('user_id, display_name, username, avatar_url').eq('user_id', newMsg.sender_id).single();
           setMessages(prev => [...prev, { ...newMsg, sender: profile }]);
         }
-      )
-      .subscribe();
+      ).subscribe();
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !user || sending) return;
+  const sendMessage = async (imageUrl?: string) => {
+    if ((!newMessage.trim() && !imageUrl) || !user || sending) return;
 
     setSending(true);
     try {
-      const messageData: any = {
-        sender_id: user.id,
-        content: newMessage.trim(),
-      };
+      const messageData: any = { sender_id: user.id, content: newMessage.trim() || (imageUrl ? '📷 Image' : '') };
+      if (imageUrl) messageData.image_url = imageUrl;
+      if (chatType === 'group') messageData.group_id = chatTargetId;
+      else messageData.recipient_id = chatTargetId;
 
-      if (chatType === 'group') {
-        messageData.group_id = chatTargetId;
-      } else {
-        messageData.recipient_id = chatTargetId;
-      }
-
-      const { error } = await supabase
-        .from('messages')
-        .insert(messageData);
-
+      const { error } = await supabase.from('messages').insert(messageData);
       if (error) throw error;
       setNewMessage('');
     } catch (error) {
@@ -176,81 +124,89 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
     }
   };
 
-  const formatTime = (dateStr: string) => {
+  const getDateLabel = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (isToday(date)) return 'Today';
+    if (isYesterday(date)) return 'Yesterday';
+    return format(date, 'MMM d, yyyy');
   };
 
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const formatTime = (dateStr: string) => format(new Date(dateStr), 'h:mm a');
+
+  // Group messages by date
+  const groupedMessages: { label: string; messages: Message[] }[] = [];
+  let currentLabel = '';
+  messages.forEach(m => {
+    const label = getDateLabel(m.created_at);
+    if (label !== currentLabel) {
+      currentLabel = label;
+      groupedMessages.push({ label, messages: [m] });
+    } else {
+      groupedMessages[groupedMessages.length - 1].messages.push(m);
+    }
+  });
+
+  if (loading) return <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
     <div className="flex flex-col h-full min-h-[400px]">
-      {/* Header - only show if onBack is provided */}
       {onBack && (
         <div className="flex items-center gap-3 p-4 border-b border-border">
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
+          <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
           <div>
             <h3 className="font-semibold text-foreground">{chatTargetName}</h3>
-            <p className="text-xs text-muted-foreground">
-              {chatType === 'group' ? 'Group Chat' : 'Direct Message'}
-            </p>
+            <p className="text-xs text-muted-foreground">{chatType === 'group' ? 'Group Chat' : 'Direct Message'}</p>
           </div>
         </div>
       )}
 
-      {/* Messages */}
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-4">
-          <AnimatePresence>
-            {messages.map((message) => {
-              const isOwn = message.sender_id === user?.id;
-              return (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}
-                >
-                  {!isOwn && (
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={message.sender?.avatar_url || undefined} />
-                      <AvatarFallback>
-                        {(message.sender?.username || message.sender?.display_name)?.[0]?.toUpperCase() || '?'}
-                      </AvatarFallback>
-                    </Avatar>
-                  )}
-                  <div className={`max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                    {!isOwn && type === 'group' && (
-                      <p className="text-xs text-muted-foreground mb-1">
-                        {message.sender?.username ? `@${message.sender.username}` : message.sender?.display_name || 'User'}
-                      </p>
-                    )}
-                    <div
-                      className={`px-4 py-2 rounded-2xl ${
-                        isOwn
-                          ? 'bg-primary text-primary-foreground rounded-br-md'
-                          : 'bg-muted text-foreground rounded-bl-md'
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    </div>
-                    <p className={`text-xs text-muted-foreground mt-1 ${isOwn ? 'text-right' : ''}`}>
-                      {formatTime(message.created_at)}
-                    </p>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-          
+        <div className="space-y-1">
+          {groupedMessages.map((group, gi) => (
+            <div key={gi}>
+              <div className="flex justify-center my-4">
+                <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">{group.label}</span>
+              </div>
+              <AnimatePresence>
+                {group.messages.map((message) => {
+                  const isOwn = message.sender_id === user?.id;
+                  return (
+                    <motion.div key={message.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-2 mb-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                      {!isOwn && (
+                        <Avatar className="h-8 w-8 shrink-0">
+                          <AvatarImage src={message.sender?.avatar_url || undefined} />
+                          <AvatarFallback className="text-xs">{(message.sender?.username || message.sender?.display_name)?.[0]?.toUpperCase() || '?'}</AvatarFallback>
+                        </Avatar>
+                      )}
+                      <div className={`max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
+                        {!isOwn && chatType === 'group' && (
+                          <p className="text-xs text-primary mb-0.5 font-medium">
+                            {message.sender?.username ? `@${message.sender.username}` : message.sender?.display_name || 'User'}
+                          </p>
+                        )}
+                        <div className={`px-4 py-2.5 rounded-2xl ${isOwn ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md'}`}>
+                          {message.image_url && (
+                            <img
+                              src={message.image_url}
+                              alt="Shared"
+                              className="rounded-lg max-w-full max-h-48 object-cover mb-1 cursor-pointer"
+                              onClick={() => setLightboxImage(message.image_url!)}
+                            />
+                          )}
+                          {message.content && message.content !== '📷 Image' && (
+                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          )}
+                        </div>
+                        <p className={`text-[10px] text-muted-foreground mt-0.5 ${isOwn ? 'text-right' : ''}`}>
+                          {formatTime(message.created_at)}
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          ))}
           {messages.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <p>No messages yet</p>
@@ -261,19 +217,28 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-4 border-t border-border">
-        <div className="flex gap-2">
+      <div className="p-3 border-t border-border">
+        <div className="flex items-center gap-2">
+          {user && <MediaUpload userId={user.id} onUploaded={(url) => sendMessage(url)} />}
           <Input
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+            className="flex-1"
           />
-          <Button onClick={sendMessage} disabled={sending || !newMessage.trim()}>
+          <Button onClick={() => sendMessage()} disabled={sending || !newMessage.trim()} size="icon">
             <Send className="w-4 h-4" />
           </Button>
         </div>
       </div>
+
+      {/* Lightbox */}
+      <Dialog open={!!lightboxImage} onOpenChange={() => setLightboxImage(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-2">
+          {lightboxImage && <img src={lightboxImage} alt="Full size" className="w-full h-full object-contain rounded-lg" />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

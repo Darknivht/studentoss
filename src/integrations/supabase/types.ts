@@ -74,6 +74,33 @@ export type Database = {
         }
         Relationships: []
       }
+      challenge_claims: {
+        Row: {
+          challenge_id: string
+          claimed_date: string
+          created_at: string
+          id: string
+          user_id: string
+          xp_earned: number
+        }
+        Insert: {
+          challenge_id: string
+          claimed_date?: string
+          created_at?: string
+          id?: string
+          user_id: string
+          xp_earned?: number
+        }
+        Update: {
+          challenge_id?: string
+          claimed_date?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          xp_earned?: number
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -316,6 +343,7 @@ export type Database = {
           created_at: string | null
           group_id: string | null
           id: string
+          image_url: string | null
           is_read: boolean | null
           message_type: string | null
           recipient_id: string | null
@@ -327,6 +355,7 @@ export type Database = {
           created_at?: string | null
           group_id?: string | null
           id?: string
+          image_url?: string | null
           is_read?: boolean | null
           message_type?: string | null
           recipient_id?: string | null
@@ -338,6 +367,7 @@ export type Database = {
           created_at?: string | null
           group_id?: string | null
           id?: string
+          image_url?: string | null
           is_read?: boolean | null
           message_type?: string | null
           recipient_id?: string | null
@@ -400,6 +430,56 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peer_challenges: {
+        Row: {
+          challenged_id: string
+          challenged_score: number | null
+          challenger_id: string
+          challenger_score: number | null
+          created_at: string
+          expires_at: string
+          id: string
+          note_id: string | null
+          quiz_data: Json
+          status: string
+          xp_reward: number
+        }
+        Insert: {
+          challenged_id: string
+          challenged_score?: number | null
+          challenger_id: string
+          challenger_score?: number | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          note_id?: string | null
+          quiz_data?: Json
+          status?: string
+          xp_reward?: number
+        }
+        Update: {
+          challenged_id?: string
+          challenged_score?: number | null
+          challenger_id?: string
+          challenger_score?: number | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          note_id?: string | null
+          quiz_data?: Json
+          status?: string
+          xp_reward?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peer_challenges_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
             referencedColumns: ["id"]
           },
         ]
