@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Lightbulb, Sparkles, Copy, Check, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Loader2, Lightbulb, Sparkles, Copy, Check, RotateCcw, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,7 @@ import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import { formatAIResponse } from '@/lib/formatters';
+import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
 interface ThesisGeneratorProps {
   onBack: () => void;
@@ -127,13 +128,18 @@ const ThesisGenerator = ({ onBack }: ThesisGeneratorProps) => {
                 <Lightbulb className="w-4 h-4 text-primary" />
                 Thesis Options
               </h3>
-              <Button size="sm" variant="ghost" onClick={copyToClipboard} className="h-7">
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(thesis, 'Thesis Statements', 'thesis-statements.html')} className="h-7">
+                  <Download className="w-3 h-3" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={copyToClipboard} className="h-7">
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                </Button>
+              </div>
             </div>
             <ScrollArea className="h-[50vh]">
               <div className="p-4 overflow-hidden">
-                <div className="prose prose-sm dark:prose-invert max-w-none">
+                <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full">
                   <ReactMarkdown>{formatAIResponse(thesis)}</ReactMarkdown>
                 </div>
               </div>

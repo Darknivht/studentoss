@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Search, ExternalLink, RotateCcw, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, ExternalLink, RotateCcw, Copy, Check, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,7 @@ import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import { formatAIResponse } from '@/lib/formatters';
+import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
 interface ResearchAssistantProps {
   onBack: () => void;
@@ -138,13 +139,18 @@ const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
           <div className="rounded-2xl bg-card border border-border overflow-hidden">
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
               <h3 className="font-medium text-sm">Research Guide</h3>
-              <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(results, `Research: ${topic}`, `research-${topic.slice(0,20).replace(/\s+/g,'-')}.html`)} className="h-7">
+                  <Download className="w-3 h-3" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                </Button>
+              </div>
             </div>
             <ScrollArea className="h-[60vh]">
               <div className="p-4 overflow-hidden">
-                <div className="prose prose-sm dark:prose-invert max-w-none">
+                <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full [&_table]:table-fixed [&_pre]:overflow-x-auto [&_pre]:max-w-full">
                   <ReactMarkdown>{formatAIResponse(results)}</ReactMarkdown>
                 </div>
               </div>

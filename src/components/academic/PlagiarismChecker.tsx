@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Shield, AlertTriangle, CheckCircle, RotateCcw, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, Shield, AlertTriangle, CheckCircle, RotateCcw, Copy, Check, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import ReactMarkdown from 'react-markdown';
 import { formatAIResponse } from '@/lib/formatters';
+import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
 interface PlagiarismCheckerProps {
   onBack: () => void;
@@ -160,16 +161,23 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
                 )}
                 Analysis
               </h3>
-              {analysis && (
-                <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
-                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                </Button>
-              )}
+              <div className="flex items-center gap-1">
+                {analysis && (
+                  <>
+                    <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(analysis, 'Plagiarism Analysis', 'plagiarism-analysis.html')} className="h-7">
+                      <Download className="w-3 h-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
+                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
             <ScrollArea className="h-[40vh]">
-              <div className="p-4">
+              <div className="p-4 overflow-hidden">
                 {analysis ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full">
                     <ReactMarkdown>{formatAIResponse(analysis)}</ReactMarkdown>
                   </div>
                 ) : (
