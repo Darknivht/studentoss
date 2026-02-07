@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Quote, Copy, Check, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Loader2, Quote, Copy, Check, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
@@ -15,45 +15,94 @@ interface CitationMachineProps {
   onBack: () => void;
 }
 
+interface SourceForm {
+  authors: string;
+  title: string;
+  year: string;
+  publisher: string;
+  url: string;
+  volume: string;
+  issue: string;
+  pages: string;
+  doi: string;
+  accessDate: string;
+}
+
+const emptyForm: SourceForm = {
+  authors: '', title: '', year: '', publisher: '', url: '',
+  volume: '', issue: '', pages: '', doi: '', accessDate: '',
+};
+
+const SOURCE_FIELDS: Record<string, (keyof SourceForm)[]> = {
+  website: ['authors', 'title', 'year', 'publisher', 'url', 'accessDate'],
+  book: ['authors', 'title', 'year', 'publisher'],
+  journal: ['authors', 'title', 'year', 'publisher', 'volume', 'issue', 'pages', 'doi'],
+  newspaper: ['authors', 'title', 'year', 'publisher', 'url'],
+  video: ['authors', 'title', 'year', 'publisher', 'url'],
+  podcast: ['authors', 'title', 'year', 'publisher', 'url'],
+  report: ['authors', 'title', 'year', 'publisher', 'doi', 'url'],
+};
+
+const FIELD_LABELS: Record<keyof SourceForm, string> = {
+  authors: 'Author(s)',
+  title: 'Title',
+  year: 'Year',
+  publisher: 'Publisher / Website / Journal',
+  url: 'URL',
+  volume: 'Volume',
+  issue: 'Issue',
+  pages: 'Pages (e.g. 12-25)',
+  doi: 'DOI',
+  accessDate: 'Date Accessed',
+};
+
+const FIELD_PLACEHOLDERS: Record<keyof SourceForm, string> = {
+  authors: 'e.g. Smith, J. & Doe, A.',
+  title: 'e.g. The Impact of AI on Education',
+  year: 'e.g. 2024',
+  publisher: 'e.g. Oxford University Press',
+  url: 'https://...',
+  volume: 'e.g. 12',
+  issue: 'e.g. 3',
+  pages: 'e.g. 45-67',
+  doi: 'e.g. 10.1000/xyz123',
+  accessDate: 'e.g. January 15, 2025',
+};
+
 const CitationMachine = ({ onBack }: CitationMachineProps) => {
   const { toast } = useToast();
   const [style, setStyle] = useState('apa');
   const [sourceType, setSourceType] = useState('website');
-  const [url, setUrl] = useState('');
-  const [details, setDetails] = useState('');
+  const [form, setForm] = useState<SourceForm>(emptyForm);
   const [citation, setCitation] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const updateField = (field: keyof SourceForm, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const visibleFields = SOURCE_FIELDS[sourceType] || SOURCE_FIELDS.website;
+  const hasRequiredFields = form.title.trim() && (form.authors.trim() || form.url.trim());
+
   const generateCitation = async () => {
-    if (!url.trim() && !details.trim()) {
-      toast({ title: 'Input required', description: 'Provide a URL or source details.', variant: 'destructive' });
+    if (!hasRequiredFields) {
+      toast({ title: 'More info needed', description: 'Please provide at least a title and author or URL.', variant: 'destructive' });
       return;
     }
     
     setLoading(true);
     setCitation('');
 
+    const details = visibleFields
+      .filter(f => form[f].trim())
+      .map(f => `${FIELD_LABELS[f]}: ${form[f]}`)
+      .join('\n');
+
     await streamAIChat({
       messages: [],
-      mode: 'chat',
-      content: `Generate a properly formatted ${style.toUpperCase()} citation for this ${sourceType}.
-
-${url ? `URL: ${url}` : ''}
-${details ? `Additional details: ${details}` : ''}
-
-Provide the response in markdown:
-
-## Full Citation
-[Properly formatted ${style.toUpperCase()} citation]
-
-## In-text Citation
-[In-text format with examples]
-
-## Notes
-[Any missing information that would improve the citation, or formatting tips]
-
-Be precise with ${style.toUpperCase()} formatting rules. Use proper italics, punctuation, and ordering.`,
+      mode: 'citation',
+      content: `Generate a ${style.toUpperCase()} citation for this ${sourceType}.\n\n${details}`,
       onDelta: (chunk) => setCitation(c => c + chunk),
       onDone: () => setLoading(false),
       onError: (err) => {
@@ -87,7 +136,7 @@ Be precise with ${style.toUpperCase()} formatting rules. Use proper italics, pun
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Style</label>
+              <Label className="mb-2 block">Citation Style</Label>
               <Select value={style} onValueChange={setStyle}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -101,8 +150,8 @@ Be precise with ${style.toUpperCase()} formatting rules. Use proper italics, pun
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Source Type</label>
-              <Select value={sourceType} onValueChange={setSourceType}>
+              <Label className="mb-2 block">Source Type</Label>
+              <Select value={sourceType} onValueChange={(v) => { setSourceType(v); setForm(emptyForm); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="website">Website</SelectItem>
@@ -117,25 +166,20 @@ Be precise with ${style.toUpperCase()} formatting rules. Use proper italics, pun
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-foreground mb-2 block">URL (optional)</label>
-            <Input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://..."
-            />
+          <div className="space-y-3">
+            {visibleFields.map((field) => (
+              <div key={field}>
+                <Label className="mb-1.5 block text-sm">{FIELD_LABELS[field]}</Label>
+                <Input
+                  value={form[field]}
+                  onChange={(e) => updateField(field, e.target.value)}
+                  placeholder={FIELD_PLACEHOLDERS[field]}
+                />
+              </div>
+            ))}
           </div>
-          <div>
-            <label className="text-sm font-medium text-foreground mb-2 block">Source Details</label>
-            <Textarea
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-              placeholder="Author, title, date, publisher, volume, pages, DOI, etc..."
-              className="min-h-[100px]"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Provide as much detail as possible for an accurate citation.</p>
-          </div>
-          <Button onClick={generateCitation} disabled={loading || (!url.trim() && !details.trim())} className="w-full gradient-primary text-primary-foreground">
+
+          <Button onClick={generateCitation} disabled={!hasRequiredFields} className="w-full gradient-primary text-primary-foreground">
             <Quote className="w-4 h-4 mr-2" />
             Generate Citation
           </Button>
@@ -158,8 +202,8 @@ Be precise with ${style.toUpperCase()} formatting rules. Use proper italics, pun
                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
               </Button>
             </div>
-            <ScrollArea className="max-h-[50vh]">
-              <div className="p-4 overflow-hidden">
+            <ScrollArea className="h-[50vh]">
+              <div className="p-4">
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   <ReactMarkdown>{formatAIResponse(citation)}</ReactMarkdown>
                 </div>
@@ -167,7 +211,7 @@ Be precise with ${style.toUpperCase()} formatting rules. Use proper italics, pun
             </ScrollArea>
           </div>
 
-          <Button onClick={() => { setCitation(''); setUrl(''); setDetails(''); }} variant="outline" className="w-full">
+          <Button onClick={() => { setCitation(''); setForm(emptyForm); }} variant="outline" className="w-full">
             <RotateCcw className="w-4 h-4 mr-2" />
             Generate Another Citation
           </Button>

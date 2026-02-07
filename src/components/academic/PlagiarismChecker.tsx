@@ -17,7 +17,8 @@ interface PlagiarismCheckerProps {
 const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
   const { toast } = useToast();
   const [text, setText] = useState('');
-  const [result, setResult] = useState<{ score: number; analysis: string } | null>(null);
+  const [score, setScore] = useState<number | null>(null);
+  const [analysis, setAnalysis] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -34,43 +35,43 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
     }
     
     setLoading(true);
-    setResult(null);
+    setScore(null);
+    setAnalysis('');
 
     let fullResponse = '';
+    let scoreParsed = false;
+
     await streamAIChat({
       messages: [],
-      mode: 'chat',
-      content: `Analyze this text for originality and potential plagiarism indicators. Check for:
-1. Common phrases that might be copied from textbooks or Wikipedia
-2. Inconsistent writing style (suggesting multiple sources were stitched together)
-3. Overly formal or encyclopedic passages that don't match the overall tone
-4. Technical terms used without proper context or explanation
-5. Abrupt changes in vocabulary level or sentence structure
-
-Return JSON first, then detailed analysis:
-{"originality_score": 85}
-(Score 0-100, where 100 is fully original)
-
-Then provide a detailed markdown-formatted analysis with:
-- **Overall Assessment**: Summary of originality
-- **Suspicious Passages**: Quote specific phrases that seem potentially copied
-- **Style Inconsistencies**: Where writing style shifts
-- **Suggestions**: How to make the text more original
-
-Text to check (${wordCount} words):
-${text}`,
+      mode: 'plagiarism',
+      content: `Analyze this text for originality (${wordCount} words):\n\n${text}`,
       onDelta: (chunk) => {
         fullResponse += chunk;
-        try {
-          const jsonMatch = fullResponse.match(/\{"originality_score":\s*(\d+)\}/);
+        
+        if (!scoreParsed) {
+          const jsonMatch = fullResponse.match(/\{"originality_score"\s*:\s*(\d+)\}/);
           if (jsonMatch) {
-            const score = parseInt(jsonMatch[1]);
-            const analysis = fullResponse.substring(fullResponse.indexOf('}') + 1).trim();
-            setResult({ score, analysis });
+            setScore(parseInt(jsonMatch[1]));
+            scoreParsed = true;
           }
-        } catch {}
+        }
+
+        // Extract analysis after JSON
+        const jsonEnd = fullResponse.search(/\}\s*\n/);
+        if (jsonEnd > -1) {
+          const afterJson = fullResponse.substring(jsonEnd + 1).replace(/^\s*\}\s*/, '').trim();
+          if (afterJson) setAnalysis(afterJson);
+        } else if (!scoreParsed) {
+          setAnalysis(fullResponse);
+        }
       },
-      onDone: () => setLoading(false),
+      onDone: () => {
+        setLoading(false);
+        if (!scoreParsed && fullResponse) {
+          setAnalysis(fullResponse);
+          setScore(75); // Default if parsing fails
+        }
+      },
       onError: (err) => {
         toast({ title: 'Error', description: err, variant: 'destructive' });
         setLoading(false);
@@ -78,24 +79,25 @@ ${text}`,
     });
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-500';
-    if (score >= 60) return 'text-amber-500';
+  const getScoreColor = (s: number) => {
+    if (s >= 80) return 'text-emerald-500';
+    if (s >= 60) return 'text-amber-500';
     return 'text-red-500';
   };
 
-  const getScoreLabel = (score: number) => {
-    if (score >= 80) return 'High Originality';
-    if (score >= 60) return 'Moderate Originality';
+  const getScoreLabel = (s: number) => {
+    if (s >= 80) return 'High Originality';
+    if (s >= 60) return 'Moderate Originality';
     return 'Low Originality — Review Needed';
   };
 
   const handleCopy = async () => {
-    if (!result) return;
-    await navigator.clipboard.writeText(`Originality: ${result.score}%\n\n${result.analysis}`);
+    await navigator.clipboard.writeText(`Originality: ${score}%\n\n${analysis}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const hasResults = score !== null || analysis;
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 min-h-screen pb-24">
@@ -110,7 +112,7 @@ ${text}`,
         </div>
       </motion.header>
 
-      {!result && !loading && (
+      {!hasResults && !loading && (
         <div className="space-y-4">
           <Textarea
             value={text}
@@ -120,7 +122,7 @@ ${text}`,
           />
           <p className="text-xs text-muted-foreground">
             {wordCount} words {wordCount > 0 && wordCount < 30 ? '(minimum 30 words)' : ''}
-            {' • '}Note: This is an AI-based analysis. For academic submissions, also use official plagiarism detection tools.
+            {' • '}Note: AI-based analysis. For academic submissions, also use official plagiarism tools.
           </p>
           <Button onClick={checkPlagiarism} disabled={!text.trim() || wordCount < 30} className="w-full gradient-primary text-primary-foreground">
             <Shield className="w-4 h-4 mr-2" />
@@ -129,50 +131,63 @@ ${text}`,
         </div>
       )}
 
-      {loading && (
+      {loading && !hasResults && (
         <div className="flex flex-col items-center justify-center py-12">
           <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
           <p className="text-muted-foreground">Analyzing text...</p>
         </div>
       )}
 
-      {result && !loading && (
+      {(hasResults || loading) && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <div className="p-6 rounded-2xl bg-card border border-border text-center">
-            <div className={`text-5xl font-bold mb-2 ${getScoreColor(result.score)}`}>
-              {result.score}%
+          {score !== null && (
+            <div className="p-6 rounded-2xl bg-card border border-border text-center">
+              <div className={`text-5xl font-bold mb-2 ${getScoreColor(score)}`}>
+                {score}%
+              </div>
+              <p className={`font-medium ${getScoreColor(score)}`}>{getScoreLabel(score)}</p>
+              <Progress value={score} className="mt-4 h-3" />
             </div>
-            <p className={`font-medium ${getScoreColor(result.score)}`}>{getScoreLabel(result.score)}</p>
-            <Progress value={result.score} className="mt-4 h-3" />
-          </div>
+          )}
 
           <div className="rounded-2xl bg-card border border-border overflow-hidden">
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
               <h3 className="font-medium text-sm flex items-center gap-2">
-                {result.score >= 80 ? (
+                {score !== null && score >= 80 ? (
                   <CheckCircle className="w-4 h-4 text-emerald-500" />
                 ) : (
                   <AlertTriangle className="w-4 h-4 text-amber-500" />
                 )}
                 Analysis
               </h3>
-              <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              </Button>
+              {analysis && (
+                <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                </Button>
+              )}
             </div>
             <ScrollArea className="h-[40vh]">
-              <div className="p-4 overflow-hidden">
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown>{formatAIResponse(result.analysis)}</ReactMarkdown>
-                </div>
+              <div className="p-4">
+                {analysis ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>{formatAIResponse(analysis)}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Generating analysis...</span>
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </div>
 
-          <Button onClick={() => { setResult(null); setText(''); }} variant="outline" className="w-full">
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Check Another Text
-          </Button>
+          {!loading && (
+            <Button onClick={() => { setScore(null); setAnalysis(''); setText(''); }} variant="outline" className="w-full">
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Check Another Text
+            </Button>
+          )}
         </motion.div>
       )}
     </div>

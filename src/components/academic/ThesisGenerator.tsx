@@ -38,30 +38,8 @@ const ThesisGenerator = ({ onBack }: ThesisGeneratorProps) => {
 
     await streamAIChat({
       messages: [],
-      mode: 'chat',
-      content: `Generate strong thesis statements for a ${essayType} essay on this topic.
-
-Topic: ${topic}
-${position ? `Position/Angle: ${position}` : ''}
-
-Provide in markdown format:
-
-## Strong Thesis Statement
-A clear, arguable, specific thesis.
-
-## Alternative Versions
-2-3 variations with different angles.
-
-## Weak vs Strong Comparison
-Show what makes a thesis effective by comparing a weak version to the strong one.
-
-## Supporting Points
-Main arguments that could support each thesis.
-
-## Refinement Tips
-How to make it even stronger, including counter-argument awareness.
-
-Make theses specific, arguable (not obvious facts), and appropriately scoped for a ${essayType} essay.`,
+      mode: 'thesis',
+      content: `Generate thesis statements for a ${essayType} essay.\nTopic: ${topic}\n${position ? `Position/Angle: ${position}` : ''}`,
       onDelta: (chunk) => setThesis(t => t + chunk),
       onDone: () => setLoading(false),
       onError: (err) => {

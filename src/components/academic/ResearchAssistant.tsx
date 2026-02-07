@@ -39,36 +39,8 @@ const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
 
     await streamAIChat({
       messages: [],
-      mode: 'chat',
-      content: `Act as an expert research assistant. For the topic: "${topic}"${fieldContext}
-
-Provide a comprehensive research guide in markdown:
-
-## Overview
-Brief explanation of the topic and its significance.
-
-## Key Research Areas
-Main subtopics currently being studied, with brief descriptions.
-
-## Suggested Search Terms
-Keywords and Boolean search strings for finding papers on databases like Google Scholar, JSTOR, PubMed.
-
-## Recommended Databases
-Specific databases and sources relevant to this field.
-
-## Notable Authors & Researchers
-Key figures in the field and their contributions.
-
-## Recent Developments
-Current trends, debates, and emerging research directions.
-
-## Research Questions
-5-7 potential research questions or angles for papers, from narrow to broad.
-
-## Methodology Suggestions
-Appropriate research methods for studying this topic.
-
-Format clearly with headers and bullet points. Be specific and actionable.`,
+      mode: 'research',
+      content: `Research topic: "${topic}"${fieldContext}\n\nProvide a comprehensive research guide.`,
       onDelta: (chunk) => setResults(r => r + chunk),
       onDone: () => setLoading(false),
       onError: (err) => {
