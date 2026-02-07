@@ -1,94 +1,112 @@
 
+# Fix Resume Focus, Subscription Tiers, Ads, Chat Gating, and Reply Navigation
 
-# Chat Fixes, Reply Feature, and Career Section Overhaul
+## 1. Fix Resume Builder Input Focus Loss
 
-## Part 1: Fix Chat Message Input + Add Reply Feature
+The `InputRow` component is defined as a nested function inside `ResumeBuilder` (line 136). Every keystroke triggers a re-render, which recreates `InputRow` as a new component type, causing React to unmount/remount the input and lose focus.
 
-### Problem: Input form not showing
-The `ChatRoom` component renders the input form correctly at line 220-234, but when used inside `Chat.tsx` (the DM page) and `GroupChat.tsx`, the parent container height constraints may clip the input. The `Chat.tsx` page wraps `ChatRoom` in a `div` with `flex-1 overflow-hidden` but `ChatRoom` itself uses `min-h-[400px]` and `flex flex-col h-full` -- the issue is likely the ScrollArea consuming all space. Will fix the layout to ensure the input is always visible with `flex-shrink-0`.
+**Fix**: Move `InputRow` outside the `ResumeBuilder` component as a standalone component.
 
-### Reply-to-message feature
-- Add `reply_to_id` column to the `messages` table (UUID, nullable, references messages.id)
-- Update `ChatRoom` to track a `replyingTo` message state
-- Show a reply preview bar above the input when replying
-- On each message bubble, add a swipe gesture (mobile) or hover reply button (desktop) to trigger reply
-- Display replied-to message as a compact quote above the message content
+**File**: `src/components/career/ResumeBuilder.tsx`
 
-### Database Migration
-```sql
-ALTER TABLE messages ADD COLUMN reply_to_id UUID REFERENCES messages(id);
+---
+
+## 2. Subscription Tiers (3-Tier Model)
+
+### Tier Structure
+
+```text
++-------------------------+----------+-----------------+-----------------+
+| Feature                 | Free     | Plus (N1,500/mo)| Pro (N2,500/mo) |
++-------------------------+----------+-----------------+-----------------+
+| AI calls/day            | 5        | 20              | Unlimited       |
+| Quizzes/day             | 3        | 10              | Unlimited       |
+| Flashcards/day          | 10       | 30              | Unlimited       |
+| Notes/day               | 2        | 8               | Unlimited       |
+| DM Chat                 | Yes      | Yes             | Yes             |
+| Group Chat              | No       | Yes             | Yes             |
+| Resume templates        | 3        | 7               | All 10          |
+| Job searches/day        | 3        | 10              | Unlimited       |
+| Advanced AI tools       | No       | No              | Yes             |
+| Ads                     | Yes      | No              | No              |
++-------------------------+----------+-----------------+-----------------+
 ```
 
+### Global Kill Switch
+
+Create `src/lib/subscriptionConfig.ts`:
+- `SUBSCRIPTION_ENABLED = true` -- when `false`, all users get full access regardless of plan
+
 ### Files Modified
-- `src/components/chat/ChatRoom.tsx` -- fix layout, add reply UI, swipe/hover to reply
-- `src/pages/Chat.tsx` -- ensure container height is correct
-- `src/pages/GroupChat.tsx` -- ensure container height is correct
+- `src/hooks/useSubscription.ts` -- Add `plus` tier, `isPlus`, `canUseGroupChat` (separate from `canUseChat`), `showAds`, import the toggle
+- `src/pages/Upgrade.tsx` -- 3-tier pricing UI (Free, Plus, Pro) with plan comparison
 
 ---
 
-## Part 2: Career Section Overhaul
+## 3. Ads Feature for Free Users
 
-### 2A: Resume Builder (World-Class)
+Create `src/components/ads/AdBanner.tsx` -- a banner ad component that shows contextual, non-intrusive ads to free-tier users only. Uses the `useSubscription` hook to check `showAds`. When `SUBSCRIPTION_ENABLED` is `false`, ads are hidden.
 
-Complete rewrite with:
-- **10 professional templates**: Classic, Modern, Minimal, Creative, Executive, Tech, Academic, Compact, Bold, Elegant
-- **Template preview and selection** with visual thumbnails
-- **Structured sections**: Contact Info, Summary, Education, Experience, Skills, Projects, Certifications, Languages
-- **Add/remove/reorder items** in each section
-- **AI-powered summary generation** (existing, will keep)
-- **Export options**: PDF print (via iframe), HTML download, plain text download
-- **Live preview** panel showing the resume in the selected template
-- **Skills management**: Add custom skills, remove skills, skill levels
+**Ad placement locations** (added to existing layouts):
+- `src/components/layout/AppLayout.tsx` -- a sticky banner ad above the bottom nav
+- `src/pages/Dashboard.tsx` -- inline ad card between dashboard widgets
 
-### 2B: Jobs & Internships (Combined Tab)
-
-Rename "Internships" tab to "Jobs & Internships" with two modes:
-
-**Mode 1: AI-Matched (existing, improved)**
-- Based on user's skills from courses
-- AI suggests relevant positions
-
-**Mode 2: Live Job Search**
-- Search input with query field
-- Use the Firecrawl connector (or a free scraping approach via the `ai-study` edge function) to search for real job/internship listings
-- Since no external job API keys are available, the approach will use the AI model to perform web-aware searches and return structured results with links
-- Filters: Location, Job Type (internship/full-time/part-time), Remote/On-site
-- Display results with title, company, location, description, and "Apply" link
-
-**Skills Management:**
-- Users can add custom skills (not just from courses)
-- Remove skills with X button on each skill chip
-- Skills persist (stored in component state, populated from courses + manual additions)
-
-### 2C: Career Page Layout Update
-- Change tabs from 3 to 4: "Why It Matters", "Resume", "Jobs & Internships" (was "Internships"), plus keep the structure clean
-
-### Files Created
-- `src/components/career/ResumeTemplates.tsx` -- template definitions and preview renderer
-- `src/components/career/ResumePreview.tsx` -- live preview component
-- `src/components/career/JobSearch.tsx` -- live job search component
-
-### Files Modified
-- `src/components/career/ResumeBuilder.tsx` -- complete rewrite with templates, sections, export
-- `src/components/career/InternshipMatcher.tsx` -- add jobs, search mode, skill management
-- `src/pages/Career.tsx` -- update tab labels
-- `supabase/functions/ai-study/index.ts` -- add `job_search` mode for AI-powered job listing generation
+The ads will be placeholder/house ads promoting the upgrade to Plus/Pro (self-promotional). This avoids needing an external ad network. Each ad shows a compelling upgrade message with a link to `/upgrade`.
 
 ---
 
-## Technical Details
+## 4. Chat Access Gating
 
-### Resume Templates (10 templates)
-Each template is a function that takes resume data and returns styled HTML for PDF/print output. Templates differ in layout, color scheme, typography, and section arrangement. The preview is rendered in an iframe for isolation.
+- **DMs (`src/pages/Chat.tsx`)**: Allowed for ALL tiers (free, plus, pro) -- no gate needed
+- **Group Chat (`src/pages/GroupChat.tsx`)**: Gate for Plus/Pro only. Free users see an `UpgradePrompt` when trying to access group chat
+- **Social page group actions**: The "Join Group" / "Create Group" buttons in the Social tab should also show the gate for free users
 
-### Job Search Implementation
-Since there are no job API connectors available, the approach will use the existing AI edge function with a new `job_search` mode. The AI will generate realistic, current job listings based on the search query, with instructions to include real company names and realistic details. A disclaimer will note these are AI-suggested positions and users should verify on actual job boards. Each listing will include a Google search link to help users find the actual posting.
+### Files Modified
+- `src/pages/GroupChat.tsx` -- Add subscription check, show UpgradePrompt if free tier
+- `src/components/social/StudyGroups.tsx` -- Gate "Create Group" and "Join Group" for free users
 
-### Reply Feature Technical Flow
-1. User long-presses (mobile) or hovers and clicks reply icon (desktop) on a message
-2. `replyingTo` state is set with the message object
-3. A compact preview bar appears above the input showing the quoted message
-4. When sending, `reply_to_id` is included in the insert
-5. Messages with `reply_to_id` show a quoted message block above their content
-6. The original replied-to message is fetched and cached in the messages list
+---
 
+## 5. Chat Reply Navigation (Scroll to Original)
+
+When a user clicks the quoted reply preview in a message bubble, scroll to and highlight the original message.
+
+### Implementation in `src/components/chat/ChatRoom.tsx`:
+- Add `id={`msg-${message.id}`}` attribute to each message div
+- Make reply quote clickable with `onClick` handler
+- Use `scrollIntoView({ behavior: 'smooth', block: 'center' })` on click
+- Add a brief highlight animation (yellow flash) via a temporary CSS class
+
+---
+
+## 6. Feature Gating Across the App
+
+Add subscription checks to key pages:
+- `src/pages/AITutor.tsx` -- Check `canUseAI` before AI session
+- `src/pages/Quizzes.tsx` -- Check `canCreateQuiz` before quiz generation
+- `src/pages/SmartNotes.tsx` -- Check `canCreateNote` before saving
+- `src/pages/Flashcards.tsx` -- Check `canCreateFlashcard` before generating
+
+Each shows `UpgradePrompt` (compact variant) with remaining uses when approaching limit.
+
+---
+
+## Summary of All Files
+
+### New Files (2)
+- `src/lib/subscriptionConfig.ts` -- Global subscription toggle
+- `src/components/ads/AdBanner.tsx` -- Self-promo ad banner component
+
+### Modified Files (11)
+- `src/components/career/ResumeBuilder.tsx` -- Move InputRow outside component
+- `src/hooks/useSubscription.ts` -- 3-tier model, group chat permission, showAds flag, kill switch
+- `src/pages/Upgrade.tsx` -- 3-tier pricing UI
+- `src/components/subscription/UpgradePrompt.tsx` -- Support tier-specific messaging (Plus vs Pro)
+- `src/components/chat/ChatRoom.tsx` -- Reply navigation with scroll and highlight
+- `src/pages/GroupChat.tsx` -- Gate group chat for Plus/Pro only
+- `src/components/social/StudyGroups.tsx` -- Gate group creation/joining
+- `src/components/layout/AppLayout.tsx` -- Add ad banner placement
+- `src/pages/AITutor.tsx` -- Subscription gate
+- `src/pages/Quizzes.tsx` -- Subscription gate
+- `src/pages/SmartNotes.tsx` -- Subscription gate
+- `src/pages/Flashcards.tsx` -- Subscription gate
