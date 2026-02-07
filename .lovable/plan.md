@@ -1,201 +1,94 @@
 
 
-# Plan & Social Sections: Comprehensive Upgrade
+# Chat Fixes, Reply Feature, and Career Section Overhaul
 
-## Current State Assessment
+## Part 1: Fix Chat Message Input + Add Reply Feature
 
-### Plan Section
-The Plan page has 3 tabs (Schedule, Focus, Progress) with:
-- **Smart Scheduler**: Functional goal/exam tracker with CRUD, XP on completion
-- **Weakness Detector**: Per-course analysis based on quiz scores, notes, flashcards, focus time
-- **Pomodoro Timer**: Exists in Focus tab
-- **Lo-Fi Radio**: 4 streaming stations with play/pause/volume
-- **Sleep Calculator**: Calculates bedtimes based on wake-up time
-- **Progress Tracker**: Per-course stats grid with overall stats
+### Problem: Input form not showing
+The `ChatRoom` component renders the input form correctly at line 220-234, but when used inside `Chat.tsx` (the DM page) and `GroupChat.tsx`, the parent container height constraints may clip the input. The `Chat.tsx` page wraps `ChatRoom` in a `div` with `flex-1 overflow-hidden` but `ChatRoom` itself uses `min-h-[400px]` and `flex flex-col h-full` -- the issue is likely the ScrollArea consuming all space. Will fix the layout to ensure the input is always visible with `flex-shrink-0`.
 
-The Plan section is solid but could benefit from a study planner/timetable view and better visual presentation.
+### Reply-to-message feature
+- Add `reply_to_id` column to the `messages` table (UUID, nullable, references messages.id)
+- Update `ChatRoom` to track a `replyingTo` message state
+- Show a reply preview bar above the input when replying
+- On each message bubble, add a swipe gesture (mobile) or hover reply button (desktop) to trigger reply
+- Display replied-to message as a compact quote above the message content
 
-### Social Section
-The Social page has 6 tabs across 2 rows (Ranks, Friends, Challenges, Compete, Groups, Discover):
-- **Leaderboard**: Weekly and all-time XP rankings -- works but weekly XP may show 0 if weekly_xp records aren't being updated consistently
-- **FriendsList**: Search, friend requests, accept/decline, DM links
-- **StudyChallenges**: Daily/weekly challenges with progress bars but **claim button missing** -- XP can be claimed multiple times with no tracking
-- **ChallengeAFriend**: Only shows a toast -- no actual challenge/quiz is generated or tracked (broken)
-- **StudyGroups**: Create, join by code, public/private groups -- functional
-- **GroupChat**: Chat + Resources + Members tabs -- resources list but no viewer
-- **PeerFinder**: Global user discovery with friend request button
-- **ChatRoom**: Text-only messages, no media upload, basic UI
+### Database Migration
+```sql
+ALTER TABLE messages ADD COLUMN reply_to_id UUID REFERENCES messages(id);
+```
 
-## Issues Found
+### Files Modified
+- `src/components/chat/ChatRoom.tsx` -- fix layout, add reply UI, swipe/hover to reply
+- `src/pages/Chat.tsx` -- ensure container height is correct
+- `src/pages/GroupChat.tsx` -- ensure container height is correct
 
-1. **Challenge a Friend is fake** -- just shows a toast, no challenge table, no quiz generation, no tracking
-2. **StudyChallenges XP claim has no guard** -- users can claim XP infinitely by reloading
-3. **Weekly leaderboard may show 0** -- weekly_xp records need to be consistently written when XP is earned
-4. **No profile image upload** -- Profile page shows initials only, no avatar upload
-5. **Chat has no media/image support** -- text only
-6. **Group resources can't be viewed** -- listed but not clickable/viewable
-7. **Social page has 6 tabs in 2 rows** -- confusing UX, needs consolidation
-8. **No challenge completion XP propagation** -- challenge XP isn't reflected in weekly_xp table
+---
 
-## Implementation Plan
+## Part 2: Career Section Overhaul
 
-### Phase 1: Database Schema Changes
+### 2A: Resume Builder (World-Class)
 
-**New table: `peer_challenges`**
-- id, challenger_id, challenged_id, note_id, quiz_data (jsonb), challenger_score, challenged_score, status (pending/active/completed/declined), xp_reward, created_at, expires_at
+Complete rewrite with:
+- **10 professional templates**: Classic, Modern, Minimal, Creative, Executive, Tech, Academic, Compact, Bold, Elegant
+- **Template preview and selection** with visual thumbnails
+- **Structured sections**: Contact Info, Summary, Education, Experience, Skills, Projects, Certifications, Languages
+- **Add/remove/reorder items** in each section
+- **AI-powered summary generation** (existing, will keep)
+- **Export options**: PDF print (via iframe), HTML download, plain text download
+- **Live preview** panel showing the resume in the selected template
+- **Skills management**: Add custom skills, remove skills, skill levels
 
-**New table: `challenge_claims`**
-- id, user_id, challenge_id (text like 'daily_notes'), claimed_date, xp_earned -- prevents double-claiming
+### 2B: Jobs & Internships (Combined Tab)
 
-**Storage bucket: `avatars`** (public)
-- RLS policies for users to upload/update their own avatar
+Rename "Internships" tab to "Jobs & Internships" with two modes:
 
-**Add `image_url` column to `messages` table**
-- For media uploads in chat
+**Mode 1: AI-Matched (existing, improved)**
+- Based on user's skills from courses
+- AI suggests relevant positions
 
-### Phase 2: Profile Image Upload
+**Mode 2: Live Job Search**
+- Search input with query field
+- Use the Firecrawl connector (or a free scraping approach via the `ai-study` edge function) to search for real job/internship listings
+- Since no external job API keys are available, the approach will use the AI model to perform web-aware searches and return structured results with links
+- Filters: Location, Job Type (internship/full-time/part-time), Remote/On-site
+- Display results with title, company, location, description, and "Apply" link
 
-- Add camera/upload button on Profile page avatar circle
-- Upload to `avatars` storage bucket
-- Update `profiles.avatar_url` with public URL
-- Avatar shows in chats, leaderboard, friends list, group members, peer finder (already reads avatar_url)
+**Skills Management:**
+- Users can add custom skills (not just from courses)
+- Remove skills with X button on each skill chip
+- Skills persist (stored in component state, populated from courses + manual additions)
 
-### Phase 3: Fix Peer Challenges (Challenge a Friend)
+### 2C: Career Page Layout Update
+- Change tabs from 3 to 4: "Why It Matters", "Resume", "Jobs & Internships" (was "Internships"), plus keep the structure clean
 
-- Create actual challenge flow:
-  1. Challenger selects friend + note
-  2. System generates a 5-question quiz via AI from the note content
-  3. Stores quiz in `peer_challenges` table
-  4. Challenged user sees pending challenge in Challenges tab
-  5. Both users complete the quiz, scores compared
-  6. Winner gets bonus XP (e.g., 100 XP), loser gets 50 XP
-- Add incoming/outgoing challenge lists
-- Add challenge expiry (48 hours)
+### Files Created
+- `src/components/career/ResumeTemplates.tsx` -- template definitions and preview renderer
+- `src/components/career/ResumePreview.tsx` -- live preview component
+- `src/components/career/JobSearch.tsx` -- live job search component
 
-### Phase 4: Fix Challenge XP System
-
-- Add `challenge_claims` table to track which challenges have been claimed
-- Modify StudyChallenges `claimReward` to:
-  1. Check if already claimed today/this week
-  2. Insert claim record
-  3. Update `profiles.total_xp`
-  4. Update `weekly_xp` table (upsert current week)
-- Add more challenge variety:
-  - "Early Bird" -- study before 8am
-  - "Streak Keeper" -- maintain 3-day streak
-  - "Social Butterfly" -- send 5 messages
-  - "Group Contributor" -- share a resource
-  - "Challenge Champion" -- win a peer challenge
-  - "Perfect Score" -- get 100% on a quiz
-
-### Phase 5: Fix Weekly Leaderboard
-
-- Create a helper function `updateWeeklyXP(userId, xpAmount)` in a shared hook
-- Call it from every XP-granting action:
-  - Challenge claims
-  - Peer challenge completion
-  - Study goal completion
-  - Quiz completion
-  - Pomodoro session completion
-- This ensures weekly_xp stays in sync with total_xp
-
-### Phase 6: Chat UI Improvements + Media Upload
-
-- Add image/file attachment button to ChatRoom input bar
-- Upload media to a new `chat-media` storage bucket
-- Store image_url in messages table
-- Display images inline in chat bubbles with lightbox on tap
-- Add typing indicator animation
-- Add message timestamps grouped by day ("Today", "Yesterday", etc.)
-- Show read receipts for DMs
-- Improve bubble styling with tails and better spacing
-
-### Phase 7: Group Chat Improvements
-
-- **Resource Viewer**: Click shared note to open NoteViewerDialog or navigate to note
-- **Resource Viewer for courses**: Click shared course to navigate to course page
-- **Invite system polish**: Add "Share invite" button using native share API (navigator.share)
-- **Join flow**: After joining via code, auto-navigate to group chat
-- **Member avatars**: Use Avatar component with uploaded profile images instead of plain initials
-
-### Phase 8: Social Page UX Consolidation
-
-- Reduce from 6 tabs (2 rows) to 4 tabs (1 row): **Compete**, **Friends**, **Groups**, **Discover**
-- Merge Leaderboard into Compete tab (leaderboard + challenges + peer challenges)
-- Friends tab stays the same
-- Groups tab stays the same
-- Discover tab (PeerFinder) stays the same
-
-### Phase 9: Plan Section Enhancements
-
-- Add a **Study Timetable** view in Schedule tab -- weekly calendar grid showing scheduled study sessions
-- Add **Study Streak Widget** to Progress tab showing current streak prominently
-- Add motivational quotes rotation in Focus tab
+### Files Modified
+- `src/components/career/ResumeBuilder.tsx` -- complete rewrite with templates, sections, export
+- `src/components/career/InternshipMatcher.tsx` -- add jobs, search mode, skill management
+- `src/pages/Career.tsx` -- update tab labels
+- `supabase/functions/ai-study/index.ts` -- add `job_search` mode for AI-powered job listing generation
 
 ---
 
 ## Technical Details
 
-### Database Migrations
+### Resume Templates (10 templates)
+Each template is a function that takes resume data and returns styled HTML for PDF/print output. Templates differ in layout, color scheme, typography, and section arrangement. The preview is rendered in an iframe for isolation.
 
-```sql
--- peer_challenges table
-CREATE TABLE peer_challenges (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  challenger_id UUID NOT NULL,
-  challenged_id UUID NOT NULL,
-  note_id UUID REFERENCES notes(id),
-  quiz_data JSONB NOT NULL DEFAULT '[]',
-  challenger_score INT,
-  challenged_score INT,
-  status TEXT NOT NULL DEFAULT 'pending',
-  xp_reward INT NOT NULL DEFAULT 100,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  expires_at TIMESTAMPTZ DEFAULT now() + interval '48 hours'
-);
+### Job Search Implementation
+Since there are no job API connectors available, the approach will use the existing AI edge function with a new `job_search` mode. The AI will generate realistic, current job listings based on the search query, with instructions to include real company names and realistic details. A disclaimer will note these are AI-suggested positions and users should verify on actual job boards. Each listing will include a Google search link to help users find the actual posting.
 
--- challenge_claims table
-CREATE TABLE challenge_claims (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  challenge_id TEXT NOT NULL,
-  claimed_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  xp_earned INT NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id, challenge_id, claimed_date)
-);
-
--- Add image_url to messages
-ALTER TABLE messages ADD COLUMN image_url TEXT;
-
--- Create avatars bucket
-INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true);
-INSERT INTO storage.buckets (id, name, public) VALUES ('chat-media', 'chat-media', true);
-
--- RLS for all new tables and buckets
-```
-
-### Files to Create/Modify
-
-**New files:**
-- `src/hooks/useWeeklyXP.ts` -- shared XP update helper
-- `src/components/social/PeerChallengesList.tsx` -- incoming/outgoing challenges UI
-- `src/components/social/PeerChallengeQuiz.tsx` -- take-challenge quiz UI
-- `src/components/profile/AvatarUpload.tsx` -- avatar upload component
-- `src/components/chat/MediaUpload.tsx` -- chat media attachment
-- `src/components/chat/ImageMessage.tsx` -- inline image in chat
-- `src/components/planning/StudyTimetable.tsx` -- weekly timetable view
-
-**Modified files:**
-- `src/pages/Profile.tsx` -- add avatar upload
-- `src/pages/Social.tsx` -- consolidate to 4 tabs
-- `src/components/social/ChallengeAFriend.tsx` -- real challenge flow
-- `src/components/social/StudyChallenges.tsx` -- add claim guards + more challenges
-- `src/components/social/Leaderboard.tsx` -- fix weekly XP display
-- `src/components/chat/ChatRoom.tsx` -- media upload, improved UI
-- `src/components/social/GroupDetail.tsx` -- clickable resource viewer
-- `src/pages/GroupChat.tsx` -- clickable resources, avatar images
-- `src/components/social/StudyGroups.tsx` -- native share for invites
-- `src/pages/Plan.tsx` -- add timetable
-- `supabase/functions/ai-study/index.ts` -- add challenge quiz generation mode
+### Reply Feature Technical Flow
+1. User long-presses (mobile) or hovers and clicks reply icon (desktop) on a message
+2. `replyingTo` state is set with the message object
+3. A compact preview bar appears above the input showing the quoted message
+4. When sending, `reply_to_id` is included in the insert
+5. Messages with `reply_to_id` show a quoted message block above their content
+6. The original replied-to message is fetched and cached in the messages list
 
