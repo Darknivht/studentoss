@@ -1,360 +1,201 @@
 
 
-# Fix Study Modes - Complete Overhaul
+# Plan & Social Sections: Comprehensive Upgrade
 
-## Problems Identified
+## Current State Assessment
 
-### 1. **Mock Exam - No Question Count Selector**
-The MockExam component always generates 10 questions with no user control.
+### Plan Section
+The Plan page has 3 tabs (Schedule, Focus, Progress) with:
+- **Smart Scheduler**: Functional goal/exam tracker with CRUD, XP on completion
+- **Weakness Detector**: Per-course analysis based on quiz scores, notes, flashcards, focus time
+- **Pomodoro Timer**: Exists in Focus tab
+- **Lo-Fi Radio**: 4 streaming stations with play/pause/volume
+- **Sleep Calculator**: Calculates bedtimes based on wake-up time
+- **Progress Tracker**: Per-course stats grid with overall stats
 
-### 2. **Study Modes Return Generic Greetings Instead of Actual Content**
-Console logs show: `"Hello there! I'm StudentOS AI..."` being returned instead of actual content. This happens because:
-- **ConceptLinking.tsx** uses `mode: 'chat'` (line 54) - gets generic greeting
-- **MnemonicGenerator.tsx** uses `mode: 'chat'` (line 29) - gets generic greeting
-- **CheatSheetCreator.tsx** uses `mode: 'chat'` (line 49) - gets generic greeting
-- **DebatePartner.tsx** uses `mode: 'chat'` (line 33, 70) - gets generic greeting
+The Plan section is solid but could benefit from a study planner/timetable view and better visual presentation.
 
-The edge function `ai-study/index.ts` has a `chat` mode that gives a generic "StudentOS AI" introduction when no content is provided in the messages.
+### Social Section
+The Social page has 6 tabs across 2 rows (Ranks, Friends, Challenges, Compete, Groups, Discover):
+- **Leaderboard**: Weekly and all-time XP rankings -- works but weekly XP may show 0 if weekly_xp records aren't being updated consistently
+- **FriendsList**: Search, friend requests, accept/decline, DM links
+- **StudyChallenges**: Daily/weekly challenges with progress bars but **claim button missing** -- XP can be claimed multiple times with no tracking
+- **ChallengeAFriend**: Only shows a toast -- no actual challenge/quiz is generated or tracked (broken)
+- **StudyGroups**: Create, join by code, public/private groups -- functional
+- **GroupChat**: Chat + Resources + Members tabs -- resources list but no viewer
+- **PeerFinder**: Global user discovery with friend request button
+- **ChatRoom**: Text-only messages, no media upload, basic UI
 
-### 3. **Scrolling Issues in Reply Components**
-Multiple components use `ScrollArea` with `max-h-[50vh]` or similar, but some content overflows or doesn't scroll properly. The issue is likely that:
-- Some components use `pre` tags with `whitespace-pre-wrap` that don't respect height constraints
-- Missing `overflow-hidden` on parent containers
+## Issues Found
 
-### 4. **Audio Notes - No Voice/Speed Controls**
-AudioNotes.tsx uses hardcoded `rate = 0.9` and auto-selects a voice. Users need:
-- Voice selection dropdown
-- Speed slider (0.5x - 2x)
+1. **Challenge a Friend is fake** -- just shows a toast, no challenge table, no quiz generation, no tracking
+2. **StudyChallenges XP claim has no guard** -- users can claim XP infinitely by reloading
+3. **Weekly leaderboard may show 0** -- weekly_xp records need to be consistently written when XP is earned
+4. **No profile image upload** -- Profile page shows initials only, no avatar upload
+5. **Chat has no media/image support** -- text only
+6. **Group resources can't be viewed** -- listed but not clickable/viewable
+7. **Social page has 6 tabs in 2 rows** -- confusing UX, needs consolidation
+8. **No challenge completion XP propagation** -- challenge XP isn't reflected in weekly_xp table
 
-### 5. **Voice Mode Not Working**
-VoiceMode.tsx implementation looks correct but may fail due to:
-- Speech recognition not being supported on all browsers
-- No fallback for unsupported browsers
-- Missing error handling for microphone permissions
+## Implementation Plan
 
-### 6. **Text Formatting Inconsistency**
-Different components format AI responses differently:
-- Some use `<pre>` tags (loses markdown)
-- Some use ReactMarkdown
-- Some use custom MarkdownRenderer
-Need a unified formatter that's used everywhere.
+### Phase 1: Database Schema Changes
 
----
+**New table: `peer_challenges`**
+- id, challenger_id, challenged_id, note_id, quiz_data (jsonb), challenger_score, challenged_score, status (pending/active/completed/declined), xp_reward, created_at, expires_at
 
-## Phase 1: Create Dedicated Edge Function Modes
+**New table: `challenge_claims`**
+- id, user_id, challenge_id (text like 'daily_notes'), claimed_date, xp_earned -- prevents double-claiming
 
-### Add New Modes to `supabase/functions/ai-study/index.ts`
+**Storage bucket: `avatars`** (public)
+- RLS policies for users to upload/update their own avatar
 
-Add these specialized modes that include the content directly in the system prompt:
+**Add `image_url` column to `messages` table**
+- For media uploads in chat
 
-```text
-case "mnemonic":
-  - System prompt specialized for creating mnemonics
-  - Takes content parameter and returns actual mnemonics
-  - No greeting, just the content
+### Phase 2: Profile Image Upload
 
-case "cheatsheet":
-  - System prompt for creating condensed study guides
-  - Takes content parameter, returns formatted cheat sheet
+- Add camera/upload button on Profile page avatar circle
+- Upload to `avatars` storage bucket
+- Update `profiles.avatar_url` with public URL
+- Avatar shows in chats, leaderboard, friends list, group members, peer finder (already reads avatar_url)
 
-case "debate":
-  - System prompt for debate partner
-  - Takes topic and position, argues opposite view
+### Phase 3: Fix Peer Challenges (Challenge a Friend)
 
-case "concept_map":
-  - System prompt for creating mind maps
-  - Returns strict JSON format for nodes/connections
-```
+- Create actual challenge flow:
+  1. Challenger selects friend + note
+  2. System generates a 5-question quiz via AI from the note content
+  3. Stores quiz in `peer_challenges` table
+  4. Challenged user sees pending challenge in Challenges tab
+  5. Both users complete the quiz, scores compared
+  6. Winner gets bonus XP (e.g., 100 XP), loser gets 50 XP
+- Add incoming/outgoing challenge lists
+- Add challenge expiry (48 hours)
 
----
+### Phase 4: Fix Challenge XP System
 
-## Phase 2: Mock Exam - Add Question Count Selector
+- Add `challenge_claims` table to track which challenges have been claimed
+- Modify StudyChallenges `claimReward` to:
+  1. Check if already claimed today/this week
+  2. Insert claim record
+  3. Update `profiles.total_xp`
+  4. Update `weekly_xp` table (upsert current week)
+- Add more challenge variety:
+  - "Early Bird" -- study before 8am
+  - "Streak Keeper" -- maintain 3-day streak
+  - "Social Butterfly" -- send 5 messages
+  - "Group Contributor" -- share a resource
+  - "Challenge Champion" -- win a peer challenge
+  - "Perfect Score" -- get 100% on a quiz
 
-### Changes to `src/components/study/MockExam.tsx`
+### Phase 5: Fix Weekly Leaderboard
 
-1. Add state for question count:
-   ```typescript
-   const [questionCount, setQuestionCount] = useState(10);
-   ```
+- Create a helper function `updateWeeklyXP(userId, xpAmount)` in a shared hook
+- Call it from every XP-granting action:
+  - Challenge claims
+  - Peer challenge completion
+  - Study goal completion
+  - Quiz completion
+  - Pomodoro session completion
+- This ensures weekly_xp stays in sync with total_xp
 
-2. Add a selector UI in the note selection screen:
-   - Slider or dropdown: 5, 10, 15, 20 questions
-   - Show estimated time (1 min per question)
+### Phase 6: Chat UI Improvements + Media Upload
 
-3. Update `generateExam` to use the selected count:
-   - Change prompt to request `questionCount` questions
-   - Update timer: `questionCount * 60` seconds
+- Add image/file attachment button to ChatRoom input bar
+- Upload media to a new `chat-media` storage bucket
+- Store image_url in messages table
+- Display images inline in chat bubbles with lightbox on tap
+- Add typing indicator animation
+- Add message timestamps grouped by day ("Today", "Yesterday", etc.)
+- Show read receipts for DMs
+- Improve bubble styling with tails and better spacing
 
----
+### Phase 7: Group Chat Improvements
 
-## Phase 3: Fix Study Mode Context Issues
+- **Resource Viewer**: Click shared note to open NoteViewerDialog or navigate to note
+- **Resource Viewer for courses**: Click shared course to navigate to course page
+- **Invite system polish**: Add "Share invite" button using native share API (navigator.share)
+- **Join flow**: After joining via code, auto-navigate to group chat
+- **Member avatars**: Use Avatar component with uploaded profile images instead of plain initials
 
-### 3.1 Update MnemonicGenerator.tsx
+### Phase 8: Social Page UX Consolidation
 
-Current:
-```typescript
-mode: 'chat',
-content: `Create memorable mnemonics...`
-```
+- Reduce from 6 tabs (2 rows) to 4 tabs (1 row): **Compete**, **Friends**, **Groups**, **Discover**
+- Merge Leaderboard into Compete tab (leaderboard + challenges + peer challenges)
+- Friends tab stays the same
+- Groups tab stays the same
+- Discover tab (PeerFinder) stays the same
 
-Fix:
-- Change to `mode: 'mnemonic'`
-- The edge function will have a dedicated prompt that returns actual mnemonics
+### Phase 9: Plan Section Enhancements
 
-### 3.2 Update CheatSheetCreator.tsx
-
-Current:
-```typescript
-mode: 'chat',
-content: `Create a one-page CHEAT SHEET...`
-```
-
-Fix:
-- Change to `mode: 'cheatsheet'`
-- Edge function returns formatted content, not greetings
-
-### 3.3 Update DebatePartner.tsx
-
-Current:
-```typescript
-mode: 'chat',
-content: `You are a skilled debate partner...`
-```
-
-Fix:
-- Change to `mode: 'debate'`
-- Edge function handles the debate persona
-
-### 3.4 Update ConceptLinking.tsx
-
-Current:
-```typescript
-mode: 'chat',
-content: `Analyze this content and create a concept map...`
-```
-
-Fix:
-- Change to `mode: 'concept_map'`
-- Edge function returns strict JSON format
+- Add a **Study Timetable** view in Schedule tab -- weekly calendar grid showing scheduled study sessions
+- Add **Study Streak Widget** to Progress tab showing current streak prominently
+- Add motivational quotes rotation in Focus tab
 
 ---
 
-## Phase 4: Fix Scrolling Issues
+## Technical Details
 
-### Create a Reusable AI Response Container
+### Database Migrations
 
-Create a new component or update how ScrollArea is used:
+```sql
+-- peer_challenges table
+CREATE TABLE peer_challenges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  challenger_id UUID NOT NULL,
+  challenged_id UUID NOT NULL,
+  note_id UUID REFERENCES notes(id),
+  quiz_data JSONB NOT NULL DEFAULT '[]',
+  challenger_score INT,
+  challenged_score INT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  xp_reward INT NOT NULL DEFAULT 100,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  expires_at TIMESTAMPTZ DEFAULT now() + interval '48 hours'
+);
 
-1. Ensure parent container has fixed height
-2. Add `overflow-hidden` to parent
-3. Use proper ScrollArea with explicit height
-4. Replace `pre` tags with proper markdown rendering
+-- challenge_claims table
+CREATE TABLE challenge_claims (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  challenge_id TEXT NOT NULL,
+  claimed_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  xp_earned INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, challenge_id, claimed_date)
+);
 
-### Files to Update:
-- `MnemonicGenerator.tsx` - Line 133-145
-- `CheatSheetCreator.tsx` - Line 143-155
-- `AIToolLayout.tsx` - Line 203-211
+-- Add image_url to messages
+ALTER TABLE messages ADD COLUMN image_url TEXT;
 
----
+-- Create avatars bucket
+INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true);
+INSERT INTO storage.buckets (id, name, public) VALUES ('chat-media', 'chat-media', true);
 
-## Phase 5: Audio Notes - Voice & Speed Controls
-
-### Changes to `src/components/study/AudioNotes.tsx`
-
-1. Add state for voice and speed:
-   ```typescript
-   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
-   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-   const [speed, setSpeed] = useState(1.0);
-   ```
-
-2. Load available voices on mount:
-   ```typescript
-   useEffect(() => {
-     const loadVoices = () => {
-       const availableVoices = synthRef.current?.getVoices() || [];
-       setVoices(availableVoices);
-       // Set default voice
-       const defaultVoice = availableVoices.find(v => v.default) || availableVoices[0];
-       setSelectedVoice(defaultVoice);
-     };
-     // Voices load async
-     speechSynthesis.onvoiceschanged = loadVoices;
-     loadVoices();
-   }, []);
-   ```
-
-3. Add UI controls:
-   - Voice dropdown (Select component)
-   - Speed slider (0.5x - 2x) with Slider component
-
-4. Update `speakText` to use selected voice and speed
-
----
-
-## Phase 6: Fix Voice Mode
-
-### Changes to `src/components/study/VoiceMode.tsx`
-
-1. Add better browser support detection:
-   ```typescript
-   const [isSupported, setIsSupported] = useState(true);
-   
-   useEffect(() => {
-     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-     if (!SpeechRecognition) {
-       setIsSupported(false);
-     }
-   }, []);
-   ```
-
-2. Show fallback UI when not supported:
-   - Text input alternative
-   - Message explaining browser requirements
-
-3. Add microphone permission handling:
-   - Request permission explicitly before starting
-   - Show helpful error if denied
-
-4. Use the `socratic` mode with context for better responses
-
----
-
-## Phase 7: Universal Text Formatting
-
-### Create `src/lib/formatters.ts`
-
-```typescript
-/**
- * Universal text formatting utilities
- * Called before displaying any AI-generated content
- */
-
-// Clean and format AI response text
-export function formatAIResponse(content: string): string {
-  if (!content) return '';
-  
-  let formatted = content;
-  
-  // Remove excessive whitespace
-  formatted = formatted.replace(/\n{3,}/g, '\n\n');
-  
-  // Ensure proper markdown spacing
-  formatted = formatted.replace(/^(#+)([^\s])/gm, '$1 $2');
-  
-  // Clean up list formatting
-  formatted = formatted.replace(/^[-*•]\s*/gm, '- ');
-  
-  return formatted.trim();
-}
-
-// Strip markdown for plain text contexts (audio, etc.)
-export function stripMarkdown(content: string): string {
-  return content
-    .replace(/\*\*(.+?)\*\*/g, '$1')  // Bold
-    .replace(/\*(.+?)\*/g, '$1')       // Italic
-    .replace(/#{1,6}\s/g, '')          // Headers
-    .replace(/`(.+?)`/g, '$1')         // Inline code
-    .replace(/```[\s\S]*?```/g, '')    // Code blocks
-    .trim();
-}
+-- RLS for all new tables and buckets
 ```
 
-### Update All Components to Use ReactMarkdown
+### Files to Create/Modify
 
-Replace all instances of `<pre className="whitespace-pre-wrap">` with:
-```tsx
-import ReactMarkdown from 'react-markdown';
-import { formatAIResponse } from '@/lib/formatters';
+**New files:**
+- `src/hooks/useWeeklyXP.ts` -- shared XP update helper
+- `src/components/social/PeerChallengesList.tsx` -- incoming/outgoing challenges UI
+- `src/components/social/PeerChallengeQuiz.tsx` -- take-challenge quiz UI
+- `src/components/profile/AvatarUpload.tsx` -- avatar upload component
+- `src/components/chat/MediaUpload.tsx` -- chat media attachment
+- `src/components/chat/ImageMessage.tsx` -- inline image in chat
+- `src/components/planning/StudyTimetable.tsx` -- weekly timetable view
 
-// In render:
-<div className="prose prose-sm dark:prose-invert max-w-none">
-  <ReactMarkdown>{formatAIResponse(content)}</ReactMarkdown>
-</div>
-```
-
-Files to update:
-- `MnemonicGenerator.tsx` (line 140)
-- `CheatSheetCreator.tsx` (line 150)
-- `AIToolLayout.tsx` (line 205)
-- `BibliographyBuilder.tsx` (line 150)
-- `ResearchAssistant.tsx` (line 90)
-
----
-
-## Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/lib/formatters.ts` | Universal text formatting utilities |
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `supabase/functions/ai-study/index.ts` | Add mnemonic, cheatsheet, debate, concept_map modes |
-| `src/components/study/MockExam.tsx` | Add question count selector UI and state |
-| `src/components/study/MnemonicGenerator.tsx` | Use new mode, fix formatting and scrolling |
-| `src/components/study/CheatSheetCreator.tsx` | Use new mode, fix formatting and scrolling |
-| `src/components/study/DebatePartner.tsx` | Use new mode |
-| `src/components/study/ConceptLinking.tsx` | Use new mode |
-| `src/components/study/AudioNotes.tsx` | Add voice selection and speed controls |
-| `src/components/study/VoiceMode.tsx` | Add fallback UI and better error handling |
-| `src/components/ai-tools/AIToolLayout.tsx` | Use ReactMarkdown for formatting |
-| `src/components/academic/BibliographyBuilder.tsx` | Use ReactMarkdown for formatting |
-| `src/components/academic/ResearchAssistant.tsx` | Use ReactMarkdown for formatting |
-
----
-
-## Technical Implementation Details
-
-### Edge Function Mode Prompts
-
-**Mnemonic Mode:**
-```text
-Create memorable mnemonics for the given content. Include:
-1. Acronyms (funny ones work best!)
-2. Rhymes or songs
-3. Visual associations
-4. Memory palace suggestions
-5. Silly sentences using first letters
-
-Make them FUNNY and MEMORABLE. Students remember humor!
-Return only the mnemonics, no greetings or introductions.
-```
-
-**Cheatsheet Mode:**
-```text
-Create a one-page CHEAT SHEET from this content. Make it:
-- Ultra-condensed (fit on one printed page)
-- Use bullet points, abbreviations
-- Include key formulas, definitions, dates
-- Use sections for different topics
-- Perfect for quick reference during exams
-
-Format in clean markdown. No greetings, just the content.
-```
-
-**Concept Map Mode:**
-```text
-Analyze this content and create a concept map with 5-8 key concepts.
-Return ONLY valid JSON in this exact format:
-{
-  "nodes": [{"id": "1", "label": "Main Concept"}],
-  "connections": [{"from": "1", "to": "2", "label": "relates to"}]
-}
-No other text, just JSON.
-```
-
----
-
-## Expected Outcome
-
-After these fixes:
-1. Mock exams allow choosing 5/10/15/20 questions
-2. All study modes (Mnemonics, Cheat Sheets, Debate, Mind Maps) return actual content, not greetings
-3. Scrolling works properly in all response areas
-4. Audio notes have voice selection and speed control
-5. Voice mode has fallback for unsupported browsers
-6. All AI responses are consistently formatted with markdown
+**Modified files:**
+- `src/pages/Profile.tsx` -- add avatar upload
+- `src/pages/Social.tsx` -- consolidate to 4 tabs
+- `src/components/social/ChallengeAFriend.tsx` -- real challenge flow
+- `src/components/social/StudyChallenges.tsx` -- add claim guards + more challenges
+- `src/components/social/Leaderboard.tsx` -- fix weekly XP display
+- `src/components/chat/ChatRoom.tsx` -- media upload, improved UI
+- `src/components/social/GroupDetail.tsx` -- clickable resource viewer
+- `src/pages/GroupChat.tsx` -- clickable resources, avatar images
+- `src/components/social/StudyGroups.tsx` -- native share for invites
+- `src/pages/Plan.tsx` -- add timetable
+- `supabase/functions/ai-study/index.ts` -- add challenge quiz generation mode
 
