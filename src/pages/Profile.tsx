@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight, AtSign, AlertCircle, Crown } from 'lucide-react';
 import StreakCalendar from '@/components/study/StreakCalendar';
+import AvatarUpload from '@/components/profile/AvatarUpload';
 
 const STUDY_PERSONAS = [
   { id: 'chill', name: 'Chill Bro', emoji: '😎', description: 'Relaxed and encouraging' },
@@ -31,6 +32,7 @@ const Profile = () => {
   const [achievementCount, setAchievementCount] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
   const [subscriptionTier, setSubscriptionTier] = useState('free');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -54,6 +56,7 @@ const Profile = () => {
       setStudyPersona(data.study_persona || 'chill');
       setTotalXP(data.total_xp || 0);
       setSubscriptionTier(data.subscription_tier || 'free');
+      setAvatarUrl(data.avatar_url || null);
     }
   };
 
@@ -157,15 +160,21 @@ const Profile = () => {
         </p>
       </motion.header>
 
-      {/* Profile Avatar */}
+      {/* Profile Avatar with Upload */}
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         className="flex flex-col items-center"
       >
-        <div className="w-24 h-24 rounded-full gradient-primary flex items-center justify-center text-4xl glow-primary">
-          {fullName ? fullName.charAt(0).toUpperCase() : '👤'}
-        </div>
+        {user && (
+          <AvatarUpload
+            userId={user.id}
+            currentUrl={avatarUrl}
+            fallback={fullName ? fullName.charAt(0).toUpperCase() : '👤'}
+            onUploaded={(url) => setAvatarUrl(url)}
+            size="lg"
+          />
+        )}
         <p className="text-muted-foreground text-sm mt-3">{user?.email}</p>
         <p className="text-primary font-semibold">{totalXP} XP</p>
       </motion.div>
