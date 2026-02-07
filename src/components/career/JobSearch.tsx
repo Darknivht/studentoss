@@ -5,18 +5,26 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { streamAIChat } from '@/lib/ai';
-import { Search, MapPin, Briefcase, ExternalLink, Loader2, Globe, Clock } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Search, MapPin, Briefcase, ExternalLink, Loader2, Globe, Clock, DollarSign, Building2 } from 'lucide-react';
 
 interface JobListing {
   title: string;
   company: string;
+  companyLogo: string | null;
   location: string;
   type: string;
   description: string;
-  skills: string[];
-  url: string;
-  posted: string;
+  applyUrl: string | null;
+  jobUrl: string | null;
+  isRemote: boolean;
+  postedDate: string | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string;
+  salaryPeriod: string | null;
+  publisher: string | null;
+  highlights: string[];
 }
 
 const JobSearch = () => {
@@ -29,49 +37,64 @@ const JobSearch = () => {
   const [loading, setLoading] = useState(false);
 
   const searchJobs = async () => {
-    if (!query.trim()) { toast({ title: 'Enter a search query', variant: 'destructive' }); return; }
+    if (!query.trim()) {
+      toast({ title: 'Enter a search query', variant: 'destructive' });
+      return;
+    }
 
     setLoading(true);
     setResults([]);
 
-    const filters = [
-      jobType !== 'all' ? `Type: ${jobType}` : '',
-      location ? `Location: ${location}` : '',
-      remote !== 'all' ? `Remote: ${remote}` : '',
-    ].filter(Boolean).join(', ');
-
-    const prompt = `You are a job search assistant. Search for real, current job listings matching: "${query}"${filters ? `. Filters: ${filters}` : ''}.
-
-Return exactly 6 job listings as a JSON array. Use REAL company names and realistic job details. Each listing must have:
-- title: exact job title
-- company: real company name
-- location: city/country or "Remote"
-- type: "Full-time" | "Part-time" | "Internship" | "Contract"
-- description: 2-3 sentence description
-- skills: array of 3-5 required skills
-- url: a Google search URL like "https://www.google.com/search?q=COMPANY+JOB_TITLE+careers" (URL-encoded)
-- posted: realistic posting date like "2 days ago" or "1 week ago"
-
-Return ONLY the JSON array, no other text.`;
-
     try {
-      let fullResponse = '';
-      await streamAIChat({
-        messages: [{ role: 'user', content: prompt }],
-        onDelta: (chunk) => { fullResponse += chunk; },
-        onDone: () => {
-          const jsonMatch = fullResponse.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            try { setResults(JSON.parse(jsonMatch[0])); } catch {}
-          }
-          setLoading(false);
-        },
-        onError: (err) => { toast({ title: err, variant: 'destructive' }); setLoading(false); },
+      const { data, error } = await supabase.functions.invoke('job-search', {
+        body: { query, location, jobType, remote },
       });
-    } catch {
-      toast({ title: 'Search failed', variant: 'destructive' });
+
+      if (error) throw error;
+
+      if (data?.success && data.jobs) {
+        setResults(data.jobs);
+        if (data.jobs.length === 0) {
+          toast({ title: 'No results found. Try different keywords or filters.' });
+        }
+      } else {
+        toast({ title: data?.error || 'Search failed', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      console.error('Job search error:', err);
+      toast({ title: 'Search failed. Please try again.', variant: 'destructive' });
+    } finally {
       setLoading(false);
     }
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'Recently';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return `${Math.floor(diffDays / 30)} months ago`;
+  };
+
+  const formatSalary = (job: JobListing) => {
+    if (!job.salaryMin && !job.salaryMax) return null;
+    const fmt = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+    const currency = job.salaryCurrency === 'USD' ? '$' : job.salaryCurrency + ' ';
+    if (job.salaryMin && job.salaryMax) return `${currency}${fmt(job.salaryMin)} - ${currency}${fmt(job.salaryMax)}`;
+    if (job.salaryMin) return `From ${currency}${fmt(job.salaryMin)}`;
+    return `Up to ${currency}${fmt(job.salaryMax!)}`;
+  };
+
+  const formatType = (type: string) => {
+    const map: Record<string, string> = {
+      FULLTIME: 'Full-time', PARTTIME: 'Part-time', INTERN: 'Internship', CONTRACTOR: 'Contract',
+    };
+    return map[type] || type;
   };
 
   return (
@@ -79,14 +102,14 @@ Return ONLY the JSON array, no other text.`;
       <Card className="p-4">
         <h3 className="font-semibold text-foreground flex items-center gap-2 mb-3">
           <Search className="w-5 h-5 text-primary" />
-          Search Jobs & Internships
+          Search Real Jobs & Internships
         </h3>
 
         <div className="space-y-3">
           <Input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search: e.g. Software Engineer, Data Analyst..."
+            placeholder="e.g. Software Engineer, Data Analyst, Marketing Intern..."
             onKeyDown={e => e.key === 'Enter' && searchJobs()}
           />
           <div className="grid grid-cols-3 gap-2">
@@ -107,13 +130,12 @@ Return ONLY the JSON array, no other text.`;
                 <SelectItem value="all">Any</SelectItem>
                 <SelectItem value="remote">Remote</SelectItem>
                 <SelectItem value="onsite">On-site</SelectItem>
-                <SelectItem value="hybrid">Hybrid</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <Button onClick={searchJobs} disabled={loading} className="w-full gradient-primary text-primary-foreground">
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
-            {loading ? 'Searching...' : 'Search'}
+            {loading ? 'Searching real listings...' : 'Search Jobs'}
           </Button>
         </div>
       </Card>
@@ -121,32 +143,64 @@ Return ONLY the JSON array, no other text.`;
       {results.length > 0 && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            ⚠️ AI-suggested listings based on your search. Verify opportunities on actual job boards before applying.
+            ✅ Showing {results.length} real job listings from across the web. Click "Apply" to visit the original posting.
           </p>
           {results.map((job, i) => (
-            <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+            <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
               <Card className="p-4 hover:border-primary/50 transition-colors">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <h5 className="font-semibold text-foreground">{job.title}</h5>
+                <div className="flex gap-3 items-start mb-2">
+                  {job.companyLogo ? (
+                    <img src={job.companyLogo} alt={job.company} className="w-10 h-10 rounded object-contain bg-muted p-1 flex-shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Building2 className="w-5 h-5 text-primary" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h5 className="font-semibold text-foreground text-sm leading-tight">{job.title}</h5>
                     <p className="text-sm text-primary">{job.company}</p>
                   </div>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary whitespace-nowrap">{job.type}</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-3">{job.description}</p>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {job.skills?.map((s, si) => (
-                    <span key={si} className="px-2 py-0.5 bg-muted text-muted-foreground text-xs rounded">{s}</span>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{job.location}</span>
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{job.posted}</span>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary whitespace-nowrap">
+                      {formatType(job.type)}
+                    </span>
+                    {job.isRemote && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 whitespace-nowrap flex items-center gap-1">
+                        <Globe className="w-3 h-3" />Remote
+                      </span>
+                    )}
                   </div>
-                  <a href={job.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
-                    Search <ExternalLink className="w-3 h-3" />
-                  </a>
+                </div>
+
+                <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{job.description}</p>
+
+                {job.highlights.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {job.highlights.slice(0, 4).map((h, hi) => (
+                      <span key={hi} className="px-2 py-0.5 bg-muted text-muted-foreground text-xs rounded truncate max-w-[200px]">{h}</span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{job.location}</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(job.postedDate)}</span>
+                    {formatSalary(job) && (
+                      <span className="flex items-center gap-1 text-green-600"><DollarSign className="w-3 h-3" />{formatSalary(job)}</span>
+                    )}
+                    {job.publisher && <span className="text-muted-foreground/60">via {job.publisher}</span>}
+                  </div>
+                  {(job.applyUrl || job.jobUrl) && (
+                    <a
+                      href={job.applyUrl || job.jobUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-primary font-medium hover:underline ml-2 whitespace-nowrap"
+                    >
+                      Apply <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                 </div>
               </Card>
             </motion.div>
