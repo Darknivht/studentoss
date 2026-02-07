@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Save, Check, Lock } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Check, Lock, Download, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +9,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
+import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
 interface AIToolLayoutProps {
   title: string;
@@ -76,32 +80,18 @@ const AIToolLayout = ({
     }
   };
 
-  // Show upgrade prompt for blocked features
   if (isBlocked || (requiresPro && subscription?.tier === 'free')) {
     return (
-      <div className="p-6 space-y-6 min-h-screen">
-        <motion.header
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-3"
-        >
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
+      <div className="p-6 space-y-6 min-h-screen pb-24">
+        <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
           <div className="flex-1">
             <h1 className="text-xl font-display font-bold text-foreground">{title}</h1>
             <p className="text-muted-foreground text-sm">{description}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            {icon}
-          </div>
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">{icon}</div>
         </motion.header>
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center justify-center py-12 text-center"
-        >
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
             <Lock className="w-10 h-10 text-primary" />
           </div>
@@ -113,11 +103,7 @@ const AIToolLayout = ({
               ? 'This feature is only available on the Pro plan. Upgrade to unlock unlimited access to all AI tools.'
               : `You've used all your free ${featureType} uses for today. Upgrade to Pro for unlimited access.`}
           </p>
-          <Button 
-            size="lg" 
-            className="gradient-primary text-primary-foreground"
-            onClick={() => navigate('/upgrade')}
-          >
+          <Button size="lg" className="gradient-primary text-primary-foreground" onClick={() => navigate('/upgrade')}>
             Upgrade to Pro
           </Button>
         </motion.div>
@@ -126,80 +112,49 @@ const AIToolLayout = ({
   }
 
   return (
-    <div className="p-6 space-y-6 min-h-screen">
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-3"
-      >
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 min-h-screen pb-24">
+      <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
         <div className="flex-1">
           <h1 className="text-xl font-display font-bold text-foreground">{title}</h1>
           <p className="text-muted-foreground text-sm">{description}</p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-          {icon}
-        </div>
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">{icon}</div>
       </motion.header>
 
-      {/* Remaining uses indicator for free users */}
       {subscription?.tier === 'free' && remainingUses !== null && remainingUses < 999 && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between p-3 rounded-xl bg-primary/10 border border-primary/20"
-        >
-          <span className="text-sm text-foreground">
-            {remainingUses} {featureType} uses remaining today
-          </span>
-          <Button variant="link" size="sm" onClick={() => navigate('/upgrade')}>
-            Get unlimited
-          </Button>
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between p-3 rounded-xl bg-primary/10 border border-primary/20">
+          <span className="text-sm text-foreground">{remainingUses} {featureType} uses remaining today</span>
+          <Button variant="link" size="sm" onClick={() => navigate('/upgrade')}>Get unlimited</Button>
         </motion.div>
       )}
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-4"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         {children}
       </motion.div>
 
       {(loading || result) && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-card border border-border overflow-hidden"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-card border border-border overflow-hidden">
           <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
-            <h3 className="font-medium text-sm">
-              {loading ? 'Analyzing...' : 'Result'}
-            </h3>
+            <h3 className="font-medium text-sm">{loading ? 'Analyzing...' : 'Result'}</h3>
             {result && !loading && (
-              <Button
-                size="sm"
-                variant={saved ? "default" : "outline"}
-                onClick={saveAsNote}
-                disabled={saving || saved}
-                className="h-7 text-xs"
-              >
-                {saved ? (
-                  <>
-                    <Check className="w-3 h-3 mr-1" />
-                    Saved
-                  </>
-                ) : saving ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <>
-                    <Save className="w-3 h-3 mr-1" />
-                    Save as Note
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(result, title, `${title.toLowerCase().replace(/\s+/g, '-')}.html`)} className="h-7">
+                  <Download className="w-3 h-3" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(result, title)} className="h-7">
+                  <Printer className="w-3 h-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant={saved ? "default" : "outline"}
+                  onClick={saveAsNote}
+                  disabled={saving || saved}
+                  className="h-7 text-xs"
+                >
+                  {saved ? <><Check className="w-3 h-3 mr-1" />Saved</> : saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Save className="w-3 h-3 mr-1" />Save as Note</>}
+                </Button>
+              </div>
             )}
           </div>
           <ScrollArea className="h-[50vh]">
@@ -209,8 +164,10 @@ const AIToolLayout = ({
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : (
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown>{formatAIResponse(result || '')}</ReactMarkdown>
+                <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full [&_pre]:overflow-x-auto [&_pre]:max-w-full">
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {formatAIResponse(result || '')}
+                  </ReactMarkdown>
                 </div>
               )}
             </div>

@@ -18,6 +18,7 @@ export type AIMode =
   | "citation"
   | "bibliography"
   | "research"
+  | "research_full"
   | "thesis"
   | "chat"
   | "math_solver"

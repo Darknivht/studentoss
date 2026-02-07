@@ -106,17 +106,15 @@ ${htmlContent}
 };
 
 /**
- * Print markdown content with proper table formatting
+ * Print markdown content with proper formatting - works on mobile and desktop
  */
 export const printMarkdownContent = (markdownContent: string, title: string) => {
   const htmlContent = markdownToHtml(markdownContent);
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return;
-  
-  printWindow.document.write(`<!DOCTYPE html>
+  const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
 <style>
   * { box-sizing: border-box; }
@@ -145,9 +143,44 @@ export const printMarkdownContent = (markdownContent: string, title: string) => 
 <h1>${title}</h1>
 ${htmlContent}
 </body>
-</html>`);
-  printWindow.document.close();
-  printWindow.print();
+</html>`;
+
+  // Use hidden iframe for mobile compatibility instead of window.open
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = 'none';
+  iframe.style.opacity = '0';
+  document.body.appendChild(iframe);
+
+  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!iframeDoc) {
+    // Fallback: download as HTML file
+    downloadAsHTML(markdownContent, title, `${title.toLowerCase().replace(/\s+/g, '-')}.html`);
+    document.body.removeChild(iframe);
+    return;
+  }
+
+  iframeDoc.open();
+  iframeDoc.write(fullHtml);
+  iframeDoc.close();
+
+  // Wait for content to render then print
+  setTimeout(() => {
+    try {
+      iframe.contentWindow?.print();
+    } catch {
+      // If print fails (some mobile browsers), fall back to download
+      downloadAsHTML(markdownContent, title, `${title.toLowerCase().replace(/\s+/g, '-')}.html`);
+    }
+    // Clean up after a delay
+    setTimeout(() => {
+      try { document.body.removeChild(iframe); } catch {}
+    }, 1000);
+  }, 300);
 };
 
 export const shareContent = async (title: string, text: string): Promise<boolean> => {

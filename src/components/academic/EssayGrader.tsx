@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, FileCheck, Copy, Check, RotateCcw, Download } from 'lucide-react';
+import { ArrowLeft, Loader2, FileCheck, Copy, Check, RotateCcw, Download, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,6 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
 
@@ -50,15 +53,9 @@ const EssayGrader = ({ onBack }: EssayGraderProps) => {
     await streamAIChat({
       messages: [],
       mode: 'essay_grade',
-      content: `Grade this ${essayType} essay at the ${gradeLevel} level.
-Rubric: ${rubricText}
-
-Essay (${wordCount} words):
-${essay}`,
+      content: `Grade this ${essayType} essay at the ${gradeLevel} level.\nRubric: ${rubricText}\n\nEssay (${wordCount} words):\n${essay}`,
       onDelta: (chunk) => {
         fullResponse += chunk;
-        
-        // Try to parse JSON scores from the response
         if (!scoresParsed) {
           const jsonMatch = fullResponse.match(/\{[^{}]*"scores"\s*:\s*\[[\s\S]*?\]\s*\}/);
           if (jsonMatch) {
@@ -71,23 +68,17 @@ ${essay}`,
             } catch {}
           }
         }
-
-        // Extract feedback text after the JSON block
         const jsonEnd = fullResponse.search(/\}\s*\n/);
         if (jsonEnd > -1) {
           const afterJson = fullResponse.substring(jsonEnd + 1).replace(/^\s*\}\s*/, '').trim();
           if (afterJson) setFeedback(afterJson);
         } else if (!scoresParsed) {
-          // If no JSON found at all, show everything as feedback
           setFeedback(fullResponse);
         }
       },
       onDone: () => {
         setLoading(false);
-        // Final attempt to extract everything
-        if (!scoresParsed && fullResponse) {
-          setFeedback(fullResponse);
-        }
+        if (!scoresParsed && fullResponse) setFeedback(fullResponse);
       },
       onError: (err) => {
         toast({ title: 'Error', description: err, variant: 'destructive' });
@@ -152,26 +143,15 @@ ${essay}`,
           </div>
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">Paste your essay</label>
-            <Textarea
-              value={essay}
-              onChange={(e) => setEssay(e.target.value)}
-              placeholder="Paste your essay here..."
-              className="min-h-[200px]"
-            />
+            <Textarea value={essay} onChange={(e) => setEssay(e.target.value)} placeholder="Paste your essay here..." className="min-h-[200px]" />
             <p className="text-xs text-muted-foreground mt-1">{wordCount} words {wordCount < 50 && wordCount > 0 ? '(minimum 50 words)' : ''}</p>
           </div>
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">Custom rubric (optional)</label>
-            <Textarea
-              value={rubric}
-              onChange={(e) => setRubric(e.target.value)}
-              placeholder="Enter custom grading criteria, or leave blank for standard academic rubric..."
-              className="min-h-[60px]"
-            />
+            <Textarea value={rubric} onChange={(e) => setRubric(e.target.value)} placeholder="Enter custom grading criteria, or leave blank for standard academic rubric..." className="min-h-[60px]" />
           </div>
           <Button onClick={gradeEssay} disabled={!essay.trim() || wordCount < 50} className="w-full gradient-primary text-primary-foreground">
-            <FileCheck className="w-4 h-4 mr-2" />
-            Grade Essay
+            <FileCheck className="w-4 h-4 mr-2" />Grade Essay
           </Button>
         </div>
       )}
@@ -194,16 +174,9 @@ ${essay}`,
               <div className="space-y-3">
                 {scores.map((s, i) => (
                   <div key={i}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>{s.category}</span>
-                      <span>{s.score}/{s.max}</span>
-                    </div>
+                    <div className="flex justify-between text-sm mb-1"><span>{s.category}</span><span>{s.score}/{s.max}</span></div>
                     <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-                      <motion.div
-                        className="h-full bg-white"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(s.score / s.max) * 100}%` }}
-                      />
+                      <motion.div className="h-full bg-white" initial={{ width: 0 }} animate={{ width: `${(s.score / s.max) * 100}%` }} />
                     </div>
                   </div>
                 ))}
@@ -218,12 +191,9 @@ ${essay}`,
                 <div className="flex items-center gap-1">
                   {feedback && (
                     <>
-                      <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(feedback, 'Essay Feedback', 'essay-feedback.html')} className="h-7">
-                        <Download className="w-3 h-3" />
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={copyFeedback} className="h-7">
-                        {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(feedback, 'Essay Feedback', 'essay-feedback.html')} className="h-7"><Download className="w-3 h-3" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(feedback, 'Essay Feedback')} className="h-7"><Printer className="w-3 h-3" /></Button>
+                      <Button size="sm" variant="ghost" onClick={copyFeedback} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
                     </>
                   )}
                 </div>
@@ -232,13 +202,10 @@ ${essay}`,
                 <div className="p-4 overflow-hidden">
                   {feedback ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_*]:max-w-full [&_table]:table-fixed [&_pre]:overflow-x-auto [&_pre]:max-w-full">
-                      <ReactMarkdown>{formatAIResponse(feedback)}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{formatAIResponse(feedback)}</ReactMarkdown>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm">Generating feedback...</span>
-                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /><span className="text-sm">Generating feedback...</span></div>
                   )}
                 </div>
               </ScrollArea>
@@ -247,8 +214,7 @@ ${essay}`,
 
           {!loading && (
             <Button onClick={() => { setFeedback(''); setScores([]); setEssay(''); }} variant="outline" className="w-full">
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Grade Another Essay
+              <RotateCcw className="w-4 h-4 mr-2" />Grade Another Essay
             </Button>
           )}
         </motion.div>
