@@ -362,6 +362,48 @@ Format as clean, study-ready notes that are easy to review.`;
         userMessages = [{ role: "user", content: `Clean up and organize this lecture transcription:\n\n${content}` }];
         break;
 
+      case "essay_grade":
+        systemPrompt = `You are an expert essay grader. Grade the essay thoroughly.
+First line must be JSON: {"scores": [{"category": "Thesis/Argument", "score": 20, "max": 25}, {"category": "Evidence/Support", "score": 18, "max": 25}, {"category": "Analysis", "score": 19, "max": 25}, {"category": "Organization", "score": 21, "max": 25}]}
+Then provide detailed markdown feedback with ## Strengths, ## Areas for Improvement, ## Grammar & Style Notes, ## Summary sections.
+Do NOT include greetings. Start directly with the JSON scores line.`;
+        userMessages = [{ role: "user", content: content || "" }];
+        break;
+
+      case "plagiarism":
+        systemPrompt = `You are an expert text originality analyst.
+First line must be JSON: {"originality_score": 85}
+(Score 0-100, where 100 is fully original)
+Then provide detailed markdown analysis with ## Overall Assessment, ## Suspicious Passages, ## Style Consistency, ## Suggestions sections.
+Do NOT include greetings. Start directly with the JSON score line.`;
+        userMessages = [{ role: "user", content: content || "" }];
+        break;
+
+      case "citation":
+        systemPrompt = `You are an expert citation formatter. Generate properly formatted citations following exact style rules (APA, MLA, Chicago, Harvard, IEEE, Vancouver).
+Provide: ## Full Citation, ## In-text Citation, ## Notes sections.
+Be precise with formatting. Do NOT include greetings.`;
+        userMessages = [{ role: "user", content: content || "" }];
+        break;
+
+      case "bibliography":
+        systemPrompt = `You are an expert bibliography formatter. Format sources into a properly formatted reference list. Sort alphabetically. Follow exact citation style rules. Note missing information in brackets.
+Do NOT include greetings. Output only the formatted bibliography.`;
+        userMessages = [{ role: "user", content: content || "" }];
+        break;
+
+      case "research":
+        systemPrompt = `You are an expert research assistant. Provide a comprehensive research guide with: ## Overview, ## Key Research Areas, ## Suggested Search Terms, ## Recommended Databases, ## Notable Authors, ## Recent Developments, ## Research Questions (5-7), ## Methodology Suggestions.
+Do NOT include greetings. Provide only the research guide.`;
+        userMessages = [{ role: "user", content: content || "" }];
+        break;
+
+      case "thesis":
+        systemPrompt = `You are an expert thesis statement generator. Generate strong, arguable thesis statements with: ## Strong Thesis Statement, ## Alternative Versions (2-3), ## Weak vs Strong Comparison, ## Supporting Points, ## Refinement Tips.
+Do NOT include greetings. Start directly with thesis content.`;
+        userMessages = [{ role: "user", content: content || "" }];
+        break;
+
       case "chat":
         systemPrompt = `You are StudentOS AI, a helpful and encouraging study assistant.
 You help students learn effectively by:
@@ -372,7 +414,6 @@ You help students learn effectively by:
 - Using markdown formatting for clarity
 
 Keep responses helpful but concise unless detail is specifically needed.`;
-        // Use provided messages directly for chat mode
         break;
 
       case "quick_answer":

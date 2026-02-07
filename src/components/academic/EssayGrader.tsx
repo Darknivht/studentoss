@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Loader2, FileCheck, Copy, Check, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { streamAIChat } from '@/lib/ai';
@@ -45,41 +44,50 @@ const EssayGrader = ({ onBack }: EssayGraderProps) => {
     const rubricText = rubric.trim() || 'Standard academic rubric: Thesis, Evidence, Analysis, Organization, Grammar';
 
     let fullResponse = '';
+    let scoresParsed = false;
+
     await streamAIChat({
       messages: [],
-      mode: 'chat',
-      content: `You are an expert essay grader. Grade this ${essayType} essay at the ${gradeLevel} level using the rubric: ${rubricText}
-
-Provide:
-1. Overall score (out of 100)
-2. Scores for each rubric category (out of 25 each for: Thesis/Argument, Evidence/Support, Analysis/Critical Thinking, Organization/Clarity)
-3. Specific feedback on strengths
-4. Areas for improvement with concrete suggestions
-5. Grammar/style notes
-6. A brief summary of what the student did well and what to improve
-
-Start with JSON scores in this exact format, then provide detailed feedback:
-{"scores": [{"category": "Thesis", "score": 20, "max": 25}, {"category": "Evidence", "score": 18, "max": 25}, {"category": "Analysis", "score": 19, "max": 25}, {"category": "Organization", "score": 21, "max": 25}]}
-
-Then provide detailed markdown-formatted feedback.
+      mode: 'essay_grade',
+      content: `Grade this ${essayType} essay at the ${gradeLevel} level.
+Rubric: ${rubricText}
 
 Essay (${wordCount} words):
 ${essay}`,
       onDelta: (chunk) => {
         fullResponse += chunk;
-        try {
-          const jsonMatch = fullResponse.match(/\{[\s\S]*?\}/);
+        
+        // Try to parse JSON scores from the response
+        if (!scoresParsed) {
+          const jsonMatch = fullResponse.match(/\{[^{}]*"scores"\s*:\s*\[[\s\S]*?\]\s*\}/);
           if (jsonMatch) {
-            const data = JSON.parse(jsonMatch[0]);
-            if (data.scores) setScores(data.scores);
+            try {
+              const data = JSON.parse(jsonMatch[0]);
+              if (data.scores && Array.isArray(data.scores)) {
+                setScores(data.scores);
+                scoresParsed = true;
+              }
+            } catch {}
           }
-        } catch {}
-        const feedbackStart = fullResponse.indexOf('}');
-        if (feedbackStart > -1) {
-          setFeedback(fullResponse.substring(feedbackStart + 1).trim());
+        }
+
+        // Extract feedback text after the JSON block
+        const jsonEnd = fullResponse.search(/\}\s*\n/);
+        if (jsonEnd > -1) {
+          const afterJson = fullResponse.substring(jsonEnd + 1).replace(/^\s*\}\s*/, '').trim();
+          if (afterJson) setFeedback(afterJson);
+        } else if (!scoresParsed) {
+          // If no JSON found at all, show everything as feedback
+          setFeedback(fullResponse);
         }
       },
-      onDone: () => setLoading(false),
+      onDone: () => {
+        setLoading(false);
+        // Final attempt to extract everything
+        if (!scoresParsed && fullResponse) {
+          setFeedback(fullResponse);
+        }
+      },
       onError: (err) => {
         toast({ title: 'Error', description: err, variant: 'destructive' });
         setLoading(false);
@@ -91,11 +99,13 @@ ${essay}`,
   const maxScore = scores.reduce((sum, s) => sum + s.max, 0);
 
   const copyFeedback = async () => {
-    const text = `Score: ${totalScore}/${maxScore}\n\n${feedback}`;
+    const text = scores.length > 0 ? `Score: ${totalScore}/${maxScore}\n\n${feedback}` : feedback;
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const hasResults = feedback || scores.length > 0;
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 min-h-screen pb-24">
@@ -110,7 +120,7 @@ ${essay}`,
         </div>
       </motion.header>
 
-      {!feedback && !loading && scores.length === 0 && (
+      {!hasResults && !loading && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -165,14 +175,14 @@ ${essay}`,
         </div>
       )}
 
-      {loading && (
+      {loading && !hasResults && (
         <div className="flex flex-col items-center justify-center py-12">
           <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
           <p className="text-muted-foreground">Analyzing your essay...</p>
         </div>
       )}
 
-      {(scores.length > 0 || feedback) && !loading && (
+      {(hasResults || loading) && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           {scores.length > 0 && (
             <div className="p-4 rounded-2xl gradient-primary text-primary-foreground">
@@ -200,28 +210,39 @@ ${essay}`,
             </div>
           )}
 
-          {feedback && (
+          {(feedback || loading) && (
             <div className="rounded-2xl bg-card border border-border overflow-hidden">
               <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
                 <h3 className="font-medium text-sm">Detailed Feedback</h3>
-                <Button size="sm" variant="ghost" onClick={copyFeedback} className="h-7">
-                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                </Button>
+                {feedback && (
+                  <Button size="sm" variant="ghost" onClick={copyFeedback} className="h-7">
+                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  </Button>
+                )}
               </div>
               <ScrollArea className="h-[40vh]">
-                <div className="p-4 overflow-hidden">
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <ReactMarkdown>{formatAIResponse(feedback)}</ReactMarkdown>
-                  </div>
+                <div className="p-4">
+                  {feedback ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>{formatAIResponse(feedback)}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Generating feedback...</span>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
           )}
 
-          <Button onClick={() => { setFeedback(''); setScores([]); setEssay(''); }} variant="outline" className="w-full">
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Grade Another Essay
-          </Button>
+          {!loading && (
+            <Button onClick={() => { setFeedback(''); setScores([]); setEssay(''); }} variant="outline" className="w-full">
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Grade Another Essay
+            </Button>
+          )}
         </motion.div>
       )}
     </div>
