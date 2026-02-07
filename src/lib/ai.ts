@@ -28,7 +28,9 @@ export type AIMode =
   | "translator"
   | "youtube_summary"
   | "book_scanner"
-  | "transcribe_audio";
+  | "transcribe_audio"
+  | "job_search"
+  | "quick_answer";
 
 interface StreamChatOptions {
   messages: Message[];

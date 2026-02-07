@@ -96,7 +96,7 @@ const Chat = () => {
       </motion.header>
 
       {/* Chat Room */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <ChatRoom 
           groupId={groupId || undefined}
           recipientId={recipientId || undefined}

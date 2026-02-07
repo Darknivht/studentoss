@@ -347,6 +347,7 @@ export type Database = {
           is_read: boolean | null
           message_type: string | null
           recipient_id: string | null
+          reply_to_id: string | null
           sender_id: string
           updated_at: string | null
         }
@@ -359,6 +360,7 @@ export type Database = {
           is_read?: boolean | null
           message_type?: string | null
           recipient_id?: string | null
+          reply_to_id?: string | null
           sender_id: string
           updated_at?: string | null
         }
@@ -371,6 +373,7 @@ export type Database = {
           is_read?: boolean | null
           message_type?: string | null
           recipient_id?: string | null
+          reply_to_id?: string | null
           sender_id?: string
           updated_at?: string | null
         }
@@ -380,6 +383,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
