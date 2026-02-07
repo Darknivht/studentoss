@@ -146,7 +146,7 @@ const GroupChat = () => {
           <TabsTrigger value="members" className="flex-1">Members</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="chat" className="flex-1 overflow-hidden m-0">
+        <TabsContent value="chat" className="flex-1 flex flex-col overflow-hidden m-0">
           <ChatRoom groupId={groupId} />
         </TabsContent>
 

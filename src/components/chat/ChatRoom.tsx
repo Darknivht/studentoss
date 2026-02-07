@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Send, ArrowLeft } from 'lucide-react';
+import { Send, ArrowLeft, Reply, X } from 'lucide-react';
 import MediaUpload from '@/components/chat/MediaUpload';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -18,6 +18,7 @@ interface Message {
   recipient_id?: string;
   content: string;
   image_url?: string | null;
+  reply_to_id?: string | null;
   created_at: string;
   sender?: {
     display_name: string | null;
@@ -46,6 +47,7 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -110,12 +112,14 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
     try {
       const messageData: any = { sender_id: user.id, content: newMessage.trim() || (imageUrl ? '📷 Image' : '') };
       if (imageUrl) messageData.image_url = imageUrl;
+      if (replyingTo) messageData.reply_to_id = replyingTo.id;
       if (chatType === 'group') messageData.group_id = chatTargetId;
       else messageData.recipient_id = chatTargetId;
 
       const { error } = await supabase.from('messages').insert(messageData);
       if (error) throw error;
       setNewMessage('');
+      setReplyingTo(null);
     } catch (error) {
       console.error('Error sending message:', error);
       toast({ title: 'Failed to send message', variant: 'destructive' });
@@ -133,6 +137,11 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
 
   const formatTime = (dateStr: string) => format(new Date(dateStr), 'h:mm a');
 
+  const getRepliedMessage = (replyToId: string | null | undefined): Message | undefined => {
+    if (!replyToId) return undefined;
+    return messages.find(m => m.id === replyToId);
+  };
+
   // Group messages by date
   const groupedMessages: { label: string; messages: Message[] }[] = [];
   let currentLabel = '';
@@ -149,9 +158,9 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
   if (loading) return <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
-    <div className="flex flex-col h-full min-h-[400px]">
+    <div className="flex flex-col h-full">
       {onBack && (
-        <div className="flex items-center gap-3 p-4 border-b border-border">
+        <div className="flex items-center gap-3 p-4 border-b border-border flex-shrink-0">
           <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
           <div>
             <h3 className="font-semibold text-foreground">{chatTargetName}</h3>
@@ -160,7 +169,7 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
         </div>
       )}
 
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
         <div className="space-y-1">
           {groupedMessages.map((group, gi) => (
             <div key={gi}>
@@ -170,8 +179,14 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
               <AnimatePresence>
                 {group.messages.map((message) => {
                   const isOwn = message.sender_id === user?.id;
+                  const repliedMsg = getRepliedMessage(message.reply_to_id);
                   return (
-                    <motion.div key={message.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-2 mb-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`flex gap-2 mb-3 group relative ${isOwn ? 'flex-row-reverse' : ''}`}
+                    >
                       {!isOwn && (
                         <Avatar className="h-8 w-8 shrink-0">
                           <AvatarImage src={message.sender?.avatar_url || undefined} />
@@ -184,6 +199,17 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
                             {message.sender?.username ? `@${message.sender.username}` : message.sender?.display_name || 'User'}
                           </p>
                         )}
+
+                        {/* Replied message quote */}
+                        {repliedMsg && (
+                          <div className={`mb-1 px-3 py-1.5 rounded-lg border-l-2 border-primary/60 bg-muted/50 text-xs max-w-full ${isOwn ? 'ml-auto' : ''}`}>
+                            <p className="text-primary/80 font-medium truncate">
+                              {repliedMsg.sender_id === user?.id ? 'You' : (repliedMsg.sender?.username ? `@${repliedMsg.sender.username}` : repliedMsg.sender?.display_name || 'User')}
+                            </p>
+                            <p className="text-muted-foreground truncate">{repliedMsg.content}</p>
+                          </div>
+                        )}
+
                         <div className={`px-4 py-2.5 rounded-2xl ${isOwn ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md'}`}>
                           {message.image_url && (
                             <img
@@ -201,6 +227,15 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
                           {formatTime(message.created_at)}
                         </p>
                       </div>
+
+                      {/* Reply button on hover */}
+                      <button
+                        onClick={() => setReplyingTo(message)}
+                        className={`opacity-0 group-hover:opacity-100 transition-opacity self-center p-1 rounded-full hover:bg-muted ${isOwn ? 'order-first' : ''}`}
+                        title="Reply"
+                      >
+                        <Reply className="w-4 h-4 text-muted-foreground" />
+                      </button>
                     </motion.div>
                   );
                 })}
@@ -214,10 +249,26 @@ const ChatRoom = ({ type, targetId, targetName, onBack, groupId, recipientId }: 
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
-      {/* Input */}
-      <div className="p-3 border-t border-border">
+      {/* Reply preview bar */}
+      {replyingTo && (
+        <div className="px-3 pt-2 pb-1 border-t border-border bg-muted/30 flex items-center gap-2 flex-shrink-0">
+          <Reply className="w-4 h-4 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-primary">
+              {replyingTo.sender_id === user?.id ? 'You' : (replyingTo.sender?.username ? `@${replyingTo.sender.username}` : replyingTo.sender?.display_name || 'User')}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">{replyingTo.content}</p>
+          </div>
+          <button onClick={() => setReplyingTo(null)} className="p-1 rounded hover:bg-muted">
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
+
+      {/* Input - always visible */}
+      <div className="p-3 border-t border-border flex-shrink-0 bg-background">
         <div className="flex items-center gap-2">
           {user && <MediaUpload userId={user.id} onUploaded={(url) => sendMessage(url)} />}
           <Input
