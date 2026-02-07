@@ -52,7 +52,9 @@ const StudyTimetable = () => {
           ? await supabase.from('courses').select('id, name, color').in('id', courseIds)
           : { data: [] };
 
-        const courseMap = new Map(courses?.map(c => [c.id, c]));
+        const courseMap = new Map<string, { id: string; name: string; color: string | null }>(
+          (courses || []).map(c => [c.id, c] as [string, { id: string; name: string; color: string | null }])
+        );
 
         const mapped: ScheduleEntry[] = goals.map(g => {
           const date = new Date(g.due_date);
