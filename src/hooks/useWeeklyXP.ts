@@ -58,7 +58,7 @@ export async function updateWeeklyActivity(
 
   const { data: existing } = await supabase
     .from('weekly_xp')
-    .select('id, ' + field)
+    .select('*')
     .eq('user_id', userId)
     .eq('week_start', weekStart)
     .maybeSingle();
@@ -67,7 +67,7 @@ export async function updateWeeklyActivity(
     await supabase
       .from('weekly_xp')
       .update({ [field]: ((existing as any)[field] || 0) + incrementBy })
-      .eq('id', existing.id);
+      .eq('id', (existing as any).id);
   } else {
     await supabase
       .from('weekly_xp')

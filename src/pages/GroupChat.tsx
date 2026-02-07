@@ -50,6 +50,7 @@ const GroupChat = () => {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [viewingNoteId, setViewingNoteId] = useState<string | null>(null);
+  const [viewingNote, setViewingNote] = useState<any>(null);
 
   useEffect(() => {
     if (groupId && user) fetchGroupData();
@@ -112,9 +113,12 @@ const GroupChat = () => {
     }
   };
 
-  const openResource = (resource: Resource) => {
+  const openResource = async (resource: Resource) => {
     if (resource.resource_type === 'note') {
-      setViewingNoteId(resource.resource_id);
+      const { data } = await supabase.from('notes').select('*').eq('id', resource.resource_id).single();
+      if (data) {
+        setViewingNote(data);
+      }
     } else if (resource.resource_type === 'course') {
       navigate(`/course/${resource.resource_id}`);
     }
@@ -199,11 +203,11 @@ const GroupChat = () => {
       )}
 
       {/* Note Viewer Dialog */}
-      {viewingNoteId && (
+      {viewingNote && (
         <NoteViewerDialog
-          noteId={viewingNoteId}
-          open={!!viewingNoteId}
-          onOpenChange={(open) => !open && setViewingNoteId(null)}
+          note={viewingNote}
+          open={!!viewingNote}
+          onOpenChange={(open) => { if (!open) { setViewingNote(null); } }}
         />
       )}
     </div>
