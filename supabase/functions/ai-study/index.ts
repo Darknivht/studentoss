@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, content, imageBase64 } = await req.json();
+    const { messages, mode, content, imageBase64, contentFilterEnabled } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
@@ -305,21 +305,29 @@ Be educational and help students learn the language, not just translate.`;
 
       case "youtube_summary":
         systemPrompt = `You are an expert at summarizing educational video content.
-You will receive either a YouTube URL or a pasted transcript. In BOTH cases, provide a helpful summary.
 
-If given a URL: Use the video title and any info you can infer from the URL to provide a helpful summary about the likely topic. Do NOT say you cannot access the URL. Instead, analyze what the video is likely about based on the URL, title keywords, and your knowledge, then provide a comprehensive educational summary on that topic.
+IMPORTANT RULES:
+- If the user provides a "Video Transcript:", summarize it thoroughly and accurately. This is the PREFERRED input.
+- If the user only provides a YouTube URL with NO transcript, you MUST:
+  1. Clearly state at the top: "⚠️ **Note:** No transcript was provided. This summary is a topic-based estimate inferred from the URL keywords, NOT an actual summary of the video content."
+  2. Extract keywords from the URL (video ID, channel name, title slugs) to guess the topic
+  3. Provide general educational content about that inferred topic
+  4. Recommend the user paste the actual transcript for an accurate summary
 
-If given a transcript: Summarize it thoroughly.
-
-Always format as:
+Format for transcript summaries:
 📺 **Video Summary**
 📌 **Key Points** (bullet list)
 💡 **Main Takeaways**
 📚 **Study Notes**
 🔗 **Related Topics**
 
-Do NOT say "I cannot access external websites". Always provide useful content.`;
-        userMessages = [{ role: "user", content: `Summarize this YouTube video content:\n\n${content}` }];
+Format for URL-only estimates:
+⚠️ **Topic Estimate** (clearly labeled as inference)
+📌 **Likely Key Points**
+📚 **General Study Notes on This Topic**
+
+Do NOT include greetings. Start directly with the content.`;
+        userMessages = [{ role: "user", content: content }];
         break;
 
       case "book_scanner":
@@ -472,6 +480,11 @@ You help students learn effectively by:
 - Breaking down complex topics
 - Being encouraging and supportive
 Keep responses helpful but concise unless detail is needed.`;
+    }
+
+    // Add content safety filter if enabled
+    if (contentFilterEnabled) {
+      systemPrompt = `CONTENT SAFETY: You must never generate content that is violent, sexual, hateful, or inappropriate for students. If a request seems inappropriate, politely decline and redirect to educational topics.\n\n` + systemPrompt;
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
