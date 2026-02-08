@@ -537,8 +537,10 @@ export type Database = {
           ai_calls_reset_at: string | null
           ai_calls_today: number | null
           avatar_url: string | null
+          content_filter_enabled: boolean | null
           created_at: string | null
           current_streak: number | null
+          daily_time_limit: number | null
           display_name: string | null
           flashcards_generated_today: number | null
           full_name: string | null
@@ -549,7 +551,9 @@ export type Database = {
           longest_streak: number | null
           notes_today: number | null
           parent_email: string | null
+          parental_pin: string | null
           quizzes_today: number | null
+          safe_search_enabled: boolean | null
           school_name: string | null
           study_persona: string | null
           subscription_expires_at: string | null
@@ -563,8 +567,10 @@ export type Database = {
           ai_calls_reset_at?: string | null
           ai_calls_today?: number | null
           avatar_url?: string | null
+          content_filter_enabled?: boolean | null
           created_at?: string | null
           current_streak?: number | null
+          daily_time_limit?: number | null
           display_name?: string | null
           flashcards_generated_today?: number | null
           full_name?: string | null
@@ -575,7 +581,9 @@ export type Database = {
           longest_streak?: number | null
           notes_today?: number | null
           parent_email?: string | null
+          parental_pin?: string | null
           quizzes_today?: number | null
+          safe_search_enabled?: boolean | null
           school_name?: string | null
           study_persona?: string | null
           subscription_expires_at?: string | null
@@ -589,8 +597,10 @@ export type Database = {
           ai_calls_reset_at?: string | null
           ai_calls_today?: number | null
           avatar_url?: string | null
+          content_filter_enabled?: boolean | null
           created_at?: string | null
           current_streak?: number | null
+          daily_time_limit?: number | null
           display_name?: string | null
           flashcards_generated_today?: number | null
           full_name?: string | null
@@ -601,7 +611,9 @@ export type Database = {
           longest_streak?: number | null
           notes_today?: number | null
           parent_email?: string | null
+          parental_pin?: string | null
           quizzes_today?: number | null
+          safe_search_enabled?: boolean | null
           school_name?: string | null
           study_persona?: string | null
           subscription_expires_at?: string | null
