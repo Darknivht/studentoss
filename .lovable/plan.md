@@ -1,218 +1,151 @@
 
-# Massive Subscription Gating Overhaul, YouTube Summarizer Fix, Offline AI Improvement, More Achievements, and Safety Section Upgrade
+# Tighten Subscription Gating, Set App Icon/Favicon, Fix Branding, and Fix Security Issues
 
-This plan covers 5 major areas: tighter subscription enforcement, fixing the YouTube Summarizer, improving the offline AI system, adding more achievements, and making the Safety section functional.
+## 1. Set App Icon and Favicon
 
----
-
-## 1. Tighter Subscription Gating (Popup-on-Click + Lifetime Limits)
-
-### Current Problem
-Gating only checks when a user "enters" a page. Users can still click buttons and attempt actions. Limits are daily-only, so free users can accumulate unlimited total usage over time.
-
-### Solution
-
-**A. Add lifetime (total) limits alongside daily limits:**
-
-```text
-+-------------------------+----------+-----------+-----------+
-| Lifetime Limits         | Free     | Plus      | Pro       |
-+-------------------------+----------+-----------+-----------+
-| Total notes             | 15       | 100       | Unlimited |
-| Total flashcard sets    | 10       | 50        | Unlimited |
-| Total quizzes           | 20       | 100       | Unlimited |
-| Total AI tool uses      | 30       | 200       | Unlimited |
-+-------------------------+----------+-----------+-----------+
-```
-
-**B. Block at the action button, not at page entry:**
-- Remove page-level gates (the UpgradePrompt shown on page load)
-- Instead, wrap every action button (Generate Quiz, Save Note, Create Flashcard, Use AI Tool, etc.) with a pre-check
-- When a free/plus user clicks a gated button, show a modal/dialog popup immediately explaining the limit and prompting upgrade
-- The popup should show: feature name, current usage vs limit, and an "Upgrade" button
-
-**C. Create a reusable `FeatureGateDialog` component:**
-- New file: `src/components/subscription/FeatureGateDialog.tsx`
-- A modal dialog that shows when a gated action is attempted
-- Props: `feature`, `currentUsage`, `limit`, `isLifetime`, `requiredTier`
-- Shows a lock icon, usage bar, and upgrade CTA
-
-**D. Update `useSubscription.ts`:**
-- Add lifetime counters: `totalNotes`, `totalQuizzes`, `totalFlashcardSets`, `totalAIUses`
-- Add lifetime limit checks: `canCreateNoteLifetime`, `canCreateQuizLifetime`, etc.
-- Combined check function: `gateFeature(type)` returns `{ allowed: boolean, reason: 'daily' | 'lifetime' | null, remaining: number, limit: number }`
-- Fetch actual total counts from database (notes count, quiz_attempts count, etc.)
-
-**E. Files modified:**
-- `src/hooks/useSubscription.ts` -- Add lifetime limits and `gateFeature()` method
-- `src/components/subscription/FeatureGateDialog.tsx` -- New reusable popup component
-- `src/components/subscription/UpgradePrompt.tsx` -- Keep for inline warnings but add popup variant
-- `src/pages/AITutor.tsx` -- Gate the "Start Session" button, not the page
-- `src/pages/Quizzes.tsx` -- Gate "Generate Quiz" button
-- `src/pages/SmartNotes.tsx` -- Gate "Save Note" / "Add Note" button
-- `src/pages/Flashcards.tsx` -- Gate "Generate" button
-- `src/pages/Chat.tsx` -- Keep as-is (DMs allowed for all)
-- `src/pages/GroupChat.tsx` -- Keep popup gate (already works well)
-- All AI tools components (`MathSolver`, `CodeDebugger`, `OCRToLatex`, `DiagramInterpreter`, `BookScanner`, `LanguageTranslator`, `YouTubeSummarizer`) -- Gate the action button
-- `src/components/career/JobSearch.tsx` -- Gate search button
-- `src/components/career/ResumeBuilder.tsx` -- Gate template selection beyond limit
-
----
-
-## 2. Fix YouTube Summarizer
-
-### Current Problem
-When a URL is provided (no transcript), the AI gets `Please summarize the key points from this YouTube video: [URL]`. The AI cannot access URLs, so it hallucinates random content.
-
-### Solution
-- Update the YouTube Summarizer to **strongly emphasize** that transcript is required for accurate results
-- When only a URL is provided, make the UI clearly state: "For accurate summaries, please paste the transcript"
-- Update the backend prompt (`youtube_summary` mode in `ai-study/index.ts`) to:
-  - If transcript is provided: summarize it thoroughly
-  - If only URL is provided: extract the video ID, attempt to infer the topic from URL keywords, and explicitly state it's an inference-based summary
-- Add a helper section in the UI explaining step-by-step how to get a YouTube transcript
-- Change the default behavior: make transcript the primary input, URL secondary
+Copy `user-uploads://StudentOS_App_Icon-2.png` to:
+- `public/favicon.png` -- used as website favicon
+- `public/pwa-192x192.png` -- PWA icon (192x192)
+- `public/pwa-512x512.png` -- PWA icon (512x512)
+- `public/studentos-icon.png` -- general use icon
 
 **Files modified:**
-- `src/components/ai-tools/YouTubeSummarizer.tsx` -- Redesign UI to prioritize transcript input, add clear instructions
-- `supabase/functions/ai-study/index.ts` -- Update `youtube_summary` system prompt to be more honest about URL-only limitations
+- `index.html` -- Update favicon link to reference `/favicon.png` as type `image/png`
+- `public/pwa-192x192.png` and `public/pwa-512x512.png` -- Replaced with new icon
+
+For Capacitor Android app icon, the same image will be placed as:
+- Android mipmap resources (all density folders) -- these are generated from the same source image
+
+**Note:** Since Lovable cannot generate resized images programmatically, the uploaded image will be copied to the public directory and referenced. For the Android native icons, the user will need to use Android Studio's Image Asset tool after exporting the project to generate properly sized mipmaps from this source image.
 
 ---
 
-## 3. Improve Offline AI System
+## 2. Fix App Name to "StudentOS" Everywhere
 
-### Current Problem
-The existing system uses `@huggingface/transformers` with WebLLM, which has WebGPU compatibility issues on mobile WebViews (Capacitor). The user wants a native-capable approach.
+Update all instances of `studentoss`, `studentOS`, `StudentOss`, `studentOs` to `StudentOS`:
 
-### Solution
-Since this is a Capacitor app, we should keep the current web-based approach (which works on desktop/browser) but improve it significantly:
-
-**A. Improve the existing OfflineAI system:**
-- Fix model loading reliability by adding better error recovery
-- Add explicit WebGPU/WASM detection and auto-fallback to cloud
-- Improve the progress tracking during downloads
-- Add a "Reset All" button that clears IndexedDB, Cache API, and localStorage model data to fix stuck states
-
-**B. Add native model support preparation:**
-- Create `src/services/NativeAIService.ts` -- A singleton service that detects if running in Capacitor and uses the appropriate inference path
-- On native (Capacitor): use `@capacitor/filesystem` for persistent model storage instead of browser cache
-- Add `android:largeHeap="true"` to AndroidManifest.xml
-
-**C. Improve model selection and UX:**
-- Auto-detect device capabilities more accurately
-- Show clear warnings for unsupported devices
-- Add model size verification after download
-- Better error messages when model loading fails
-
-**Files modified:**
-- `src/context/OfflineAIContext.tsx` -- Better error recovery, cache verification, reset functionality
-- `src/hooks/useOfflineAI.ts` -- Improved fallback logic
-- `src/components/safety/OfflineMode.tsx` -- Better UX, reset button, clearer status
-- `android/app/src/main/AndroidManifest.xml` -- Add `android:largeHeap="true"`
-- `src/services/NativeAIService.ts` -- New file for native AI path detection
+| File | Current | Fix |
+|---|---|---|
+| `capacitor.config.ts` | `appName: "studentoss"` | `appName: "StudentOS"` |
+| `android/app/src/main/res/values/strings.xml` | `studentoss` | `StudentOS` |
+| `src/pages/Auth.tsx` | `"studentOS"` | `"StudentOS"` |
+| `src/pages/Upgrade.tsx` | `"studentOS Plans"` | `"StudentOS Plans"` |
+| `src/components/layout/AppLayout.tsx` | `"studentOS"` (2 places) | `"StudentOS"` |
+| `src/components/focus/PermissionsSetup.tsx` | `"StudentOss"` | `"StudentOS"` |
+| `index.html` | Already correct (`StudentOS`) | No change needed |
 
 ---
 
-## 4. More Achievements
+## 3. Tighten Subscription Gating
 
-### Current Achievements (13 total)
-The existing set covers: notes, quizzes, flashcards, streaks, focus sessions, and XP.
+### A. Job/Internship Search: 2 per month for free users
 
-### New Achievements to Add (12 more, total 25)
+**File: `src/hooks/useSubscription.ts`**
+- Change `jobSearchesLimit` in `FREE_LIMITS` from `3` (daily) to `2` (monthly)
+- Add monthly tracking: query `profiles` for `job_searches_this_month` and `job_searches_reset_month`
+- Add `canSearchJobs` and `jobSearchesThisMonth` to the subscription state
+- Add `gateFeature` support for `'jobSearch'` type
 
-```text
-+------------------------+-------------------+-------+------+
-| Name                   | Requirement       | Value | XP   |
-+------------------------+-------------------+-------+------+
-| Social Butterfly       | groups_joined      | 1     | 50   |
-| Study Buddy            | groups_joined      | 3     | 150  |
-| Speed Reader           | notes_count        | 25    | 300  |
-| Library Builder         | notes_count        | 50    | 500  |
-| Quiz Champion          | quizzes_count      | 25    | 400  |
-| Flashcard Guru         | flashcards_reviewed| 500   | 500  |
-| Marathon Studier       | focus_sessions     | 50    | 750  |
-| Century Focus          | focus_sessions     | 100   | 1000 |
-| XP Legend              | total_xp           | 5000  | 750  |
-| Streak Legend          | streak             | 60    | 1500 |
-| Streak Immortal        | streak             | 100   | 2500 |
-| Early Bird             | notes_count        | 5     | 100  |
-+------------------------+-------------------+-------+------+
-```
+**Database migration:**
+- Add `job_searches_this_month` (integer, default 0) and `job_searches_reset_month` (text, default current month) columns to `profiles`
 
-**Implementation:**
-- Database migration to insert the new achievements into the `achievements` table
-- Update `fetchUserStats` in `useAchievements.ts` to also count `groups_joined` (from study_groups membership)
-- Add the `groups_joined` stat type
+**File: `src/components/career/JobSearch.tsx`**
+- Import `useSubscription` and `FeatureGateDialog`
+- Gate the "Search Jobs" button click -- check `canSearchJobs` before executing
+- Show `FeatureGateDialog` popup when limit reached
+- Call `incrementUsage('jobSearch')` on successful search
 
-**Files modified:**
-- Database migration (SQL) -- Insert 12 new achievements
-- `src/hooks/useAchievements.ts` -- Add `groups_joined` to UserStats and fetch logic
+### B. Clearer Gating Showcases
+
+**File: `src/components/subscription/FeatureGateDialog.tsx`**
+- Add a feature breakdown section showing what each tier unlocks
+- Show tier comparison (Free vs Plus vs Pro) inline in the dialog
+- Add animated lock icon and clearer copy
+- Show "X of Y used" with a progress ring instead of just a bar
+
+### C. Gate AI Tool Action Buttons
+
+Ensure every AI tool component gates the action button (not page entry). For each of these files, wrap the main action button with a subscription check and show `FeatureGateDialog` on click when blocked:
+
+- `src/components/ai-tools/MathSolver.tsx`
+- `src/components/ai-tools/CodeDebugger.tsx`
+- `src/components/ai-tools/OCRToLatex.tsx`
+- `src/components/ai-tools/DiagramInterpreter.tsx`
+- `src/components/ai-tools/BookScanner.tsx`
+- `src/components/ai-tools/LanguageTranslator.tsx`
+- `src/components/ai-tools/YouTubeSummarizer.tsx`
+
+Each will:
+1. Import `useSubscription` and `FeatureGateDialog`
+2. Call `gateFeature('ai')` before executing the AI action
+3. Show the dialog popup if not allowed
+4. Call `incrementUsage('ai')` on success
+
+### D. Remove page-level UpgradePrompt blocks
+
+In `AITutor.tsx`, `Quizzes.tsx`, `SmartNotes.tsx`, `Flashcards.tsx` -- remove any page-entry blocking with `UpgradePrompt`. Instead, only gate the specific action buttons (Generate Quiz, Save Note, etc.).
 
 ---
 
-## 5. Improve Safety Section
+## 4. Fix Security Issues (6 findings)
 
-### Current Problems
-- ParentDashboard uses **mock/random data** for weekly activity chart (lines 77-88 in ParentDashboard.tsx)
-- Daily time limits are not enforced anywhere -- they're just UI settings that do nothing
-- Content filters are just toggles with no backend enforcement
-- No PIN protection for parental controls (anyone can toggle them off)
+### A. Profiles table publicly readable (CRITICAL)
+**Current:** `USING condition: true` on SELECT -- anyone can read all profiles including `parent_email`, `parental_pin`, `school_name`, etc.
 
-### Solution
+**Fix (Database migration):**
+- Drop the current overly permissive `"Users can view profiles for social"` SELECT policy
+- Create two new policies:
+  1. `"Users can view own full profile"` -- `auth.uid() = user_id` (full access to own profile)
+  2. `"Users can view limited profiles for social"` -- Create a database VIEW `public_profiles` that exposes only `user_id`, `display_name`, `username`, `avatar_url`, `total_xp`, `current_streak` (no sensitive fields). OR restrict SELECT to authenticated users and rely on frontend to only display safe fields. Best approach: Replace the `true` policy with `auth.uid() IS NOT NULL` so only authenticated users can see profiles, and ensure the frontend never displays sensitive fields of other users.
 
-**A. Replace mock data with real data in ParentDashboard:**
-- Query `pomodoro_sessions` grouped by date for the last 7 days
-- Query `notes` created per day
-- Query `quiz_attempts` per day
-- Show actual data instead of `Math.random()`
+### B. Weekly XP leaderboard exposes user_id (WARNING)
+**Fix:** This is acceptable for a leaderboard feature. The user_id correlation risk is mitigated if profiles are locked down (fix A above). Mark as acceptable with auth-only access.
 
-**B. Add PIN protection for parental controls:**
-- Add a `parental_pin` field to the profiles table
-- When parental controls are first enabled, prompt to set a 4-digit PIN
-- Require PIN entry before any parental settings can be changed
-- Store PIN as a hash (not plain text)
+**Migration:** Update weekly_xp SELECT policy from `true` to `auth.uid() IS NOT NULL` (authenticated users only).
 
-**C. Enforce daily time limits:**
-- Track session time using `useStudyTimeTracker` hook
-- When daily limit is reached, show a full-screen overlay blocking further use
-- The overlay can only be dismissed with the parental PIN
+### C. Study group members visible to all (CRITICAL)
+**Current:** `USING condition: true` on study_group_members SELECT.
 
-**D. Make content filters functional:**
-- Pass the `safeSearchEnabled` and `contentFilterEnabled` flags to AI calls
-- In the edge function, prepend content safety instructions to the system prompt when filters are enabled
+**Fix (Migration):** Drop the `"Members can view group members"` policy and replace with:
+`"Group members can view fellow members"` -- USING condition: `EXISTS (SELECT 1 FROM study_group_members sgm WHERE sgm.group_id = study_group_members.group_id AND sgm.user_id = auth.uid())`
 
-**Files modified:**
-- `src/components/safety/ParentDashboard.tsx` -- Replace mock data with real queries
-- `src/components/safety/ParentalControls.tsx` -- Add PIN setup/verification, persist daily limit and content filter settings
-- `src/hooks/useStudyTimeTracker.ts` -- Add daily limit enforcement
-- `supabase/functions/ai-study/index.ts` -- Add content safety prompt when filters are on
-- Database migration -- Add `parental_pin`, `daily_time_limit`, `safe_search_enabled`, `content_filter_enabled` columns to profiles
+### D. Achievements publicly readable (WARNING)
+Achievement definitions (names, XP rewards) are static reference data. This is acceptable -- authenticated-only access is sufficient.
+
+**Migration:** Update achievements SELECT policy from `true` to `auth.uid() IS NOT NULL`.
+
+### E. Study group invitation codes exposed (WARNING)
+**Fix:** Restrict `invitation_code` visibility. Since we can't restrict columns with RLS, update the frontend to not expose invitation codes to non-members. The current `is_public = true` policy is fine for listing groups, but the invitation_code should only be fetched by group members.
+
+### F. Leaked password protection disabled (WARNING)
+**Fix:** Enable leaked password protection via auth configuration.
 
 ---
 
 ## Summary of All Changes
 
-### New Files (2)
-- `src/components/subscription/FeatureGateDialog.tsx` -- Popup dialog for gated features
-- `src/services/NativeAIService.ts` -- Native AI detection service
+### New Database Migration
+- Add `job_searches_this_month` and `job_searches_reset_month` to profiles
+- Fix 4 RLS policies (profiles, weekly_xp, study_group_members, achievements)
 
-### Database Migrations (2)
-- Insert 12 new achievements
-- Add parental control columns to profiles (`parental_pin`, `daily_time_limit`, `safe_search_enabled`, `content_filter_enabled`)
+### Files Copied
+- `user-uploads://StudentOS_App_Icon-2.png` to `public/favicon.png` and `public/pwa-192x192.png`
 
-### Modified Files (20+)
-- `src/hooks/useSubscription.ts` -- Lifetime limits, `gateFeature()` method
-- `src/components/subscription/UpgradePrompt.tsx` -- Minor updates
-- `src/pages/AITutor.tsx`, `Quizzes.tsx`, `SmartNotes.tsx`, `Flashcards.tsx` -- Button-level gating with popup
-- All AI tool components -- Button-level gating
-- `src/components/career/JobSearch.tsx`, `ResumeBuilder.tsx` -- Button-level gating
-- `src/components/ai-tools/YouTubeSummarizer.tsx` -- Redesigned UI
-- `supabase/functions/ai-study/index.ts` -- Updated YouTube prompt + content safety
-- `src/context/OfflineAIContext.tsx` -- Error recovery improvements
-- `src/hooks/useOfflineAI.ts` -- Better fallback logic
-- `src/components/safety/OfflineMode.tsx` -- Reset button, better UX
-- `src/components/safety/ParentDashboard.tsx` -- Real data
-- `src/components/safety/ParentalControls.tsx` -- PIN protection
-- `src/hooks/useStudyTimeTracker.ts` -- Daily limit enforcement
-- `src/hooks/useAchievements.ts` -- New stat types
-- `android/app/src/main/AndroidManifest.xml` -- largeHeap
+### Files Modified (~15 files)
+- `index.html` -- Favicon reference update
+- `capacitor.config.ts` -- appName to "StudentOS"
+- `android/app/src/main/res/values/strings.xml` -- app_name to "StudentOS"
+- `src/hooks/useSubscription.ts` -- Monthly job search limits, jobSearch gate type
+- `src/components/subscription/FeatureGateDialog.tsx` -- Enhanced UI with tier comparison
+- `src/components/career/JobSearch.tsx` -- Gate search button with monthly limit
+- `src/pages/Auth.tsx` -- "StudentOS" branding
+- `src/pages/Upgrade.tsx` -- "StudentOS" branding
+- `src/components/layout/AppLayout.tsx` -- "StudentOS" branding
+- `src/components/focus/PermissionsSetup.tsx` -- "StudentOS" branding
+- `src/components/ai-tools/MathSolver.tsx` -- Gate action button
+- `src/components/ai-tools/CodeDebugger.tsx` -- Gate action button
+- `src/components/ai-tools/OCRToLatex.tsx` -- Gate action button
+- `src/components/ai-tools/DiagramInterpreter.tsx` -- Gate action button
+- `src/components/ai-tools/BookScanner.tsx` -- Gate action button
+- `src/components/ai-tools/LanguageTranslator.tsx` -- Gate action button
+- `src/components/ai-tools/YouTubeSummarizer.tsx` -- Gate action button
