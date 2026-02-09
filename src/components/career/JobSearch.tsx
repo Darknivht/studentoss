@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { Search, MapPin, Briefcase, ExternalLink, Loader2, Globe, Clock, DollarSign, Building2 } from 'lucide-react';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 
 interface JobListing {
   title: string;
@@ -29,16 +31,26 @@ interface JobListing {
 
 const JobSearch = () => {
   const { toast } = useToast();
+  const { gateFeature, incrementUsage } = useSubscription();
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [jobType, setJobType] = useState('all');
   const [remote, setRemote] = useState('all');
   const [results, setResults] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateData, setGateData] = useState<any>(null);
 
   const searchJobs = async () => {
     if (!query.trim()) {
       toast({ title: 'Enter a search query', variant: 'destructive' });
+      return;
+    }
+
+    const gate = gateFeature('jobSearch');
+    if (!gate.allowed) {
+      setGateData(gate);
+      setGateOpen(true);
       return;
     }
 
@@ -53,6 +65,7 @@ const JobSearch = () => {
       if (error) throw error;
 
       if (data?.success && data.jobs) {
+        await incrementUsage('jobSearch');
         setResults(data.jobs);
         if (data.jobs.length === 0) {
           toast({ title: 'No results found. Try different keywords or filters.' });
@@ -165,7 +178,7 @@ const JobSearch = () => {
                       {formatType(job.type)}
                     </span>
                     {job.isRemote && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 whitespace-nowrap flex items-center gap-1">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 whitespace-nowrap flex items-center gap-1">
                         <Globe className="w-3 h-3" />Remote
                       </span>
                     )}
@@ -187,7 +200,7 @@ const JobSearch = () => {
                     <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{job.location}</span>
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(job.postedDate)}</span>
                     {formatSalary(job) && (
-                      <span className="flex items-center gap-1 text-green-600"><DollarSign className="w-3 h-3" />{formatSalary(job)}</span>
+                      <span className="flex items-center gap-1 text-emerald-600"><DollarSign className="w-3 h-3" />{formatSalary(job)}</span>
                     )}
                     {job.publisher && <span className="text-muted-foreground/60">via {job.publisher}</span>}
                   </div>
@@ -206,6 +219,17 @@ const JobSearch = () => {
             </motion.div>
           ))}
         </div>
+      )}
+
+      {gateData && (
+        <FeatureGateDialog
+          open={gateOpen}
+          onOpenChange={setGateOpen}
+          feature="job searches this month"
+          currentUsage={gateData.currentUsage}
+          limit={gateData.limit}
+          requiredTier={gateData.requiredTier}
+        />
       )}
     </motion.div>
   );

@@ -6,6 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AIToolLayout from './AIToolLayout';
 import { streamAIChat } from '@/lib/ai';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 
 interface LanguageTranslatorProps {
   onBack: () => void;
@@ -26,21 +28,28 @@ const languages = [
 
 const LanguageTranslator = ({ onBack }: LanguageTranslatorProps) => {
   const { toast } = useToast();
+  const { gateFeature, incrementUsage } = useSubscription();
   const [text, setText] = useState('');
   const [targetLang, setTargetLang] = useState('english');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateData, setGateData] = useState<any>(null);
 
   const handleTranslate = async () => {
     if (!text.trim()) {
-      toast({
-        title: 'Missing text',
-        description: 'Please enter text to translate.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Missing text', description: 'Please enter text to translate.', variant: 'destructive' });
       return;
     }
 
+    const gate = gateFeature('ai');
+    if (!gate.allowed) {
+      setGateData(gate);
+      setGateOpen(true);
+      return;
+    }
+
+    await incrementUsage('ai');
     setLoading(true);
     setResult('');
 
@@ -75,7 +84,6 @@ const LanguageTranslator = ({ onBack }: LanguageTranslatorProps) => {
         rows={5}
         disabled={loading}
       />
-
       <Select value={targetLang} onValueChange={setTargetLang}>
         <SelectTrigger>
           <SelectValue placeholder="Translate to..." />
@@ -88,7 +96,6 @@ const LanguageTranslator = ({ onBack }: LanguageTranslatorProps) => {
           ))}
         </SelectContent>
       </Select>
-
       <Button
         onClick={handleTranslate}
         disabled={loading || !text.trim()}
@@ -97,6 +104,18 @@ const LanguageTranslator = ({ onBack }: LanguageTranslatorProps) => {
         <Languages className="w-4 h-4 mr-2" />
         Translate & Explain
       </Button>
+
+      {gateData && (
+        <FeatureGateDialog
+          open={gateOpen}
+          onOpenChange={setGateOpen}
+          feature="AI tool uses"
+          currentUsage={gateData.currentUsage}
+          limit={gateData.limit}
+          isLifetime={gateData.isLifetime}
+          requiredTier={gateData.requiredTier}
+        />
+      )}
     </AIToolLayout>
   );
 };

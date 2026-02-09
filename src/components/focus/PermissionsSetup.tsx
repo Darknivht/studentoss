@@ -47,7 +47,7 @@ const PermissionsSetup = ({ onComplete }: PermissionsSetupProps) => {
               'Turn on Guided Access',
               'Set a passcode for Guided Access',
               'Triple-click the side button to start Guided Access',
-              'When in StudentOss, triple-click to lock the app',
+              'When in StudentOS, triple-click to lock the app',
             ].map((step, index) => (
               <motion.div
                 key={index}

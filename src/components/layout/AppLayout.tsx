@@ -27,7 +27,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center glow-primary">
             <Loader2 className="w-8 h-8 text-primary-foreground animate-spin" />
           </div>
-          <p className="text-muted-foreground animate-pulse">Loading studentOS...</p>
+          <p className="text-muted-foreground animate-pulse">Loading StudentOS...</p>
         </motion.div>
       </div>
     );
@@ -46,7 +46,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
               <span className="text-sm font-bold text-primary-foreground">S</span>
             </div>
-            <span className="font-display font-bold text-foreground">studentOS</span>
+            <span className="font-display font-bold text-foreground">StudentOS</span>
           </Link>
           
           <div className="flex items-center gap-2">

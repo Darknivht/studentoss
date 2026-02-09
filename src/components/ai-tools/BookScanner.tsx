@@ -5,6 +5,8 @@ import AIToolLayout from './AIToolLayout';
 import ImageUpload from './ImageUpload';
 import { streamAIChat } from '@/lib/ai';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 
 interface BookScannerProps {
   onBack: () => void;
@@ -12,20 +14,27 @@ interface BookScannerProps {
 
 const BookScanner = ({ onBack }: BookScannerProps) => {
   const { toast } = useToast();
+  const { gateFeature, incrementUsage } = useSubscription();
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateData, setGateData] = useState<any>(null);
 
   const handleScan = async () => {
     if (!imageBase64) {
-      toast({
-        title: 'Missing image',
-        description: 'Please upload a photo of a textbook page.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Missing image', description: 'Please upload a photo of a textbook page.', variant: 'destructive' });
       return;
     }
 
+    const gate = gateFeature('ai');
+    if (!gate.allowed) {
+      setGateData(gate);
+      setGateOpen(true);
+      return;
+    }
+
+    await incrementUsage('ai');
     setLoading(true);
     setResult('');
 
@@ -52,7 +61,6 @@ const BookScanner = ({ onBack }: BookScannerProps) => {
       loading={loading}
     >
       <ImageUpload onImageSelect={setImageBase64} disabled={loading} />
-
       <Button
         onClick={handleScan}
         disabled={loading || !imageBase64}
@@ -61,6 +69,18 @@ const BookScanner = ({ onBack }: BookScannerProps) => {
         <BookOpen className="w-4 h-4 mr-2" />
         Extract & Organize
       </Button>
+
+      {gateData && (
+        <FeatureGateDialog
+          open={gateOpen}
+          onOpenChange={setGateOpen}
+          feature="AI tool uses"
+          currentUsage={gateData.currentUsage}
+          limit={gateData.limit}
+          isLifetime={gateData.isLifetime}
+          requiredTier={gateData.requiredTier}
+        />
+      )}
     </AIToolLayout>
   );
 };

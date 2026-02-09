@@ -36,14 +36,14 @@ interface SubscriptionData {
   quizzesToday: number;
   flashcardsToday: number;
   notesToday: number;
+  jobSearchesThisMonth: number;
+  jobSearchesResetMonth: string;
   limits: FeatureLimits;
   lifetimeLimits: LifetimeLimits;
-  // Lifetime counts
   totalNotesCount: number;
   totalQuizzesCount: number;
   totalFlashcardSetsCount: number;
   totalAIUsesCount: number;
-  // Permission checks
   canUseAI: boolean;
   canCreateQuiz: boolean;
   canCreateFlashcard: boolean;
@@ -88,6 +88,7 @@ const PRO_LIFETIME: LifetimeLimits = { totalNotes: Infinity, totalQuizzes: Infin
 const FULL_ACCESS: SubscriptionData = {
   tier: 'pro', isPro: true, isPlus: true,
   aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0,
+  jobSearchesThisMonth: 0, jobSearchesResetMonth: '',
   limits: PRO_LIMITS, lifetimeLimits: PRO_LIFETIME,
   totalNotesCount: 0, totalQuizzesCount: 0, totalFlashcardSetsCount: 0, totalAIUsesCount: 0,
   canUseAI: true, canCreateQuiz: true, canCreateFlashcard: true, canCreateNote: true,
@@ -99,6 +100,7 @@ export const useSubscription = () => {
   const [subscription, setSubscription] = useState<SubscriptionData>({
     tier: 'free', isPro: false, isPlus: false,
     aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0,
+    jobSearchesThisMonth: 0, jobSearchesResetMonth: '',
     limits: FREE_LIMITS, lifetimeLimits: FREE_LIFETIME,
     totalNotesCount: 0, totalQuizzesCount: 0, totalFlashcardSetsCount: 0, totalAIUsesCount: 0,
     canUseAI: true, canCreateQuiz: true, canCreateFlashcard: true, canCreateNote: true,
@@ -122,7 +124,7 @@ export const useSubscription = () => {
       // Fetch profile + lifetime counts in parallel
       const [profileRes, notesCountRes, quizzesCountRes, flashcardsCountRes, aiCountRes] = await Promise.all([
         supabase.from('profiles')
-          .select('subscription_tier, subscription_expires_at, ai_calls_today, ai_calls_reset_at, quizzes_today, flashcards_generated_today, notes_today')
+          .select('subscription_tier, subscription_expires_at, ai_calls_today, ai_calls_reset_at, quizzes_today, flashcards_generated_today, notes_today, job_searches_this_month, job_searches_reset_month')
           .eq('user_id', user.id).single(),
         supabase.from('notes').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
         supabase.from('quiz_attempts').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
@@ -159,9 +161,13 @@ export const useSubscription = () => {
       const totalFlashcardSetsCount = flashcardsCountRes.count || 0;
       const totalAIUsesCount = aiCountRes.count || 0;
 
+      const jobSearchesThisMonth = (data as any)?.job_searches_this_month || 0;
+      const jobSearchesResetMonth = (data as any)?.job_searches_reset_month || '';
+
       setSubscription({
         tier, isPro, isPlus,
         aiCallsToday, quizzesToday, flashcardsToday, notesToday,
+        jobSearchesThisMonth, jobSearchesResetMonth,
         limits, lifetimeLimits,
         totalNotesCount, totalQuizzesCount, totalFlashcardSetsCount, totalAIUsesCount,
         canUseAI: isPro || isPlus || (aiCallsToday < limits.aiCallsLimit && totalAIUsesCount < lifetimeLimits.totalAIUses),
@@ -180,9 +186,20 @@ export const useSubscription = () => {
     }
   };
 
-  const gateFeature = useCallback((type: 'ai' | 'quiz' | 'flashcard' | 'note'): GateResult => {
+  const gateFeature = useCallback((type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch'): GateResult => {
     if (!SUBSCRIPTION_ENABLED) return { allowed: true, reason: null, currentUsage: 0, limit: Infinity, isLifetime: false, requiredTier: 'plus' };
     if (subscription.isPro) return { allowed: true, reason: null, currentUsage: 0, limit: Infinity, isLifetime: false, requiredTier: 'plus' };
+
+    // Monthly job search check (2/month for free, 10/month for plus)
+    if (type === 'jobSearch') {
+      const monthlyLimit = subscription.isPlus ? 10 : 2;
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const usage = subscription.jobSearchesResetMonth === currentMonth ? subscription.jobSearchesThisMonth : 0;
+      if (usage >= monthlyLimit) {
+        return { allowed: false, reason: 'daily', currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
+      }
+      return { allowed: true, reason: null, currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
+    }
 
     // Check lifetime first
     const lifetimeMap = {
@@ -213,12 +230,28 @@ export const useSubscription = () => {
     return { allowed: true, reason: null, currentUsage: daily.current, limit: daily.limit, isLifetime: false, requiredTier: 'plus' };
   }, [subscription]);
 
-  const incrementUsage = async (type: 'ai' | 'quiz' | 'flashcard' | 'note') => {
+  const incrementUsage = async (type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch') => {
     if (!user) return false;
     if (!SUBSCRIPTION_ENABLED) return true;
 
+    if (type === 'jobSearch') {
+      try {
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const { data } = await supabase.from('profiles').select('job_searches_this_month, job_searches_reset_month').eq('user_id', user.id).single();
+        const resetMonth = (data as any)?.job_searches_reset_month || '';
+        const current = resetMonth === currentMonth ? ((data as any)?.job_searches_this_month || 0) : 0;
+        const newCount = current + 1;
+        await supabase.from('profiles').update({ job_searches_this_month: newCount, job_searches_reset_month: currentMonth } as any).eq('user_id', user.id);
+        setSubscription(prev => ({ ...prev, jobSearchesThisMonth: newCount, jobSearchesResetMonth: currentMonth }));
+        return true;
+      } catch (error) {
+        console.error('Error incrementing job search usage:', error);
+        return false;
+      }
+    }
+
     const fieldMap = { ai: 'ai_calls_today', quiz: 'quizzes_today', flashcard: 'flashcards_generated_today', note: 'notes_today' };
-    const field = fieldMap[type];
+    const field = fieldMap[type as keyof typeof fieldMap];
 
     try {
       const { data } = await supabase.from('profiles').select(field).eq('user_id', user.id).single();
@@ -227,7 +260,7 @@ export const useSubscription = () => {
       await supabase.from('profiles').update({ [field]: newCount }).eq('user_id', user.id);
 
       setSubscription(prev => {
-        const stateKey = { ai: 'aiCallsToday', quiz: 'quizzesToday', flashcard: 'flashcardsToday', note: 'notesToday' }[type] as keyof SubscriptionData;
+        const stateKey = { ai: 'aiCallsToday', quiz: 'quizzesToday', flashcard: 'flashcardsToday', note: 'notesToday' }[type as keyof typeof fieldMap] as keyof SubscriptionData;
         return { ...prev, [stateKey]: newCount };
       });
 

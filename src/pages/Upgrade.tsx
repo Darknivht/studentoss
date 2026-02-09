@@ -22,6 +22,7 @@ const TIERS = [
       '3 quizzes/day',
       '10 flashcards/day',
       '2 notes/day',
+      '2 job searches/month',
       'Direct messages',
       '3 resume templates',
       'Basic study tools',
@@ -41,10 +42,10 @@ const TIERS = [
       '10 quizzes/day',
       '30 flashcards/day',
       '8 notes/day',
+      '10 job searches/month',
       'Direct messages',
       'Group chat access',
       '7 resume templates',
-      '10 job searches/day',
       'No ads',
     ],
     cta: 'Upgrade to Plus',
@@ -150,7 +151,7 @@ const Upgrade = () => {
         <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mb-4">
           <Crown className="w-8 h-8 text-white" />
         </div>
-        <h2 className="text-xl font-bold text-foreground mb-2">studentOS Plans</h2>
+        <h2 className="text-xl font-bold text-foreground mb-2">StudentOS Plans</h2>
         <p className="text-muted-foreground text-sm">
           Pick the plan that fits your study goals
         </p>

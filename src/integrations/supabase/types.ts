@@ -547,6 +547,8 @@ export type Database = {
           grade_level: string | null
           id: string
           is_under_14: boolean | null
+          job_searches_reset_month: string | null
+          job_searches_this_month: number | null
           last_study_date: string | null
           longest_streak: number | null
           notes_today: number | null
@@ -577,6 +579,8 @@ export type Database = {
           grade_level?: string | null
           id?: string
           is_under_14?: boolean | null
+          job_searches_reset_month?: string | null
+          job_searches_this_month?: number | null
           last_study_date?: string | null
           longest_streak?: number | null
           notes_today?: number | null
@@ -607,6 +611,8 @@ export type Database = {
           grade_level?: string | null
           id?: string
           is_under_14?: boolean | null
+          job_searches_reset_month?: string | null
+          job_searches_this_month?: number | null
           last_study_date?: string | null
           longest_streak?: number | null
           notes_today?: number | null

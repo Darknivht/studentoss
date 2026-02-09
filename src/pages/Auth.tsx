@@ -107,7 +107,7 @@ const Auth = () => {
           }
         } else {
           toast({
-            title: "Welcome to studentOS! 🚀",
+            title: "Welcome to StudentOS! 🚀",
             description: "Your account has been created successfully.",
           });
           navigate('/');
@@ -173,7 +173,7 @@ const Auth = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary mb-4 glow-primary">
               <BookOpen className="w-8 h-8 text-primary-foreground" />
             </div>
-            <h1 className="text-3xl font-display font-bold text-gradient">studentOS</h1>
+            <h1 className="text-3xl font-display font-bold text-gradient">StudentOS</h1>
             <p className="text-muted-foreground mt-2">
               {isLogin ? 'Welcome back, scholar!' : 'Start your learning journey'}
             </p>
