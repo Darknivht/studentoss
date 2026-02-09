@@ -5,6 +5,8 @@ import { Textarea } from '@/components/ui/textarea';
 import AIToolLayout from './AIToolLayout';
 import { streamAIChat } from '@/lib/ai';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 
 interface CodeDebuggerProps {
   onBack: () => void;
@@ -12,20 +14,27 @@ interface CodeDebuggerProps {
 
 const CodeDebugger = ({ onBack }: CodeDebuggerProps) => {
   const { toast } = useToast();
+  const { gateFeature, incrementUsage } = useSubscription();
   const [code, setCode] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateData, setGateData] = useState<any>(null);
 
   const handleDebug = async () => {
     if (!code.trim()) {
-      toast({
-        title: 'Missing code',
-        description: 'Please paste your code to debug.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Missing code', description: 'Please paste your code to debug.', variant: 'destructive' });
       return;
     }
 
+    const gate = gateFeature('ai');
+    if (!gate.allowed) {
+      setGateData(gate);
+      setGateOpen(true);
+      return;
+    }
+
+    await incrementUsage('ai');
     setLoading(true);
     setResult('');
 
@@ -59,7 +68,6 @@ const CodeDebugger = ({ onBack }: CodeDebuggerProps) => {
         className="font-mono text-sm"
         disabled={loading}
       />
-
       <Button
         onClick={handleDebug}
         disabled={loading || !code.trim()}
@@ -68,6 +76,18 @@ const CodeDebugger = ({ onBack }: CodeDebuggerProps) => {
         <Bug className="w-4 h-4 mr-2" />
         Debug & Explain
       </Button>
+
+      {gateData && (
+        <FeatureGateDialog
+          open={gateOpen}
+          onOpenChange={setGateOpen}
+          feature="AI tool uses"
+          currentUsage={gateData.currentUsage}
+          limit={gateData.limit}
+          isLifetime={gateData.isLifetime}
+          requiredTier={gateData.requiredTier}
+        />
+      )}
     </AIToolLayout>
   );
 };

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.studentoss.app",
-  appName: "studentoss",
+  appName: "StudentOS",
   webDir: "dist",
   server: {
     url: "https://studentoss.lovable.app?forceHideBadge=true",
