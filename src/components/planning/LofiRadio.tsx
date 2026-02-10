@@ -16,34 +16,18 @@ interface Station {
 }
 
 const stations: Station[] = [
-  {
-    id: 'lofi-girl',
-    name: 'Lofi Girl',
-    icon: Coffee,
-    url: 'https://play.streamafrica.net/lofiradio',
-    color: '#E879F9',
-  },
-  {
-    id: 'chillhop',
-    name: 'Chillhop',
-    icon: Music,
-    url: 'https://streams.ilovemusic.de/iloveradio17.mp3',
-    color: '#F97316',
-  },
-  {
-    id: 'sleep',
-    name: 'Sleep Sounds',
-    icon: Moon,
-    url: 'https://stream.zeno.fm/0r0xa792kwzuv',
-    color: '#6366F1',
-  },
-  {
-    id: 'nature',
-    name: 'Nature Sounds',
-    icon: Waves,
-    url: 'https://stream.zeno.fm/f3wvbbqmdg8uv',
-    color: '#10B981',
-  },
+  { id: 'lofi-girl', name: 'Lofi Girl', icon: Coffee, url: 'https://play.streamafrica.net/lofiradio', color: '#E879F9' },
+  { id: 'chillhop', name: 'Chillhop', icon: Music, url: 'https://streams.ilovemusic.de/iloveradio17.mp3', color: '#F97316' },
+  { id: 'sleep', name: 'Sleep Sounds', icon: Moon, url: 'https://stream.zeno.fm/0r0xa792kwzuv', color: '#6366F1' },
+  { id: 'nature', name: 'Nature Sounds', icon: Waves, url: 'https://stream.zeno.fm/f3wvbbqmdg8uv', color: '#10B981' },
+  { id: 'jazz', name: 'Jazz Study', icon: Music, url: 'https://stream.zeno.fm/fyn8eh3h5bzuv', color: '#D97706' },
+  { id: 'classical', name: 'Classical Focus', icon: Music, url: 'https://stream.zeno.fm/4d6622rd8wzuv', color: '#8B5CF6' },
+  { id: 'ambient', name: 'Ambient Space', icon: Moon, url: 'https://stream.zeno.fm/cgmyn72m3xzuv', color: '#0EA5E9' },
+  { id: 'rain', name: 'Rain Sounds', icon: Waves, url: 'https://stream.zeno.fm/6ry05p4h9xzuv', color: '#64748B' },
+  { id: 'piano', name: 'Piano Chill', icon: Music, url: 'https://stream.zeno.fm/nd3chr3h5bzuv', color: '#EC4899' },
+  { id: 'deep-focus', name: 'Deep Focus', icon: Radio, url: 'https://streams.ilovemusic.de/iloveradio21.mp3', color: '#14B8A6' },
+  { id: 'cafe', name: 'Cafe Vibes', icon: Coffee, url: 'https://stream.zeno.fm/qw5s004h9xzuv', color: '#A16207' },
+  { id: 'white-noise', name: 'White Noise', icon: Waves, url: 'https://stream.zeno.fm/4r304v02ttzuv', color: '#94A3B8' },
 ];
 
 const LofiRadio = () => {
@@ -197,7 +181,7 @@ const LofiRadio = () => {
       )}
 
       {/* Station Grid */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
         {stations.map((station) => {
           const isActive = currentStation?.id === station.id;
           const Icon = station.icon;
