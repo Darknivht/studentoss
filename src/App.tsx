@@ -9,6 +9,8 @@ import AppLayout from "@/components/layout/AppLayout";
 import OfflineSyncIndicator from "@/components/safety/OfflineSyncIndicator";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import Onboarding from "./pages/Onboarding";
+import { useAuth } from "@/hooks/useAuth";
 import Study from "./pages/Study";
 import SmartNotes from "./pages/SmartNotes";
 import AITutor from "./pages/AITutor";
@@ -31,6 +33,28 @@ import BlockingOverlay from "./components/focus/BlockingOverlay";
 
 const queryClient = new QueryClient();
 
+const HomeRoute = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    const seen = localStorage.getItem('onboarding_seen');
+    if (seen) {
+      return <Auth />;
+    }
+    return <Onboarding />;
+  }
+
+  return <AppLayout><Dashboard /></AppLayout>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -42,7 +66,7 @@ const App = () => (
             <OfflineSyncIndicator />
             <Routes>
               <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
+              <Route path="/" element={<HomeRoute />} />
               <Route path="/course/:courseId" element={<AppLayout><CoursePage /></AppLayout>} />
               <Route path="/study" element={<AppLayout><Study /></AppLayout>} />
               <Route path="/notes" element={<AppLayout><SmartNotes /></AppLayout>} />

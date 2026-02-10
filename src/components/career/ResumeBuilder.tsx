@@ -3,15 +3,17 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { streamAIChat } from '@/lib/ai';
-import { FileText, Plus, Trash2, Download, Sparkles, Briefcase, Award, GraduationCap, Eye, Palette, Printer, FileDown, FileCode } from 'lucide-react';
+import { FileText, Plus, Trash2, Download, Sparkles, Briefcase, Award, GraduationCap, Eye, Palette, Printer, FileDown, FileCode, Lock } from 'lucide-react';
 import { templates, TemplateInfo, ResumeData, emptyResumeData, renderResumeHTML } from './ResumeTemplates';
 import ResumePreview from './ResumePreview';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 
 // Moved OUTSIDE ResumeBuilder to prevent re-creation on every render
 const InputRow = ({ label, value, onChange, placeholder, type }: { label: string; value: string; onChange: (v: string) => void; placeholder: string; type?: string }) => (
@@ -24,11 +26,15 @@ const InputRow = ({ label, value, onChange, placeholder, type }: { label: string
 const ResumeBuilder = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { subscription } = useSubscription();
   const [data, setData] = useState<ResumeData>({ ...emptyResumeData });
   const [selectedTemplate, setSelectedTemplate] = useState('modern');
   const [generating, setGenerating] = useState(false);
   const [activeSection, setActiveSection] = useState('contact');
   const [showPreview, setShowPreview] = useState(false);
+  const [showGate, setShowGate] = useState(false);
+
+  const templateLimit = subscription.limits.resumeTemplatesLimit;
 
   useEffect(() => {
     if (user) fetchUserData();
@@ -152,19 +158,48 @@ const ResumeBuilder = () => {
           </Button>
         </div>
         <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
-          {templates.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setSelectedTemplate(t.id)}
-              className={`flex flex-col items-center p-2 rounded-lg border transition-all ${selectedTemplate === t.id ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-border hover:border-primary/40'}`}
-            >
-              <div className="w-8 h-10 rounded border mb-1" style={{ borderColor: t.accent, background: `linear-gradient(135deg, ${t.accent}22, ${t.accent}08)` }}>
-                <div className="w-full h-2 rounded-t" style={{ background: t.accent }} />
-              </div>
-              <span className="text-[10px] text-muted-foreground leading-tight text-center">{t.name}</span>
-            </button>
-          ))}
+          {templates.map((t, idx) => {
+            const isLocked = idx >= templateLimit;
+            return (
+              <button
+                key={t.id}
+                onClick={() => {
+                  if (isLocked) {
+                    setShowGate(true);
+                  } else {
+                    setSelectedTemplate(t.id);
+                  }
+                }}
+                className={`relative flex flex-col items-center p-2 rounded-lg border transition-all ${
+                  isLocked
+                    ? 'border-border opacity-50 cursor-not-allowed'
+                    : selectedTemplate === t.id
+                      ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                      : 'border-border hover:border-primary/40'
+                }`}
+              >
+                {isLocked && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg z-10">
+                    <Lock className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="w-8 h-10 rounded border mb-1" style={{ borderColor: t.accent, background: `linear-gradient(135deg, ${t.accent}22, ${t.accent}08)` }}>
+                  <div className="w-full h-2 rounded-t" style={{ background: t.accent }} />
+                </div>
+                <span className="text-[10px] text-muted-foreground leading-tight text-center">{t.name}</span>
+              </button>
+            );
+          })}
         </div>
+
+        <FeatureGateDialog
+          open={showGate}
+          onOpenChange={setShowGate}
+          feature="resume templates"
+          currentUsage={templateLimit}
+          limit={templateLimit}
+          requiredTier="plus"
+        />
       </Card>
 
       {showPreview ? (
