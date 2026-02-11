@@ -1,74 +1,92 @@
 
-# Onboarding Flow, More Radio Stations, and Resume Template Gating
 
-## 1. Onboarding Flow (5 Slides) for Unauthenticated Users
+# Fix Radio Stations, Add Daily Quiz Challenge, Improve Streak System, and Redesign Onboarding
 
-Replace the current direct-to-auth flow with a 5-step onboarding experience for all unauthenticated users (mobile and desktop).
+## 1. Fix Radio Stations with Verified Streams
 
-### Onboarding Slides
+Replace all zeno.fm streams (many are Nigerian radio/news broadcasts) with verified, reliable music/ambient streams. Use known-good sources like ilovemusic.de (German music streams), and SomaFM (free listener-supported radio).
 
-| Step | Title | Description | Icon |
-|---|---|---|---|
-| 1 | Welcome to StudentOS | Your AI-powered study companion that helps you learn smarter, not harder | BookOpen + logo |
-| 2 | AI-Powered Learning | Smart notes, AI tutor, math solver, and more -- all powered by AI to help you understand any subject | Brain |
-| 3 | Stay Focused | Pomodoro timer, focus radio, and app blocking keep you on track during study sessions | Target |
-| 4 | Track Your Progress | Achievements, streaks, XP, and detailed stats to keep you motivated every day | Trophy |
-| 5 | Study Together | Join study groups, challenge friends, and climb the leaderboard | Users |
+**File: `src/components/planning/LofiRadio.tsx`**
 
-### UI Design
-- Full-screen pages with large icon/illustration at top, title, description text, and dot indicators at bottom
-- "Next" button advances slides, "Skip" link goes straight to `/auth`
-- Final slide has a "Get Started" button that navigates to `/auth`
-- Smooth framer-motion transitions between slides (slide left/right)
-- Swipe gesture support for mobile via framer-motion drag
+Updated station list with verified URLs:
 
-### Routing Logic
-In `App.tsx`:
-- Create a `HomeRoute` wrapper component
-- If user is authenticated: render Dashboard inside AppLayout
-- If user is NOT authenticated: render the Onboarding component
-- The onboarding stores a flag in localStorage (`onboarding_seen`) so returning unauthenticated visitors go straight to `/auth` instead of seeing it again
-
-### Files
-- **New**: `src/pages/Onboarding.tsx` -- 5-step onboarding with swipe/tap navigation
-- **Modified**: `src/App.tsx` -- Add `HomeRoute` wrapper for `/` route
-
----
-
-## 2. More Radio Stations (8 new, total 12)
-
-Add 8 new stations to `src/components/planning/LofiRadio.tsx`:
-
-| Station | Icon | Stream URL |
+| Station | Source | Type |
 |---|---|---|
-| Jazz Study | Music | zeno.fm jazz stream |
-| Classical Focus | Music | zeno.fm classical stream |
-| Ambient Space | Moon | zeno.fm ambient stream |
-| Rain Sounds | Waves | zeno.fm rain stream |
-| Piano Chill | Music | zeno.fm piano stream |
-| Deep Focus | Radio | ilovemusic electronic stream |
-| Cafe Vibes | Coffee | zeno.fm cafe stream |
-| White Noise | Waves | zeno.fm white noise stream |
+| Lofi Hip Hop | SomaFM Groove Salad | Ambient/Downtempo |
+| Chillhop | iloveradio17 (iLoveMusic) | Chillhop |
+| Sleep Sounds | SomaFM Drone Zone | Deep ambient |
+| Nature Sounds | SomaFM Illinois Street Lounge | Smooth background |
+| Jazz Study | SomaFM Secret Agent | Jazz/spy-fi |
+| Classical Focus | SomaFM Bagel Radio | Classical |
+| Ambient Space | SomaFM Space Station | Space ambient |
+| Rain & Thunder | Rainymood-style stream | Rain sounds |
+| Piano Chill | SomaFM Seven Inch Soul | Mellow |
+| Deep Focus | iloveradio21 (iLoveMusic) | Deep electronic |
+| Cafe Vibes | SomaFM Boot Liquor | Cafe acoustic |
+| White Noise | SomaFM Fluid | Electronic ambient |
 
-Update station grid from `grid-cols-2` to `grid-cols-3` on mobile and `grid-cols-4` on desktop.
-
-### Files
-- **Modified**: `src/components/planning/LofiRadio.tsx`
+All streams will be from SomaFM (somafm.com) or ilovemusic.de -- both are free, reliable, ad-free music streams with no news broadcasts.
 
 ---
 
-## 3. Resume Template Gating
+## 2. Daily Quiz Challenge (5 Questions, 10 XP Each)
 
-Currently all 10 templates are selectable by everyone. Enforce limits: Free = 3, Plus = 7, Pro = all 10.
+Add a new "Daily Brain Boost" challenge -- a quick 5-question general knowledge quiz that appears once per day. Completing it counts as a study activity (updates streak) and awards 10 XP per correct answer (max 50 XP).
 
-### Implementation
-- Import `useSubscription` and `FeatureGateDialog` into `ResumeBuilder.tsx`
-- When rendering the template grid, templates beyond the user's limit get a lock overlay and dimmed styling
-- Clicking a locked template shows `FeatureGateDialog` instead of selecting it
-- The first 3 templates are always available to free users
+### How It Works
+- A new component `DailyQuizChallenge` is added to the Study page and Dashboard
+- 5 random questions are generated from a pool of 50+ hardcoded general knowledge questions (math, science, vocabulary, history, geography)
+- Each correct answer = 10 XP, awarded immediately
+- Completing the quiz (regardless of score) counts as a daily study activity and updates the streak via `updateStreak()`
+- The quiz can only be taken once per day (tracked via localStorage `daily_quiz_date`)
+- Results are saved to the `quiz_attempts` table for tracking
 
-### Files
-- **Modified**: `src/components/career/ResumeBuilder.tsx`
+### New Files
+- `src/components/gamification/DailyQuizChallenge.tsx` -- The quiz component with timer, animations, and score display
+
+### Modified Files
+- `src/pages/Dashboard.tsx` -- Add DailyQuizChallenge card between StreakCard and StudyTimeWidget
+- `src/components/gamification/DailyChallenges.tsx` -- Add a 5th challenge type "Complete Daily Quiz" that tracks whether the daily quiz was done today
+
+---
+
+## 3. Improve Streak Tracking
+
+Currently the streak system exists but the daily challenge doesn't have a "quick quiz to earn streak" mechanic. This change ties the daily quiz directly into streak building.
+
+### Modified Files
+- `src/components/gamification/DailyQuizChallenge.tsx` -- On quiz completion, call `updateStreak(userId)` from `src/lib/streak.ts` and `awardXP(userId, correctCount * 10)` from `src/hooks/useWeeklyXP.ts`
+- `src/components/gamification/DailyChallenges.tsx` -- Add a 5th challenge: "Daily Brain Boost - Complete the daily quiz" with 50 XP reward, tracking completion via localStorage check
+
+---
+
+## 4. Redesign Onboarding (7 Pages, Much More Beautiful)
+
+Completely redesign `src/pages/Onboarding.tsx` with 7 slides, richer visuals, gradient backgrounds, floating particle animations, and 3D-style animated icons.
+
+### 7 Onboarding Slides
+
+| Slide | Title | Description | Visual |
+|---|---|---|---|
+| 1 | Welcome to StudentOS | The smartest way to study. Built by students, for students. | Large animated logo with floating sparkle particles |
+| 2 | AI-Powered Learning | Smart notes, AI tutor, math solver -- AI that actually understands your homework | Animated brain icon with glowing neural connections |
+| 3 | Never Forget Again | Spaced-repetition flashcards and quizzes that adapt to how you learn | Animated flashcard stack with flip effect |
+| 4 | Stay in the Zone | Pomodoro timer, lofi radio, and app blocking to keep distractions away | Animated clock with sound wave rings |
+| 5 | Track Your Growth | Streaks, XP, levels, and achievements -- watch yourself level up every day | Animated trophy with rising XP counter |
+| 6 | Study Together | Join study groups, challenge friends, and climb the global leaderboard | Animated user group with connection lines |
+| 7 | Ready to Begin? | Join thousands of students already crushing their goals with StudentOS | Large animated "Get Started" with confetti-ready CTA |
+
+### Visual Enhancements
+- Each slide has a unique gradient background (not just icon gradients)
+- Floating animated particles/dots on every slide using framer-motion
+- Icons are larger (40x40) inside bigger containers (32x32rem) with glow effects
+- Smooth page transitions with spring physics
+- Progress bar at top (thin line) in addition to dot indicators
+- "Get Started" button on final slide pulses with a glow animation
+- StudentOS logo/icon appears on first slide using `/studentos-icon.png`
+
+### File
+- **Rewritten**: `src/pages/Onboarding.tsx`
 
 ---
 
@@ -76,8 +94,9 @@ Currently all 10 templates are selectable by everyone. Enforce limits: Free = 3,
 
 | Change | Files |
 |---|---|
-| Onboarding flow | New: `src/pages/Onboarding.tsx`, Modified: `src/App.tsx` |
-| Radio stations | Modified: `src/components/planning/LofiRadio.tsx` |
-| Resume gating | Modified: `src/components/career/ResumeBuilder.tsx` |
+| Fix radio streams | Modified: `src/components/planning/LofiRadio.tsx` |
+| Daily quiz challenge | New: `src/components/gamification/DailyQuizChallenge.tsx`, Modified: `src/pages/Dashboard.tsx`, `src/components/gamification/DailyChallenges.tsx` |
+| Redesigned onboarding | Rewritten: `src/pages/Onboarding.tsx` |
 
-No database changes required.
+No database changes required -- quiz results use the existing `quiz_attempts` table, streak uses existing `profiles` columns, and XP uses existing `weekly_xp` table.
+
