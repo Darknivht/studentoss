@@ -9,6 +9,7 @@ import AddCourseDialog from '@/components/dashboard/AddCourseDialog';
 import StreakCard from '@/components/dashboard/StreakCard';
 import StudyProgressWidget from '@/components/dashboard/StudyProgressWidget';
 import StudyTimeWidget from '@/components/dashboard/StudyTimeWidget';
+import DailyQuizChallenge from '@/components/gamification/DailyQuizChallenge';
 import { Settings, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { checkAndResetStreak } from '@/lib/streak';
@@ -201,6 +202,9 @@ const Dashboard = () => {
         longestStreak={profile?.longest_streak || 0}
         totalXP={profile?.total_xp || 0}
       />
+
+      {/* Daily Brain Boost Quiz */}
+      <DailyQuizChallenge />
 
       {/* Study Time Tracker Widget */}
       <StudyTimeWidget />

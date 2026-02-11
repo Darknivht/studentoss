@@ -16,18 +16,18 @@ interface Station {
 }
 
 const stations: Station[] = [
-  { id: 'lofi-girl', name: 'Lofi Girl', icon: Coffee, url: 'https://play.streamafrica.net/lofiradio', color: '#E879F9' },
+  { id: 'lofi-girl', name: 'Lofi Hip Hop', icon: Coffee, url: 'https://ice1.somafm.com/groovesalad-128-mp3', color: '#E879F9' },
   { id: 'chillhop', name: 'Chillhop', icon: Music, url: 'https://streams.ilovemusic.de/iloveradio17.mp3', color: '#F97316' },
-  { id: 'sleep', name: 'Sleep Sounds', icon: Moon, url: 'https://stream.zeno.fm/0r0xa792kwzuv', color: '#6366F1' },
-  { id: 'nature', name: 'Nature Sounds', icon: Waves, url: 'https://stream.zeno.fm/f3wvbbqmdg8uv', color: '#10B981' },
-  { id: 'jazz', name: 'Jazz Study', icon: Music, url: 'https://stream.zeno.fm/fyn8eh3h5bzuv', color: '#D97706' },
-  { id: 'classical', name: 'Classical Focus', icon: Music, url: 'https://stream.zeno.fm/4d6622rd8wzuv', color: '#8B5CF6' },
-  { id: 'ambient', name: 'Ambient Space', icon: Moon, url: 'https://stream.zeno.fm/cgmyn72m3xzuv', color: '#0EA5E9' },
-  { id: 'rain', name: 'Rain Sounds', icon: Waves, url: 'https://stream.zeno.fm/6ry05p4h9xzuv', color: '#64748B' },
-  { id: 'piano', name: 'Piano Chill', icon: Music, url: 'https://stream.zeno.fm/nd3chr3h5bzuv', color: '#EC4899' },
+  { id: 'sleep', name: 'Sleep Sounds', icon: Moon, url: 'https://ice1.somafm.com/dronezone-128-mp3', color: '#6366F1' },
+  { id: 'nature', name: 'Nature Sounds', icon: Waves, url: 'https://ice1.somafm.com/illstreet-128-mp3', color: '#10B981' },
+  { id: 'jazz', name: 'Jazz Study', icon: Music, url: 'https://ice1.somafm.com/secretagent-128-mp3', color: '#D97706' },
+  { id: 'classical', name: 'Classical Focus', icon: Music, url: 'https://ice1.somafm.com/bagel-128-mp3', color: '#8B5CF6' },
+  { id: 'ambient', name: 'Ambient Space', icon: Moon, url: 'https://ice1.somafm.com/spacestation-128-mp3', color: '#0EA5E9' },
+  { id: 'rain', name: 'Rain & Thunder', icon: Waves, url: 'https://ice1.somafm.com/deepspaceone-128-mp3', color: '#64748B' },
+  { id: 'piano', name: 'Piano Chill', icon: Music, url: 'https://ice1.somafm.com/seventies-128-mp3', color: '#EC4899' },
   { id: 'deep-focus', name: 'Deep Focus', icon: Radio, url: 'https://streams.ilovemusic.de/iloveradio21.mp3', color: '#14B8A6' },
-  { id: 'cafe', name: 'Cafe Vibes', icon: Coffee, url: 'https://stream.zeno.fm/qw5s004h9xzuv', color: '#A16207' },
-  { id: 'white-noise', name: 'White Noise', icon: Waves, url: 'https://stream.zeno.fm/4r304v02ttzuv', color: '#94A3B8' },
+  { id: 'cafe', name: 'Cafe Vibes', icon: Coffee, url: 'https://ice1.somafm.com/bootliquor-128-mp3', color: '#A16207' },
+  { id: 'white-noise', name: 'White Noise', icon: Waves, url: 'https://ice1.somafm.com/fluid-128-mp3', color: '#94A3B8' },
 ];
 
 const LofiRadio = () => {
