@@ -14,7 +14,7 @@ interface Challenge {
   target: number;
   current: number;
   xpReward: number;
-  type: 'notes' | 'quizzes' | 'flashcards' | 'focus' | 'streak';
+  type: 'notes' | 'quizzes' | 'flashcards' | 'focus' | 'streak' | 'daily_quiz';
   completed: boolean;
 }
 
@@ -78,6 +78,8 @@ const DailyChallenges = ({ compact = false }: DailyChallengesProps) => {
         supabase.from('pomodoro_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user?.id).gte('completed_at', todayStr),
       ]);
 
+      const dailyQuizDone = localStorage.getItem('daily_quiz_date') === new Date().toISOString().split('T')[0];
+
       const dailyChallenges: Challenge[] = [
         {
           id: 'notes_daily',
@@ -118,6 +120,16 @@ const DailyChallenges = ({ compact = false }: DailyChallengesProps) => {
           xpReward: 60,
           type: 'focus',
           completed: (focusRes.count || 0) >= 2,
+        },
+        {
+          id: 'brain_boost',
+          title: 'Brain Boost',
+          description: 'Complete the daily quiz',
+          target: 1,
+          current: dailyQuizDone ? 1 : 0,
+          xpReward: 50,
+          type: 'daily_quiz',
+          completed: dailyQuizDone,
         },
       ];
 
