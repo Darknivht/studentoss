@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, CheckCircle, XCircle, Zap, Trophy, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -73,7 +73,11 @@ function getRandomQuestions(count: number): Question[] {
   return shuffled.slice(0, count);
 }
 
-const DailyQuizChallenge = () => {
+interface DailyQuizChallengeProps {
+  onComplete?: () => void;
+}
+
+const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [quizState, setQuizState] = useState<'idle' | 'playing' | 'result'>('idle');
@@ -81,6 +85,7 @@ const DailyQuizChallenge = () => {
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
+  const scoreRef = useRef(0);
   const [answered, setAnswered] = useState(false);
   const [alreadyDone, setAlreadyDone] = useState(false);
 
@@ -94,6 +99,7 @@ const DailyQuizChallenge = () => {
     setQuestions(getRandomQuestions(5));
     setCurrentQ(0);
     setScore(0);
+    scoreRef.current = 0;
     setSelected(null);
     setAnswered(false);
     setQuizState('playing');
@@ -104,6 +110,7 @@ const DailyQuizChallenge = () => {
     setSelected(idx);
     setAnswered(true);
     if (idx === questions[currentQ].correct) {
+      scoreRef.current += 1;
       setScore(s => s + 1);
     }
   }, [answered, questions, currentQ]);
@@ -119,6 +126,7 @@ const DailyQuizChallenge = () => {
   };
 
   const finishQuiz = async () => {
+    const finalScore = scoreRef.current;
     setQuizState('result');
     const today = new Date().toISOString().split('T')[0];
     localStorage.setItem('daily_quiz_date', today);
@@ -126,32 +134,28 @@ const DailyQuizChallenge = () => {
 
     if (!user) return;
 
-    const xpEarned = score * 10;
+    const xpEarned = finalScore * 10;
 
     try {
-      // Award XP
       if (xpEarned > 0) {
         await awardXP(user.id, xpEarned);
       }
-
-      // Update streak
       await updateStreak(user.id);
-
-      // Update weekly activity
       await updateWeeklyActivity(user.id, 'quizzes_completed', 1);
 
-      // Save quiz attempt
       await supabase.from('quiz_attempts').insert({
         user_id: user.id,
-        score: score,
+        score: finalScore,
         total_questions: 5,
-        quiz_data: questions.map((q, i) => ({ question: q.question, correct: q.correct, category: q.category })) as any,
+        quiz_data: questions.map((q) => ({ question: q.question, correct: q.correct, category: q.category })) as any,
       });
 
       toast({
         title: `🧠 Daily Quiz Complete!`,
-        description: `You scored ${score}/5 and earned ${xpEarned} XP!`,
+        description: `You scored ${finalScore}/5 and earned ${xpEarned} XP!`,
       });
+
+      onComplete?.();
     } catch (err) {
       console.error('Error saving quiz results:', err);
     }
@@ -205,6 +209,7 @@ const DailyQuizChallenge = () => {
   }
 
   if (quizState === 'result') {
+    const finalScore = scoreRef.current;
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -220,9 +225,9 @@ const DailyQuizChallenge = () => {
           <Trophy className="w-8 h-8 text-primary" />
         </motion.div>
         <h3 className="text-lg font-bold text-foreground">Quiz Complete!</h3>
-        <p className="text-3xl font-bold text-primary mt-1">{score}/5</p>
+        <p className="text-3xl font-bold text-primary mt-1">{finalScore}/5</p>
         <p className="text-sm text-muted-foreground mt-1">
-          You earned <span className="font-semibold text-primary">{score * 10} XP</span>
+          You earned <span className="font-semibold text-primary">{finalScore * 10} XP</span>
         </p>
         <p className="text-xs text-muted-foreground mt-2">🔥 Streak updated! Come back tomorrow.</p>
       </motion.div>

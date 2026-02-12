@@ -19,14 +19,14 @@ const stations: Station[] = [
   { id: 'lofi-girl', name: 'Lofi Hip Hop', icon: Coffee, url: 'https://ice1.somafm.com/groovesalad-128-mp3', color: '#E879F9' },
   { id: 'chillhop', name: 'Chillhop', icon: Music, url: 'https://streams.ilovemusic.de/iloveradio17.mp3', color: '#F97316' },
   { id: 'sleep', name: 'Sleep Sounds', icon: Moon, url: 'https://ice1.somafm.com/dronezone-128-mp3', color: '#6366F1' },
-  { id: 'nature', name: 'Nature Sounds', icon: Waves, url: 'https://ice1.somafm.com/illstreet-128-mp3', color: '#10B981' },
+  { id: 'nature', name: 'Nature Ambient', icon: Waves, url: 'https://ice1.somafm.com/suburbsofgoa-128-mp3', color: '#10B981' },
   { id: 'jazz', name: 'Jazz Study', icon: Music, url: 'https://ice1.somafm.com/secretagent-128-mp3', color: '#D97706' },
   { id: 'classical', name: 'Classical Focus', icon: Music, url: 'https://ice1.somafm.com/bagel-128-mp3', color: '#8B5CF6' },
   { id: 'ambient', name: 'Ambient Space', icon: Moon, url: 'https://ice1.somafm.com/spacestation-128-mp3', color: '#0EA5E9' },
-  { id: 'rain', name: 'Rain & Thunder', icon: Waves, url: 'https://ice1.somafm.com/deepspaceone-128-mp3', color: '#64748B' },
-  { id: 'piano', name: 'Piano Chill', icon: Music, url: 'https://ice1.somafm.com/seventies-128-mp3', color: '#EC4899' },
+  { id: 'rain', name: 'Deep Space', icon: Waves, url: 'https://ice1.somafm.com/deepspaceone-128-mp3', color: '#64748B' },
+  { id: 'piano', name: 'Piano & Classical', icon: Music, url: 'https://ice1.somafm.com/thistle-128-mp3', color: '#EC4899' },
   { id: 'deep-focus', name: 'Deep Focus', icon: Radio, url: 'https://streams.ilovemusic.de/iloveradio21.mp3', color: '#14B8A6' },
-  { id: 'cafe', name: 'Cafe Vibes', icon: Coffee, url: 'https://ice1.somafm.com/bootliquor-128-mp3', color: '#A16207' },
+  { id: 'cafe', name: 'Cafe Vibes', icon: Coffee, url: 'https://ice1.somafm.com/lush-128-mp3', color: '#A16207' },
   { id: 'white-noise', name: 'White Noise', icon: Waves, url: 'https://ice1.somafm.com/fluid-128-mp3', color: '#94A3B8' },
 ];
 

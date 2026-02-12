@@ -204,7 +204,7 @@ const Dashboard = () => {
       />
 
       {/* Daily Brain Boost Quiz */}
-      <DailyQuizChallenge />
+      <DailyQuizChallenge onComplete={fetchData} />
 
       {/* Study Time Tracker Widget */}
       <StudyTimeWidget />

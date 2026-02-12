@@ -246,28 +246,39 @@ const Onboarding = () => {
           ))}
         </div>
 
-        {/* CTA button */}
-        {isLast ? (
-          <motion.div
-            animate={{ boxShadow: ['0 0 0px rgba(255,255,255,0.3)', '0 0 25px rgba(255,255,255,0.5)', '0 0 0px rgba(255,255,255,0.3)'] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="rounded-2xl"
-          >
+        {/* Navigation buttons */}
+        <div className="flex gap-3">
+          {current > 0 && (
             <Button
-              onClick={finish}
-              className="w-full h-14 text-lg font-bold bg-white text-purple-700 hover:bg-white/90 rounded-2xl shadow-xl"
+              onClick={() => paginate(-1)}
+              variant="ghost"
+              className="h-12 px-5 text-base text-white/80 hover:text-white hover:bg-white/10 border border-white/20 rounded-2xl"
             >
-              Get Started <Rocket className="w-5 h-5 ml-2" />
+              Back
             </Button>
-          </motion.div>
-        ) : (
-          <Button
-            onClick={() => paginate(1)}
-            className="w-full h-12 text-base bg-white/20 hover:bg-white/30 text-white border border-white/20 backdrop-blur-sm rounded-2xl"
-          >
-            Next <ArrowRight className="w-5 h-5 ml-2" />
-          </Button>
-        )}
+          )}
+          {isLast ? (
+            <motion.div
+              animate={{ boxShadow: ['0 0 0px rgba(255,255,255,0.3)', '0 0 25px rgba(255,255,255,0.5)', '0 0 0px rgba(255,255,255,0.3)'] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="rounded-2xl flex-1"
+            >
+              <Button
+                onClick={finish}
+                className="w-full h-14 text-lg font-bold bg-white text-purple-700 hover:bg-white/90 rounded-2xl shadow-xl"
+              >
+                Get Started <Rocket className="w-5 h-5 ml-2" />
+              </Button>
+            </motion.div>
+          ) : (
+            <Button
+              onClick={() => paginate(1)}
+              className="flex-1 h-12 text-base bg-white/20 hover:bg-white/30 text-white border border-white/20 backdrop-blur-sm rounded-2xl"
+            >
+              Next <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
