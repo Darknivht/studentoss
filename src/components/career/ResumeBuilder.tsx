@@ -196,7 +196,7 @@ const ResumeBuilder = () => {
           open={showGate}
           onOpenChange={setShowGate}
           feature="resume templates"
-          currentUsage={templateLimit}
+          currentUsage={templates.length}
           limit={templateLimit}
           requiredTier="plus"
         />
