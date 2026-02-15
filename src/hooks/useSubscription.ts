@@ -56,18 +56,18 @@ interface SubscriptionData {
 
 const FREE_LIMITS: FeatureLimits = {
   aiCallsLimit: 5,
-  quizzesLimit: 3,
-  flashcardsLimit: 10,
-  notesLimit: 2,
+  quizzesLimit: 5,
+  flashcardsLimit: 15,
+  notesLimit: 5,
   jobSearchesLimit: 3,
   resumeTemplatesLimit: 3,
 };
 
 const PLUS_LIMITS: FeatureLimits = {
-  aiCallsLimit: 20,
-  quizzesLimit: 10,
-  flashcardsLimit: 30,
-  notesLimit: 8,
+  aiCallsLimit: 30,
+  quizzesLimit: 15,
+  flashcardsLimit: 50,
+  notesLimit: 15,
   jobSearchesLimit: 10,
   resumeTemplatesLimit: 7,
 };

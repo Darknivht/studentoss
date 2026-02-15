@@ -3,109 +3,151 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { 
-  Crown, Check, Sparkles, ArrowLeft, Loader2 
+  Crown, Check, Sparkles, ArrowLeft, Loader2, RefreshCw 
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-const TIERS = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: 0,
-    period: '',
-    description: 'Get started with basics',
-    features: [
-      '5 AI calls/day',
-      '3 quizzes/day',
-      '10 flashcards/day',
-      '2 notes/day',
-      '2 job searches/month',
-      'Direct messages',
-      '3 resume templates',
-      'Basic study tools',
-      'Ads included',
-    ],
-    cta: 'Current Plan',
-    highlight: false,
-  },
-  {
-    id: 'plus',
-    name: 'Plus',
-    price: 1500,
-    period: '/month',
-    description: 'For serious students',
-    features: [
-      '20 AI calls/day',
-      '10 quizzes/day',
-      '30 flashcards/day',
-      '8 notes/day',
-      '10 job searches/month',
-      'Direct messages',
-      'Group chat access',
-      '7 resume templates',
-      'No ads',
-    ],
-    cta: 'Upgrade to Plus',
-    highlight: true,
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: 2500,
-    period: '/month',
-    description: 'Unlimited everything',
-    features: [
-      'Unlimited AI calls',
-      'Unlimited quizzes',
-      'Unlimited flashcards',
-      'Unlimited notes',
-      'Direct messages',
-      'Group chat access',
-      'All 10 resume templates',
-      'Unlimited job searches',
-      'Advanced AI tools (OCR, Code Debugger)',
-      'No ads',
-      'Priority support',
-    ],
-    cta: 'Upgrade to Pro',
-    highlight: false,
-  },
-];
+import { PAYSTACK_PUBLIC_KEY, PLAN_PRICING, formatNaira } from '@/lib/paystackConfig';
 
 const Upgrade = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { subscription } = useSubscription();
+  const { subscription, refetch } = useSubscription();
   const [loading, setLoading] = useState(false);
-  const [selectedTier, setSelectedTier] = useState('plus');
+  const [isYearly, setIsYearly] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const tiers = [
+    {
+      id: 'free',
+      name: 'Free',
+      monthlyPrice: 0,
+      yearlyPrice: 0,
+      description: 'Get started with basics',
+      features: [
+        '5 AI calls/day',
+        '3 quizzes/day',
+        '10 flashcards/day',
+        '2 notes/day',
+        '2 job searches/month',
+        'Direct messages',
+        '3 resume templates',
+        'Basic study tools',
+        'Ads included',
+      ],
+      cta: 'Current Plan',
+      highlight: false,
+    },
+    {
+      id: 'plus',
+      name: 'Plus',
+      monthlyPrice: PLAN_PRICING.plus.monthly,
+      yearlyPrice: PLAN_PRICING.plus.yearly,
+      description: 'For serious students',
+      features: [
+        '20 AI calls/day',
+        '10 quizzes/day',
+        '30 flashcards/day',
+        '8 notes/day',
+        '10 job searches/month',
+        'Direct messages',
+        'Group chat access',
+        '7 resume templates',
+        'Note-based daily quiz',
+        'No ads',
+      ],
+      cta: 'Upgrade to Plus',
+      highlight: true,
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      monthlyPrice: PLAN_PRICING.pro.monthly,
+      yearlyPrice: PLAN_PRICING.pro.yearly,
+      description: 'Unlimited everything',
+      features: [
+        'Unlimited AI calls',
+        'Unlimited quizzes',
+        'Unlimited flashcards',
+        'Unlimited notes',
+        'Direct messages',
+        'Group chat access',
+        'All 10 resume templates',
+        'Unlimited job searches',
+        'Advanced AI tools (OCR, Code Debugger)',
+        'Note-based daily quiz',
+        'No ads',
+        'Priority support',
+      ],
+      cta: 'Upgrade to Pro',
+      highlight: false,
+    },
+  ];
 
   const handleUpgrade = async (tierId: string) => {
     if (!user || tierId === 'free') return;
 
     setLoading(true);
     try {
-      const tier = TIERS.find(t => t.id === tierId);
+      const tier = tiers.find(t => t.id === tierId);
       if (!tier) return;
+
+      const amount = isYearly ? tier.yearlyPrice : tier.monthlyPrice;
+      const plan = isYearly ? 'yearly' : 'monthly';
 
       // @ts-ignore - Paystack inline script
       const handler = window.PaystackPop?.setup({
-        key: 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        key: PAYSTACK_PUBLIC_KEY,
         email: user.email,
-        amount: tier.price * 100,
+        amount,
         currency: 'NGN',
-        ref: `${tierId}_${user.id}_${Date.now()}`,
+        ref: `${tierId}_${plan}_${user.id}_${Date.now()}`,
         metadata: {
           user_id: user.id,
           plan: tierId,
+          billing_period: plan,
         },
-        callback: function(response: any) {
-          toast({
-            title: 'Payment successful!',
-            description: `Welcome to ${tier.name}! Enjoy your new features.`,
-          });
+        callback: async function(response: any) {
+          // Verify payment on backend
+          try {
+            const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-payment`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              },
+              body: JSON.stringify({
+                reference: response.reference,
+                user_id: user.id,
+                plan: plan,
+              }),
+            });
+
+            const result = await resp.json();
+            if (result.success) {
+              toast({
+                title: 'Payment successful! 🎉',
+                description: `Welcome to ${tier.name}! Enjoy your new features.`,
+              });
+              refetch();
+            } else {
+              toast({
+                title: 'Verification issue',
+                description: result.error || 'Please contact support if your payment was debited.',
+                variant: 'destructive',
+              });
+            }
+          } catch {
+            toast({
+              title: 'Payment received',
+              description: 'Your subscription will be activated shortly.',
+            });
+            refetch();
+          }
         },
         onClose: function() {
           toast({ title: 'Payment cancelled' });
@@ -126,6 +168,16 @@ const Upgrade = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    await refetch();
+    setRestoring(false);
+    toast({
+      title: subscription.tier === 'free' ? 'No active subscription found' : `${subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)} plan active`,
+      description: subscription.tier === 'free' ? 'If you recently paid, please wait a moment and try again.' : 'Your subscription is active!',
+    });
   };
 
   return (
@@ -157,10 +209,20 @@ const Upgrade = () => {
         </p>
       </motion.div>
 
+      {/* Billing toggle */}
+      <div className="flex items-center justify-center gap-3">
+        <span className={`text-sm font-medium ${!isYearly ? 'text-foreground' : 'text-muted-foreground'}`}>Monthly</span>
+        <Switch checked={isYearly} onCheckedChange={setIsYearly} />
+        <span className={`text-sm font-medium ${isYearly ? 'text-foreground' : 'text-muted-foreground'}`}>
+          Yearly <span className="text-xs text-emerald-500 font-semibold">Save 17%</span>
+        </span>
+      </div>
+
       {/* Tier Cards */}
       <div className="space-y-4">
-        {TIERS.map((tier, index) => {
+        {tiers.map((tier, index) => {
           const isCurrent = subscription.tier === tier.id;
+          const displayPrice = isYearly ? tier.yearlyPrice : tier.monthlyPrice;
           return (
             <motion.div
               key={tier.id}
@@ -188,10 +250,10 @@ const Upgrade = () => {
 
                 <div className="flex items-baseline gap-2 mb-1 mt-1">
                   <h3 className="text-lg font-bold text-foreground">{tier.name}</h3>
-                  {tier.price > 0 && (
-                    <span className="text-2xl font-bold text-foreground">₦{tier.price.toLocaleString()}</span>
+                  {displayPrice > 0 && (
+                    <span className="text-2xl font-bold text-foreground">{formatNaira(displayPrice)}</span>
                   )}
-                  {tier.period && <span className="text-sm text-muted-foreground">{tier.period}</span>}
+                  {displayPrice > 0 && <span className="text-sm text-muted-foreground">{isYearly ? '/year' : '/month'}</span>}
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">{tier.description}</p>
 
@@ -228,6 +290,17 @@ const Upgrade = () => {
           );
         })}
       </div>
+
+      {/* Restore Purchase */}
+      <Button
+        variant="ghost"
+        onClick={handleRestore}
+        disabled={restoring}
+        className="w-full text-muted-foreground"
+      >
+        {restoring ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+        Restore Purchase
+      </Button>
 
       <p className="text-center text-xs text-muted-foreground">
         Secure payment via Paystack. Cancel anytime.

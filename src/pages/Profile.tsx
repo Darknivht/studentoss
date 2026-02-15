@@ -312,13 +312,27 @@ const Profile = () => {
             <GraduationCap size={14} />
             Grade Level
           </Label>
-          <Input
+          <select
             id="grade"
             value={gradeLevel}
             onChange={(e) => setGradeLevel(e.target.value)}
-            placeholder="10th Grade / Sophomore"
-            className="mt-1.5"
-          />
+            className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          >
+            <option value="">Select grade level</option>
+            <option value="6th">6th Grade</option>
+            <option value="7th">7th Grade</option>
+            <option value="8th">8th Grade</option>
+            <option value="9th">9th Grade</option>
+            <option value="10th">10th Grade</option>
+            <option value="11th">11th Grade</option>
+            <option value="12th">12th Grade</option>
+            <option value="freshman">College Freshman</option>
+            <option value="sophomore">College Sophomore</option>
+            <option value="junior">College Junior</option>
+            <option value="senior">College Senior</option>
+            <option value="graduate">Graduate School</option>
+          </select>
+          <p className="text-xs text-muted-foreground mt-1">This adjusts AI responses to match your level</p>
         </div>
       </motion.div>
 

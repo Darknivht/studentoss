@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, CheckCircle, XCircle, Zap, Trophy, Sparkles } from 'lucide-react';
+import { Brain, CheckCircle, XCircle, Zap, Trophy, Sparkles, Loader2, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { updateStreak } from '@/lib/streak';
 import { awardXP, updateWeeklyActivity } from '@/hooks/useWeeklyXP';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
+import { callAI } from '@/lib/ai';
+import { getEducationContext } from '@/lib/educationConfig';
 
 interface Question {
   question: string;
@@ -24,48 +27,23 @@ const questionPool: Question[] = [
   { question: "What is the square root of 144?", options: ["10", "11", "12", "14"], correct: 2, category: "Math" },
   { question: "Which ocean is the largest?", options: ["Atlantic", "Indian", "Arctic", "Pacific"], correct: 3, category: "Geography" },
   { question: "What year did World War II end?", options: ["1943", "1944", "1945", "1946"], correct: 2, category: "History" },
-  { question: "What is the speed of light (approx)?", options: ["300,000 km/s", "150,000 km/s", "500,000 km/s", "100,000 km/s"], correct: 0, category: "Physics" },
   { question: "What gas do plants absorb?", options: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"], correct: 2, category: "Biology" },
   { question: "What is 7 × 8?", options: ["54", "56", "58", "48"], correct: 1, category: "Math" },
-  { question: "Which country has the most population?", options: ["USA", "India", "China", "Indonesia"], correct: 1, category: "Geography" },
   { question: "What is H₂O commonly known as?", options: ["Hydrogen peroxide", "Water", "Heavy water", "Salt water"], correct: 1, category: "Chemistry" },
   { question: "Who painted the Mona Lisa?", options: ["Michelangelo", "Da Vinci", "Raphael", "Van Gogh"], correct: 1, category: "Art" },
-  { question: "What is the longest river in the world?", options: ["Amazon", "Nile", "Mississippi", "Yangtze"], correct: 1, category: "Geography" },
   { question: "What does DNA stand for?", options: ["Deoxyribose Nucleic Acid", "Deoxyribonucleic Acid", "Dinitrogen Acid", "Dynamic Nucleic Acid"], correct: 1, category: "Biology" },
   { question: "What is the derivative of x²?", options: ["x", "2x", "x²", "2"], correct: 1, category: "Math" },
   { question: "Which element has the symbol 'Fe'?", options: ["Fluorine", "Iron", "Francium", "Fermium"], correct: 1, category: "Chemistry" },
   { question: "What is the capital of Japan?", options: ["Osaka", "Kyoto", "Tokyo", "Hiroshima"], correct: 2, category: "Geography" },
   { question: "Who discovered gravity?", options: ["Einstein", "Newton", "Galileo", "Hawking"], correct: 1, category: "Physics" },
-  { question: "What is photosynthesis?", options: ["Energy from food", "Light to chemical energy", "Cell division", "Water absorption"], correct: 1, category: "Biology" },
   { question: "What is 3⁴?", options: ["12", "27", "81", "64"], correct: 2, category: "Math" },
   { question: "What is the smallest prime number?", options: ["0", "1", "2", "3"], correct: 2, category: "Math" },
-  { question: "Which planet has the most moons?", options: ["Jupiter", "Saturn", "Uranus", "Neptune"], correct: 1, category: "Science" },
   { question: "What is the boiling point of water in °C?", options: ["90", "100", "110", "120"], correct: 1, category: "Science" },
   { question: "What continent is Egypt in?", options: ["Asia", "Europe", "Africa", "Middle East"], correct: 2, category: "Geography" },
   { question: "What is the formula for area of a circle?", options: ["2πr", "πr²", "πd", "2πr²"], correct: 1, category: "Math" },
-  { question: "Who wrote '1984'?", options: ["Huxley", "Orwell", "Bradbury", "Tolkien"], correct: 1, category: "Literature" },
   { question: "What is the SI unit of force?", options: ["Joule", "Watt", "Newton", "Pascal"], correct: 2, category: "Physics" },
   { question: "How many chromosomes do humans have?", options: ["23", "44", "46", "48"], correct: 2, category: "Biology" },
-  { question: "What is the value of π (approx)?", options: ["3.14", "2.72", "1.62", "3.41"], correct: 0, category: "Math" },
-  { question: "What language has the most native speakers?", options: ["English", "Spanish", "Mandarin", "Hindi"], correct: 2, category: "General" },
-  { question: "What is Newton's 2nd law?", options: ["F = ma", "E = mc²", "V = IR", "P = IV"], correct: 0, category: "Physics" },
-  { question: "What is the capital of Australia?", options: ["Sydney", "Melbourne", "Canberra", "Brisbane"], correct: 2, category: "Geography" },
-  { question: "Which vitamin is produced by sunlight?", options: ["Vitamin A", "Vitamin B", "Vitamin C", "Vitamin D"], correct: 3, category: "Biology" },
-  { question: "What is 25% of 80?", options: ["15", "20", "25", "30"], correct: 1, category: "Math" },
-  { question: "What is the hardest natural substance?", options: ["Gold", "Iron", "Diamond", "Platinum"], correct: 2, category: "Science" },
-  { question: "Who developed the theory of relativity?", options: ["Newton", "Einstein", "Bohr", "Planck"], correct: 1, category: "Physics" },
-  { question: "What is the main gas in Earth's atmosphere?", options: ["Oxygen", "Carbon Dioxide", "Nitrogen", "Argon"], correct: 2, category: "Science" },
-  { question: "What does CPU stand for?", options: ["Central Process Unit", "Central Processing Unit", "Computer Personal Unit", "Central Program Unit"], correct: 1, category: "Technology" },
-  { question: "What is the freezing point of water in °F?", options: ["0", "32", "100", "212"], correct: 1, category: "Science" },
-  { question: "How many sides does a hexagon have?", options: ["5", "6", "7", "8"], correct: 1, category: "Math" },
-  { question: "What is the largest organ in the human body?", options: ["Heart", "Liver", "Skin", "Lungs"], correct: 2, category: "Biology" },
-  { question: "What is the chemical formula for table salt?", options: ["NaCl", "KCl", "CaCl₂", "NaOH"], correct: 0, category: "Chemistry" },
-  { question: "What year was the internet invented?", options: ["1969", "1983", "1990", "1995"], correct: 0, category: "Technology" },
   { question: "What is the Pythagorean theorem?", options: ["a+b=c", "a²+b²=c²", "a×b=c", "a/b=c"], correct: 1, category: "Math" },
-  { question: "Which blood type is the universal donor?", options: ["A", "B", "AB", "O"], correct: 3, category: "Biology" },
-  { question: "What is the currency of Japan?", options: ["Yuan", "Won", "Yen", "Ringgit"], correct: 2, category: "General" },
-  { question: "How many bones are in the adult human body?", options: ["196", "206", "216", "226"], correct: 1, category: "Biology" },
-  { question: "What is the tallest mountain in the world?", options: ["K2", "Kangchenjunga", "Everest", "Lhotse"], correct: 2, category: "Geography" },
 ];
 
 function getRandomQuestions(count: number): Question[] {
@@ -80,7 +58,8 @@ interface DailyQuizChallengeProps {
 const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [quizState, setQuizState] = useState<'idle' | 'playing' | 'result'>('idle');
+  const { subscription } = useSubscription();
+  const [quizState, setQuizState] = useState<'idle' | 'loading' | 'playing' | 'result'>('idle');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -88,6 +67,7 @@ const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
   const scoreRef = useRef(0);
   const [answered, setAnswered] = useState(false);
   const [alreadyDone, setAlreadyDone] = useState(false);
+  const [quizSource, setQuizSource] = useState<'notes' | 'general'>('general');
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -95,13 +75,99 @@ const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
     if (lastQuiz === today) setAlreadyDone(true);
   }, []);
 
-  const startQuiz = () => {
-    setQuestions(getRandomQuestions(5));
-    setCurrentQ(0);
+  const generateNoteBasedQuiz = async (): Promise<Question[] | null> => {
+    if (!user) return null;
+
+    try {
+      // Fetch user's notes
+      const { data: notes } = await supabase
+        .from('notes')
+        .select('content, title')
+        .eq('user_id', user.id)
+        .not('content', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (!notes || notes.length === 0) return null;
+
+      // Pick 1-3 random notes
+      const shuffled = [...notes].sort(() => Math.random() - 0.5);
+      const selected = shuffled.slice(0, Math.min(3, shuffled.length));
+      const noteContent = selected
+        .map(n => `## ${n.title}\n${(n.content || '').slice(0, 1500)}`)
+        .join('\n\n');
+
+      if (noteContent.trim().length < 50) return null;
+
+      // Get education context
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('grade_level')
+        .eq('user_id', user.id)
+        .single();
+
+      const educationContext = getEducationContext(profile?.grade_level);
+
+      const prompt = `Based on the following study notes, generate exactly 5 multiple-choice quiz questions. Each question must have exactly 4 options with one correct answer.
+
+${educationContext ? `\n${educationContext}\n` : ''}
+
+NOTES:
+${noteContent}
+
+Return ONLY valid JSON in this exact format, no other text:
+[{"question":"...","options":["A","B","C","D"],"correct":0,"category":"Subject"},...]
+
+The "correct" field is the 0-based index of the correct option.`;
+
+      const response = await callAI('quiz', prompt);
+
+      // Parse JSON from response
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return null;
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(parsed) || parsed.length < 3) return null;
+
+      // Validate structure
+      const valid = parsed
+        .filter((q: any) =>
+          q.question && Array.isArray(q.options) && q.options.length === 4 &&
+          typeof q.correct === 'number' && q.correct >= 0 && q.correct <= 3
+        )
+        .slice(0, 5);
+
+      return valid.length >= 3 ? valid : null;
+    } catch (error) {
+      console.error('Failed to generate note-based quiz:', error);
+      return null;
+    }
+  };
+
+  const startQuiz = async () => {
     setScore(0);
     scoreRef.current = 0;
+    setCurrentQ(0);
     setSelected(null);
     setAnswered(false);
+
+    // Try AI-based quiz for Plus/Pro users
+    const canUseAI = subscription.isPlus || subscription.isPro;
+
+    if (canUseAI) {
+      setQuizState('loading');
+      const aiQuestions = await generateNoteBasedQuiz();
+      if (aiQuestions) {
+        setQuestions(aiQuestions);
+        setQuizSource('notes');
+        setQuizState('playing');
+        return;
+      }
+    }
+
+    // Fallback to general knowledge
+    setQuestions(getRandomQuestions(5));
+    setQuizSource('general');
     setQuizState('playing');
   };
 
@@ -137,22 +203,20 @@ const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
     const xpEarned = finalScore * 10;
 
     try {
-      if (xpEarned > 0) {
-        await awardXP(user.id, xpEarned);
-      }
+      if (xpEarned > 0) await awardXP(user.id, xpEarned);
       await updateStreak(user.id);
       await updateWeeklyActivity(user.id, 'quizzes_completed', 1);
 
       await supabase.from('quiz_attempts').insert({
         user_id: user.id,
         score: finalScore,
-        total_questions: 5,
+        total_questions: questions.length,
         quiz_data: questions.map((q) => ({ question: q.question, correct: q.correct, category: q.category })) as any,
       });
 
       toast({
         title: `🧠 Daily Quiz Complete!`,
-        description: `You scored ${finalScore}/5 and earned ${xpEarned} XP!`,
+        description: `You scored ${finalScore}/${questions.length} and earned ${xpEarned} XP!`,
       });
 
       onComplete?.();
@@ -208,6 +272,20 @@ const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
     );
   }
 
+  if (quizState === 'loading') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-5 rounded-2xl border border-border bg-card text-center"
+      >
+        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+        <p className="text-sm font-medium text-foreground">Generating quiz from your notes...</p>
+        <p className="text-xs text-muted-foreground mt-1">AI is creating personalized questions</p>
+      </motion.div>
+    );
+  }
+
   if (quizState === 'result') {
     const finalScore = scoreRef.current;
     return (
@@ -225,10 +303,15 @@ const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
           <Trophy className="w-8 h-8 text-primary" />
         </motion.div>
         <h3 className="text-lg font-bold text-foreground">Quiz Complete!</h3>
-        <p className="text-3xl font-bold text-primary mt-1">{finalScore}/5</p>
+        <p className="text-3xl font-bold text-primary mt-1">{finalScore}/{questions.length}</p>
         <p className="text-sm text-muted-foreground mt-1">
           You earned <span className="font-semibold text-primary">{finalScore * 10} XP</span>
         </p>
+        {quizSource === 'notes' && (
+          <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
+            <BookOpen className="w-3 h-3" /> Based on your notes
+          </p>
+        )}
         <p className="text-xs text-muted-foreground mt-2">🔥 Streak updated! Come back tomorrow.</p>
       </motion.div>
     );
@@ -243,19 +326,25 @@ const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
       animate={{ opacity: 1 }}
       className="p-4 rounded-2xl border border-border bg-card"
     >
-      {/* Progress */}
+      {/* Source badge + Progress */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-muted-foreground">{q.category}</span>
-        <span className="text-xs font-medium text-primary">{currentQ + 1}/5</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{q.category}</span>
+          {quizSource === 'notes' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium flex items-center gap-0.5">
+              <BookOpen className="w-2.5 h-2.5" /> Notes
+            </span>
+          )}
+        </div>
+        <span className="text-xs font-medium text-primary">{currentQ + 1}/{questions.length}</span>
       </div>
       <div className="h-1 bg-muted rounded-full mb-4 overflow-hidden">
         <motion.div
           className="h-full bg-primary rounded-full"
-          animate={{ width: `${((currentQ + 1) / 5) * 100}%` }}
+          animate={{ width: `${((currentQ + 1) / questions.length) * 100}%` }}
         />
       </div>
 
-      {/* Question */}
       <AnimatePresence mode="wait">
         <motion.div
           key={currentQ}
@@ -301,7 +390,7 @@ const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
       {answered && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3">
           <Button onClick={nextQuestion} className="w-full h-9 text-sm rounded-xl">
-            {currentQ < 4 ? 'Next Question' : 'See Results'}
+            {currentQ < questions.length - 1 ? 'Next Question' : 'See Results'}
           </Button>
         </motion.div>
       )}
