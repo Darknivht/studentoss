@@ -163,11 +163,31 @@ const AppBlockerSettings = ({ onBack }: AppBlockerSettingsProps) => {
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft size={20} />
         </Button>
-        <div>
+        <div className="flex items-center gap-2">
           <h1 className="text-2xl font-display font-bold text-foreground">App Blocker</h1>
-          <p className="text-muted-foreground text-sm">Block distracting apps until study goal is met</p>
+          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-600 border border-amber-500/30">BETA</span>
         </div>
+        <p className="text-muted-foreground text-sm">Block distracting apps until study goal is met</p>
       </motion.header>
+
+      {/* Beta notice */}
+      {!capabilities.isNative && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20"
+        >
+          <div className="flex gap-3">
+            <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-foreground">Beta Feature — Native App Required</p>
+              <p className="text-muted-foreground mt-1">
+                Full app blocking requires the native Android app. On web, you can use the Focus Timer and study goal tracker below to stay productive.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Quick Launch Focus Session */}
       <motion.div
