@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Clock, Trophy, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, Clock, Trophy, AlertCircle, Lock, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
 import { streamAIChat } from '@/lib/ai';
 import { parseQuizResponse } from '@/lib/parseAIResponse';
-import { Slider } from '@/components/ui/slider';
 
 interface ExamQuestion {
   question: string;
@@ -19,12 +21,24 @@ interface MockExamProps {
   onBack: () => void;
 }
 
+const QUESTION_OPTIONS = [
+  { count: 5, tier: 'free' as const },
+  { count: 10, tier: 'free' as const },
+  { count: 15, tier: 'free' as const },
+  { count: 20, tier: 'free' as const },
+  { count: 40, tier: 'plus' as const },
+  { count: 60, tier: 'pro' as const },
+];
+
 const MockExam = ({ onBack }: MockExamProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [notes, setNotes] = useState<{ id: string; title: string }[]>([]);
+  const navigate = useNavigate();
+  const { subscription } = useSubscription();
+  const [notes, setNotes] = useState<{ id: string; title: string; course_id: string | null }[]>([]);
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
+  const [userAnswerDetails, setUserAnswerDetails] = useState<{ questionIndex: number; selected: number | null }[]>([]);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(false);
   const [examStarted, setExamStarted] = useState(false);
@@ -55,7 +69,7 @@ const MockExam = ({ onBack }: MockExamProps) => {
   const fetchNotes = async () => {
     const { data } = await supabase
       .from('notes')
-      .select('id, title')
+      .select('id, title, course_id')
       .eq('user_id', user?.id)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -87,7 +101,7 @@ const MockExam = ({ onBack }: MockExamProps) => {
               }));
               setQuestions(examQuestions);
               setAnswers(new Array(examQuestions.length).fill(null));
-              setTimeLeft(examQuestions.length * 60); // 1 minute per question
+              setTimeLeft(examQuestions.length * 60);
               setExamStarted(true);
             } else {
               throw new Error('No questions parsed');
@@ -118,11 +132,63 @@ const MockExam = ({ onBack }: MockExamProps) => {
 
   const finishExam = () => {
     let correct = 0;
-    questions.forEach((q, i) => {
+    const details = questions.map((q, i) => {
       if (answers[i] === q.correct) correct++;
+      return { questionIndex: i, selected: answers[i] };
     });
     setScore(correct);
+    setUserAnswerDetails(details);
     setExamFinished(true);
+  };
+
+  const handleReviewWithTutor = () => {
+    const percentage = Math.round((score / questions.length) * 100);
+    const wrongAnswers = questions
+      .map((q, i) => ({ q, userAnswer: answers[i], index: i }))
+      .filter(({ q, userAnswer }) => userAnswer !== q.correct);
+    const correctAnswers = questions
+      .map((q, i) => ({ q, index: i }))
+      .filter(({ q, index }) => answers[index] === q.correct);
+
+    let context = `Mock Exam Results: ${score}/${questions.length} (${percentage}%)\n\n`;
+
+    if (wrongAnswers.length > 0) {
+      context += `WRONG ANSWERS (${wrongAnswers.length}):\n`;
+      wrongAnswers.forEach(({ q, userAnswer, index }) => {
+        context += `Q${index + 1}: ${q.question}\n`;
+        context += `  Student answered: ${userAnswer !== null ? q.options[userAnswer] : 'No answer'}\n`;
+        context += `  Correct answer: ${q.options[q.correct]}\n\n`;
+      });
+    }
+
+    if (correctAnswers.length > 0) {
+      context += `CORRECT ANSWERS (${correctAnswers.length}):\n`;
+      correctAnswers.forEach(({ q, index }) => {
+        context += `Q${index + 1}: ${q.question} → ${q.options[q.correct]}\n`;
+      });
+    }
+
+    const noteData = notes.find(n => n.id === selectedNote);
+    navigate('/tutor', {
+      state: {
+        quizContext: context,
+        courseId: noteData?.course_id || null,
+        noteId: selectedNote,
+        autoStart: true,
+      }
+    });
+  };
+
+  const handleQuestionCountSelect = (count: number, tier: 'free' | 'plus' | 'pro') => {
+    if (tier === 'pro' && !subscription.isPro) {
+      toast({ title: '🔒 Pro Required', description: `${count} questions require a Pro subscription.` });
+      return;
+    }
+    if (tier === 'plus' && !subscription.isPlus && !subscription.isPro) {
+      toast({ title: '🔒 Plus Required', description: `${count} questions require a Plus or Pro subscription.` });
+      return;
+    }
+    setQuestionCount(count);
   };
 
   const formatTime = (seconds: number) => {
@@ -153,7 +219,13 @@ const MockExam = ({ onBack }: MockExamProps) => {
         <div className={`text-lg font-medium ${percentage >= 70 ? 'text-emerald-500' : percentage >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
           {percentage >= 90 ? 'Outstanding!' : percentage >= 70 ? 'Passed!' : percentage >= 50 ? 'Almost there!' : 'Keep studying!'}
         </div>
-        <Button onClick={onBack} variant="outline">Back to Study Tools</Button>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <Button onClick={handleReviewWithTutor} className="w-full gradient-secondary text-secondary-foreground">
+            <GraduationCap className="w-4 h-4 mr-2" />
+            Review Results with AI Tutor
+          </Button>
+          <Button onClick={onBack} variant="outline">Back to Study Tools</Button>
+        </div>
       </div>
     );
   }
@@ -222,23 +294,38 @@ const MockExam = ({ onBack }: MockExamProps) => {
 
       {/* Question Count Selector */}
       <div className="p-4 rounded-2xl bg-card border border-border space-y-4">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-foreground">Number of Questions</label>
-          <span className="text-lg font-bold text-primary">{questionCount}</span>
-        </div>
-        <Slider
-          value={[questionCount]}
-          onValueChange={(value) => setQuestionCount(value[0])}
-          min={5}
-          max={20}
-          step={5}
-          className="w-full"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>5 questions</span>
-          <span>10</span>
-          <span>15</span>
-          <span>20 questions</span>
+        <label className="text-sm font-medium text-foreground">Number of Questions</label>
+        <div className="grid grid-cols-3 gap-2">
+          {QUESTION_OPTIONS.map(({ count, tier }) => {
+            const isLocked = 
+              (tier === 'pro' && !subscription.isPro) ||
+              (tier === 'plus' && !subscription.isPlus && !subscription.isPro);
+            const isSelected = questionCount === count;
+
+            return (
+              <button
+                key={count}
+                onClick={() => handleQuestionCountSelect(count, tier)}
+                className={`relative p-3 rounded-xl border text-center transition-all ${
+                  isSelected
+                    ? 'border-primary bg-primary/10 text-primary font-bold'
+                    : isLocked
+                    ? 'border-border bg-muted/50 text-muted-foreground'
+                    : 'border-border bg-card hover:border-primary/50 text-foreground'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-1">
+                  {isLocked && <Lock className="w-3.5 h-3.5 text-muted-foreground" />}
+                  <span className="text-lg font-bold">{count}</span>
+                  {tier !== 'free' && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      {tier === 'plus' ? 'Plus' : 'Pro'}
+                    </Badge>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
         <p className="text-sm text-muted-foreground text-center">
           ⏱️ Estimated time: <span className="font-medium">{questionCount} minutes</span>

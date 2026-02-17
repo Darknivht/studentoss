@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, CheckCircle, XCircle, Zap, Trophy, Sparkles, Loader2, BookOpen } from 'lucide-react';
+import { Brain, CheckCircle, XCircle, Zap, Trophy, Sparkles, Loader2, BookOpen, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,6 +59,7 @@ interface DailyQuizChallengeProps {
 const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { subscription } = useSubscription();
   const [quizState, setQuizState] = useState<'idle' | 'loading' | 'playing' | 'result'>('idle');
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -68,6 +70,7 @@ const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
   const [answered, setAnswered] = useState(false);
   const [alreadyDone, setAlreadyDone] = useState(false);
   const [quizSource, setQuizSource] = useState<'notes' | 'general'>('general');
+  const [userAnswers, setUserAnswers] = useState<(number | null)[]>([]);
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -150,6 +153,7 @@ The "correct" field is the 0-based index of the correct option.`;
     setCurrentQ(0);
     setSelected(null);
     setAnswered(false);
+    setUserAnswers([]);
 
     // Try AI-based quiz for Plus/Pro users
     const canUseAI = subscription.isPlus || subscription.isPro;
@@ -175,6 +179,11 @@ The "correct" field is the 0-based index of the correct option.`;
     if (answered) return;
     setSelected(idx);
     setAnswered(true);
+    setUserAnswers(prev => {
+      const updated = [...prev];
+      updated[currentQ] = idx;
+      return updated;
+    });
     if (idx === questions[currentQ].correct) {
       scoreRef.current += 1;
       setScore(s => s + 1);
@@ -286,6 +295,34 @@ The "correct" field is the 0-based index of the correct option.`;
     );
   }
 
+  const handleReviewWithTutor = () => {
+    const finalScore = scoreRef.current;
+    const percentage = Math.round((finalScore / questions.length) * 100);
+    let context = `Daily Brain Boost Results: ${finalScore}/${questions.length} (${percentage}%)\n\n`;
+
+    const wrong: string[] = [];
+    const right: string[] = [];
+
+    questions.forEach((q, i) => {
+      const userAns = userAnswers[i];
+      if (userAns === q.correct) {
+        right.push(`Q${i + 1}: ${q.question} → ${q.options[q.correct]}`);
+      } else {
+        wrong.push(`Q${i + 1}: ${q.question}\n  Student answered: ${userAns !== null && userAns !== undefined ? q.options[userAns] : '(no answer)'}\n  Correct answer: ${q.options[q.correct]}`);
+      }
+    });
+
+    if (wrong.length > 0) context += `WRONG ANSWERS (${wrong.length}):\n${wrong.join('\n\n')}\n\n`;
+    if (right.length > 0) context += `CORRECT ANSWERS (${right.length}):\n${right.join('\n')}`;
+
+    navigate('/tutor', {
+      state: {
+        quizContext: context,
+        autoStart: true,
+      }
+    });
+  };
+
   if (quizState === 'result') {
     const finalScore = scoreRef.current;
     return (
@@ -312,6 +349,12 @@ The "correct" field is the 0-based index of the correct option.`;
             <BookOpen className="w-3 h-3" /> Based on your notes
           </p>
         )}
+        <Button
+          onClick={handleReviewWithTutor}
+          className="w-full mt-3 h-9 text-sm gradient-secondary text-secondary-foreground rounded-xl"
+        >
+          <GraduationCap className="w-4 h-4 mr-1.5" /> Review with AI Tutor
+        </Button>
         <p className="text-xs text-muted-foreground mt-2">🔥 Streak updated! Come back tomorrow.</p>
       </motion.div>
     );

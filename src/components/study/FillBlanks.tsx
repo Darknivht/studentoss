@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Loader2, CheckCircle, XCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Loader2, CheckCircle, XCircle, Sparkles, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,7 +17,8 @@ interface FillBlanksProps {
 const FillBlanks = ({ onBack }: FillBlanksProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [notes, setNotes] = useState<{ id: string; title: string }[]>([]);
+  const navigate = useNavigate();
+  const [notes, setNotes] = useState<{ id: string; title: string; course_id: string | null }[]>([]);
   const [selectedNote, setSelectedNote] = useState<string | null>(null);
   const [blanks, setBlanks] = useState<FillBlank[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -26,6 +28,7 @@ const FillBlanks = ({ onBack }: FillBlanksProps) => {
   const [score, setScore] = useState(0);
   const [loading, setLoading] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [userAnswers, setUserAnswers] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) fetchNotes();
@@ -34,7 +37,7 @@ const FillBlanks = ({ onBack }: FillBlanksProps) => {
   const fetchNotes = async () => {
     const { data } = await supabase
       .from('notes')
-      .select('id, title')
+      .select('id, title, course_id')
       .eq('user_id', user?.id)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -64,6 +67,7 @@ const FillBlanks = ({ onBack }: FillBlanksProps) => {
           try {
             const parsedBlanks = parseFillBlanksResponse(fullResponse);
             setBlanks(parsedBlanks);
+            setUserAnswers(new Array(parsedBlanks.length).fill(''));
           } catch (e) {
             console.error('Parse error:', e, fullResponse);
             toast({
@@ -90,6 +94,11 @@ const FillBlanks = ({ onBack }: FillBlanksProps) => {
     setIsCorrect(correct);
     setShowResult(true);
     if (correct) setScore(s => s + 1);
+
+    // Track the user's answer
+    const updated = [...userAnswers];
+    updated[currentIndex] = answer.trim();
+    setUserAnswers(updated);
   };
 
   const nextQuestion = () => {
@@ -100,6 +109,41 @@ const FillBlanks = ({ onBack }: FillBlanksProps) => {
     } else {
       setComplete(true);
     }
+  };
+
+  const handleReviewWithTutor = () => {
+    const percentage = Math.round((score / blanks.length) * 100);
+    let context = `Fill-in-the-Blanks Results: ${score}/${blanks.length} (${percentage}%)\n\n`;
+
+    const wrong: string[] = [];
+    const right: string[] = [];
+
+    blanks.forEach((b, i) => {
+      const userAns = userAnswers[i] || '(no answer)';
+      const isRight = userAns.toLowerCase().trim() === b.blank.toLowerCase().trim();
+      if (isRight) {
+        right.push(`Q${i + 1}: "${b.sentence}" → ${b.blank}`);
+      } else {
+        wrong.push(`Q${i + 1}: "${b.sentence}"\n  Student answered: ${userAns}\n  Correct answer: ${b.blank}`);
+      }
+    });
+
+    if (wrong.length > 0) {
+      context += `WRONG ANSWERS (${wrong.length}):\n${wrong.join('\n\n')}\n\n`;
+    }
+    if (right.length > 0) {
+      context += `CORRECT ANSWERS (${right.length}):\n${right.join('\n')}`;
+    }
+
+    const noteData = notes.find(n => n.id === selectedNote);
+    navigate('/tutor', {
+      state: {
+        quizContext: context,
+        courseId: noteData?.course_id || null,
+        noteId: selectedNote,
+        autoStart: true,
+      }
+    });
   };
 
   if (loading) {
@@ -121,7 +165,13 @@ const FillBlanks = ({ onBack }: FillBlanksProps) => {
         <h2 className="text-2xl font-bold">{percentage >= 80 ? 'Excellent!' : percentage >= 60 ? 'Good job!' : 'Keep practicing!'}</h2>
         <p className="text-muted-foreground">You got {score} out of {blanks.length} correct</p>
         <div className="text-5xl font-bold gradient-text">{percentage}%</div>
-        <Button onClick={onBack} variant="outline">Back to Study Tools</Button>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <Button onClick={handleReviewWithTutor} className="w-full gradient-secondary text-secondary-foreground">
+            <GraduationCap className="w-4 h-4 mr-2" />
+            Review Results with AI Tutor
+          </Button>
+          <Button onClick={onBack} variant="outline">Back to Study Tools</Button>
+        </div>
       </div>
     );
   }
