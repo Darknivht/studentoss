@@ -305,6 +305,10 @@ const Upgrade = () => {
       <p className="text-center text-xs text-muted-foreground">
         Secure payment via Paystack. Cancel anytime.
       </p>
+      <div className="flex justify-center gap-4 text-xs">
+        <Link to="/terms" className="text-muted-foreground underline hover:text-foreground">Terms of Service</Link>
+        <Link to="/privacy" className="text-muted-foreground underline hover:text-foreground">Privacy Policy</Link>
+      </div>
     </div>
   );
 };
