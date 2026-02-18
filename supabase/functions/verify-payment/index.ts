@@ -51,6 +51,16 @@ serve(async (req) => {
       );
     }
 
+    // Extract tier from the payment reference (format: "plus_monthly_userid_timestamp" or "pro_yearly_...")
+    const refParts = reference.split("_");
+    const tier = refParts[0] === "plus" ? "plus" : refParts[0] === "pro" ? "pro" : null;
+    if (!tier) {
+      return new Response(
+        JSON.stringify({ error: "Invalid payment reference: could not determine tier" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Calculate subscription expiry based on plan
     const now = new Date();
     let expiresAt: Date;
@@ -66,10 +76,11 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Also reset any expired subscriptions for this user before setting new one
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
-        subscription_tier: "pro",
+        subscription_tier: tier,
         subscription_expires_at: expiresAt.toISOString(),
       })
       .eq("user_id", user_id);
