@@ -214,7 +214,7 @@ const Upgrade = () => {
         <span className={`text-sm font-medium ${!isYearly ? 'text-foreground' : 'text-muted-foreground'}`}>Monthly</span>
         <Switch checked={isYearly} onCheckedChange={setIsYearly} />
         <span className={`text-sm font-medium ${isYearly ? 'text-foreground' : 'text-muted-foreground'}`}>
-          Yearly <span className="text-xs text-emerald-500 font-semibold">Save 17%</span>
+          Yearly <span className="text-xs text-emerald-500 font-semibold">Save 20%</span>
         </span>
       </div>
 
