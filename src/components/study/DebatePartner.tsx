@@ -8,6 +8,9 @@ import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import { formatAIResponse } from '@/lib/formatters';
+import { useSubscription } from '@/hooks/useSubscription';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
+import type { GateResult } from '@/hooks/useSubscription';
 
 interface DebateMessage {
   role: 'user' | 'ai';
@@ -29,6 +32,8 @@ const DEBATES_STORAGE_KEY = 'studentos_saved_debates';
 
 const DebatePartner = ({ onBack }: DebatePartnerProps) => {
   const { toast } = useToast();
+  const { gateFeature, incrementUsage } = useSubscription();
+  const [gateData, setGateData] = useState<GateResult | null>(null);
   const [topic, setTopic] = useState('');
   const [userPosition, setUserPosition] = useState('');
   const [debate, setDebate] = useState<DebateMessage[]>([]);
@@ -82,7 +87,9 @@ const DebatePartner = ({ onBack }: DebatePartnerProps) => {
 
   const startDebate = async () => {
     if (!topic.trim() || !userPosition.trim()) return;
-    
+    const gate = gateFeature('ai');
+    if (!gate.allowed) { setGateData(gate); return; }
+    await incrementUsage('ai');
     setLoading(true);
     setStarted(true);
     setDebate([{ role: 'user', content: userPosition }]);
@@ -111,7 +118,9 @@ const DebatePartner = ({ onBack }: DebatePartnerProps) => {
 
   const continueDebate = async () => {
     if (!userInput.trim()) return;
-    
+    const gate = gateFeature('ai');
+    if (!gate.allowed) { setGateData(gate); return; }
+    await incrementUsage('ai');
     const newDebate = [...debate, { role: 'user' as const, content: userInput }];
     setDebate(newDebate);
     setUserInput('');
@@ -291,6 +300,15 @@ const DebatePartner = ({ onBack }: DebatePartnerProps) => {
           Respond
         </Button>
       </div>
+      <FeatureGateDialog
+        open={!!gateData}
+        onOpenChange={() => setGateData(null)}
+        feature="AI calls"
+        currentUsage={gateData?.currentUsage || 0}
+        limit={gateData?.limit || 0}
+        isLifetime={gateData?.isLifetime}
+        requiredTier={gateData?.requiredTier}
+      />
     </div>
   );
 };
