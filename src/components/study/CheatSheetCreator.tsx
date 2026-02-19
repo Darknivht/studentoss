@@ -10,6 +10,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import { formatAIResponse } from '@/lib/formatters';
 import { printMarkdownContent, downloadAsHTML } from '@/components/export/ExportUtils';
+import { useSubscription } from '@/hooks/useSubscription';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
+import type { GateResult } from '@/hooks/useSubscription';
 
 interface CheatSheetCreatorProps {
   onBack: () => void;
@@ -18,6 +21,8 @@ interface CheatSheetCreatorProps {
 const CheatSheetCreator = ({ onBack }: CheatSheetCreatorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { gateFeature, incrementUsage } = useSubscription();
+  const [gateData, setGateData] = useState<GateResult | null>(null);
   const [notes, setNotes] = useState<{ id: string; title: string }[]>([]);
   const [cheatSheet, setCheatSheet] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,8 +47,10 @@ const CheatSheetCreator = ({ onBack }: CheatSheetCreatorProps) => {
   };
 
   const generateCheatSheet = async (noteId: string, noteTitle: string) => {
+    const gate = gateFeature('ai');
+    if (!gate.allowed) { setGateData(gate); return; }
+    await incrementUsage('ai');
     setGenerating(true);
-    setCheatSheet('');
     setSelectedTitle(noteTitle);
 
     try {
@@ -155,6 +162,7 @@ const CheatSheetCreator = ({ onBack }: CheatSheetCreatorProps) => {
           )}
         </motion.div>
       )}
+      <FeatureGateDialog open={!!gateData} onOpenChange={() => setGateData(null)} feature="AI calls" currentUsage={gateData?.currentUsage || 0} limit={gateData?.limit || 0} isLifetime={gateData?.isLifetime} requiredTier={gateData?.requiredTier} />
     </div>
   );
 };

@@ -8,6 +8,9 @@ import { streamAIChat } from '@/lib/ai';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import { formatAIResponse } from '@/lib/formatters';
+import { useSubscription } from '@/hooks/useSubscription';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
+import type { GateResult } from '@/hooks/useSubscription';
 
 interface MnemonicGeneratorProps {
   onBack: () => void;
@@ -15,6 +18,8 @@ interface MnemonicGeneratorProps {
 
 const MnemonicGenerator = ({ onBack }: MnemonicGeneratorProps) => {
   const { toast } = useToast();
+  const { gateFeature, incrementUsage } = useSubscription();
+  const [gateData, setGateData] = useState<GateResult | null>(null);
   const [input, setInput] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,6 +27,9 @@ const MnemonicGenerator = ({ onBack }: MnemonicGeneratorProps) => {
 
   const generateMnemonic = async () => {
     if (!input.trim()) return;
+    const gate = gateFeature('ai');
+    if (!gate.allowed) { setGateData(gate); return; }
+    await incrementUsage('ai');
     
     setLoading(true);
     setResult('');
@@ -137,6 +145,15 @@ Example:
           </ScrollArea>
         </motion.div>
       )}
+      <FeatureGateDialog
+        open={!!gateData}
+        onOpenChange={() => setGateData(null)}
+        feature="AI calls"
+        currentUsage={gateData?.currentUsage || 0}
+        limit={gateData?.limit || 0}
+        isLifetime={gateData?.isLifetime}
+        requiredTier={gateData?.requiredTier}
+      />
     </div>
   );
 };

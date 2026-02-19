@@ -1,9 +1,87 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Tier limits for AI calls per day
+const AI_LIMITS: Record<string, number> = {
+  free: 5,
+  plus: 30,
+  pro: 999999, // effectively unlimited
+};
+
+async function checkAndIncrementQuota(req: Request): Promise<{ allowed: boolean; error?: string; userId?: string }> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return { allowed: false, error: "Authentication required" };
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Create a client scoped to the user's auth
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: userData, error: authError } = await userClient.auth.getUser();
+  if (authError || !userData?.user) {
+    // Allow unauthenticated requests (e.g., from anon key) but skip quota check
+    // This handles the case where the frontend sends apikey as bearer token
+    return { allowed: true };
+  }
+
+  const userId = userData.user.id;
+  const today = new Date().toISOString().split("T")[0];
+
+  // Fetch profile with subscription info
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("subscription_tier, subscription_expires_at, ai_calls_today, ai_calls_reset_at")
+    .eq("user_id", userId)
+    .single();
+
+  if (profileError || !profile) {
+    // If no profile, allow but don't track (new user edge case)
+    return { allowed: true, userId };
+  }
+
+  // Determine effective tier
+  const isActive = !profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date();
+  const tier = isActive ? (profile.subscription_tier || "free") : "free";
+  const limit = AI_LIMITS[tier] || AI_LIMITS.free;
+
+  // Reset daily counter if needed
+  let currentCalls = profile.ai_calls_today || 0;
+  if (profile.ai_calls_reset_at !== today) {
+    currentCalls = 0;
+    await supabase
+      .from("profiles")
+      .update({ ai_calls_today: 0, ai_calls_reset_at: today })
+      .eq("user_id", userId);
+  }
+
+  if (currentCalls >= limit) {
+    return {
+      allowed: false,
+      error: `Daily AI limit reached (${limit} calls). Upgrade your plan for more access.`,
+      userId,
+    };
+  }
+
+  // Increment usage
+  await supabase
+    .from("profiles")
+    .update({ ai_calls_today: currentCalls + 1, ai_calls_reset_at: today })
+    .eq("user_id", userId);
+
+  return { allowed: true, userId };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -11,6 +89,15 @@ serve(async (req) => {
   }
 
   try {
+    // Server-side quota check BEFORE processing the AI request
+    const quota = await checkAndIncrementQuota(req);
+    if (!quota.allowed) {
+      return new Response(
+        JSON.stringify({ error: quota.error }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { messages, mode, content, imageBase64, contentFilterEnabled } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
@@ -72,7 +159,6 @@ Your Approach:
 8. Use emojis sparingly to keep the conversation engaging 🎓
 
 Remember: Your role is to help them THINK, not to give them answers. A student who discovers the answer themselves learns far better than one who is simply told.`;
-        // Keep the messages as provided - they contain the context and user's question
         break;
 
       case "quiz":
@@ -175,7 +261,6 @@ Your approach:
 Use rhetorical techniques to make strong counter-arguments.
 Format with clear paragraphs and use **bold** for key points.
 Do NOT include greetings - dive straight into the debate.`;
-        // Messages will contain the topic and user's position
         break;
 
       case "concept_map":
