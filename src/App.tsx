@@ -32,6 +32,8 @@ import FocusSession from "./pages/FocusSession";
 import BlockingOverlay from "./components/focus/BlockingOverlay";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
+import Store from "./pages/Store";
+import AdminResources from "./pages/AdminResources";
 
 const queryClient = new QueryClient();
 
@@ -87,6 +89,8 @@ const App = () => (
               <Route path="/group/:groupId" element={<AppLayout><GroupChat /></AppLayout>} />
               <Route path="/focus-session" element={<AppLayout><FocusSession /></AppLayout>} />
               <Route path="/blocking-overlay" element={<BlockingOverlay />} />
+              <Route path="/store" element={<AppLayout><Store /></AppLayout>} />
+              <Route path="/admin-resources" element={<AdminResources />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />

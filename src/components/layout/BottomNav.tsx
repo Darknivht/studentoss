@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, BookOpen, Calendar, Users, Briefcase } from 'lucide-react';
+import { Home, BookOpen, Calendar, Users, Library } from 'lucide-react';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
   { icon: BookOpen, label: 'Study', path: '/study' },
+  { icon: Library, label: 'Store', path: '/store' },
   { icon: Calendar, label: 'Plan', path: '/plan' },
   { icon: Users, label: 'Social', path: '/social' },
-  { icon: Briefcase, label: 'Career', path: '/career' },
 ];
 
 const BottomNav = () => {

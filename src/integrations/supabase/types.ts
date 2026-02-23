@@ -679,6 +679,60 @@ export type Database = {
           },
         ]
       }
+      store_resources: {
+        Row: {
+          author: string | null
+          category: string
+          created_at: string
+          description: string | null
+          download_count: number
+          file_url: string | null
+          grade_level: string
+          id: string
+          is_free: boolean
+          required_tier: string
+          subject: string
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          youtube_url: string | null
+        }
+        Insert: {
+          author?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          download_count?: number
+          file_url?: string | null
+          grade_level: string
+          id?: string
+          is_free?: boolean
+          required_tier?: string
+          subject: string
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          youtube_url?: string | null
+        }
+        Update: {
+          author?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          download_count?: number
+          file_url?: string | null
+          grade_level?: string
+          id?: string
+          is_free?: boolean
+          required_tier?: string
+          subject?: string
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          youtube_url?: string | null
+        }
+        Relationships: []
+      }
       study_goals: {
         Row: {
           completed: boolean
