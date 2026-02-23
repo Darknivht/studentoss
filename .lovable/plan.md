@@ -1,90 +1,115 @@
 
-# Pre-Launch Checklist: What Needs to Be Done
 
-This is a practical checklist of blockers and improvements needed before you can accept real payments and launch.
+# Resource Store + Admin Upload System
 
----
+## Overview
 
-## CRITICAL BLOCKERS (Must fix before launch)
-
-### 1. Replace Paystack Placeholder Key
-**File**: `src/lib/paystackConfig.ts`
-The public key is literally `pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. No payments will work until you replace it with your real Paystack test key (for testing) and then your live key (for launch).
-
-**Action needed from you**: Create a Paystack account at paystack.com, get your public key, and share it so we can update the config.
-
-### 2. Fix verify-payment: Hardcoded "pro" Tier
-**File**: `supabase/functions/verify-payment/index.ts` (line 72)
-Currently, every successful payment sets `subscription_tier: "pro"` regardless of what the user actually paid for. A user paying for Plus (N1,500) gets Pro access.
-
-**Fix**: Extract the tier from the payment reference string (which already contains `plus_monthly_...` or `pro_yearly_...`) and set the correct tier.
-
-### 3. Fix Paystack Script Version Mismatch
-**File**: `index.html` (line 68)
-The script loads `v1/inline.js` but the code in `Upgrade.tsx` calls `window.PaystackPop.setup()` which is the v2 API. This will cause a runtime error.
-
-**Fix**: Change to `https://js.paystack.co/v2/inline.js`
-
-### 4. Add Terms of Service and Privacy Policy
-Both Paystack and app stores (Google Play) require these. Currently there are none.
-
-**Fix**: Create `/terms` and `/privacy` pages with basic legal content, and link to them from the Upgrade page footer.
+Build a **Resource Store** where students can browse textbooks, books, and YouTube videos organized by grade, subject, and category. You (the admin) get a secret, password-protected page to upload and manage resources. YouTube videos get their own integrated section with search.
 
 ---
 
-## IMPORTANT (Should fix before launch)
+## Architecture
 
-### 5. Handle Expired Subscriptions Server-Side
-Currently, expiry is only checked on the client side. If a user's subscription expires, they keep their tier in the database until they next open the app. This means the verify-payment function could see them as "pro" when they're actually expired.
+### Two Main Sections
 
-**Fix**: Add a check in `verify-payment` or create a scheduled function that resets expired subscriptions to "free".
+1. **Books/Textbooks Store** -- You upload PDFs/files, tagged by grade + subject. Students browse and download.
+2. **YouTube Videos** -- A dedicated section where students can search YouTube videos (using the existing RapidAPI integration) and also see curated videos you've added via the admin panel.
 
-### 6. Add OG/Social Share Images
-`index.html` has empty `og:image` and `twitter:image` meta tags. When someone shares the app link, it'll show no preview image.
+### Admin Access
 
-**Fix**: Add a proper social share image URL (e.g., your app logo or a branded card).
-
-### 7. Add Email Verification Reminder
-Users can sign up but there's no visual nudge to verify their email. This could cause support issues.
+- A hidden route (`/admin-resources`) protected by a hardcoded password stored as a Cloud secret called `ADMIN_PANEL_PASSWORD`
+- The password is checked client-side against the secret fetched via a tiny edge function (so it's never in the codebase)
+- You can change the password anytime by updating the secret -- no code changes needed
 
 ---
 
-## NICE TO HAVE (Can launch without)
+## Database Changes
 
-### 8. Payment Receipt / History
-No way for users to see past payments or download receipts. Not a blocker but expected by users.
+### New table: `store_resources`
 
-### 9. Cancellation Flow
-There's no way for users to cancel their subscription from within the app. The "Cancel anytime" text in the footer is misleading without this.
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | Auto-generated |
+| title | text | Resource name |
+| description | text | Optional description |
+| category | text | "textbook", "book", "video", "past_paper" |
+| subject | text | e.g., "Mathematics", "English" |
+| grade_level | text | e.g., "9th", "10th", "freshman" |
+| file_url | text | Storage URL (for books/PDFs) |
+| youtube_url | text | YouTube link (for videos) |
+| thumbnail_url | text | Cover image URL |
+| author | text | Book author or channel name |
+| is_free | boolean | Whether resource is free or requires Plus/Pro |
+| required_tier | text | "free", "plus", or "pro" |
+| download_count | integer | Track popularity |
+| created_at | timestamptz | Auto |
+| updated_at | timestamptz | Auto |
 
-### 10. Error Tracking
-No error tracking service (like Sentry) is configured. You'll want visibility into production errors.
+**RLS**: All authenticated users can SELECT. Only the admin edge function can INSERT/UPDATE/DELETE (via service role key).
+
+### New storage bucket: `store-resources`
+
+Public bucket for uploaded textbooks and book files.
 
 ---
 
-## Summary of Code Changes Needed
+## New Files
 
-| Priority | Issue | File(s) | Effort |
-|---|---|---|---|
-| CRITICAL | Replace Paystack placeholder key | `paystackConfig.ts` | You provide key, 1-line change |
-| CRITICAL | Fix hardcoded "pro" in verify-payment | `verify-payment/index.ts` | Small fix |
-| CRITICAL | Fix Paystack script version (v1 to v2) | `index.html` | 1-line change |
-| CRITICAL | Add Terms and Privacy pages | New files + routes | Medium |
-| IMPORTANT | Server-side subscription expiry | `verify-payment/index.ts` | Small |
-| IMPORTANT | Add OG share images | `index.html` | 1-line change |
-| NICE | Payment history page | New page | Medium |
-| NICE | Cancellation flow | New component | Medium |
+### Pages
+- **`src/pages/Store.tsx`** -- Main store page with two tabs: "Books" and "Videos"
+  - Books tab: Filter by grade, subject, category. Card grid showing cover, title, author, grade badge
+  - Videos tab: YouTube search bar + curated videos grid. Clicking plays in an embedded player
+  - Subscription gating: Some resources marked as Plus/Pro only
+- **`src/pages/AdminResources.tsx`** -- Secret admin page
+  - Password gate (input field, verified via edge function)
+  - Once unlocked: form to add resources (title, description, category, subject, grade, file upload, YouTube URL, tier requirement)
+  - Table of existing resources with edit/delete actions
+  - Bulk management capabilities
 
-### What You Need to Provide
-1. **Paystack public key** (from your Paystack dashboard > Settings > API Keys)
-2. **Paystack secret key** (verify the one already stored is real, not a placeholder)
-3. **Terms of Service text** (or let me generate a template)
-4. **Privacy Policy text** (or let me generate a template)
-5. **Social share image** (a 1200x630px branded image, or I can use the existing logo)
+### Edge Functions
+- **`supabase/functions/admin-verify/index.ts`** -- Verifies the admin password against the `ADMIN_PANEL_PASSWORD` secret. Returns a simple `{ valid: true/false }`
+- **`supabase/functions/admin-resources/index.ts`** -- CRUD operations for resources using the service role key (bypasses RLS). Validates the admin password on every request
 
-### Recommended Launch Order
-1. Fix the 3 critical code bugs (Paystack v2 script, tier extraction, placeholder key)
-2. Add Terms/Privacy pages
-3. Test a real payment end-to-end with Paystack test mode
-4. Switch to Paystack live key
-5. Publish
+### Components
+- **`src/components/store/ResourceCard.tsx`** -- Card component for books/textbooks
+- **`src/components/store/YouTubeSection.tsx`** -- YouTube search + curated videos with embedded player
+- **`src/components/store/ResourceFilters.tsx`** -- Grade, subject, category filter bar
+
+---
+
+## Navigation
+
+- Add "Store" to the bottom nav (replace or add a 6th item using a `ShoppingBag` or `Library` icon)
+- Route: `/store`
+- Admin route: `/admin-resources` (not linked anywhere in the UI -- you access it directly by URL)
+
+---
+
+## Security Model
+
+1. **Admin password**: Stored as Cloud secret `ADMIN_PANEL_PASSWORD`, never in code
+2. **Admin edge function**: Checks password server-side before any write operation
+3. **RLS on store_resources**: SELECT for all authenticated users; no INSERT/UPDATE/DELETE policies (admin writes bypass RLS via service role)
+4. **Resource tier gating**: Books marked `required_tier: "pro"` show a lock overlay and redirect to upgrade page
+5. **No client-side admin check**: Password verification always goes through the edge function
+
+---
+
+## User Flow
+
+1. Student opens Store tab in bottom nav
+2. Sees "Books" and "Videos" tabs
+3. Books tab: Filters by their grade (auto-detected from profile), browses resources, downloads free ones or sees upgrade prompt for locked ones
+4. Videos tab: Searches YouTube or browses curated educational videos, watches inline
+5. Admin (you): Navigates to `/admin-resources`, enters password, uploads resources with metadata
+
+---
+
+## Technical Details
+
+- YouTube search reuses the existing `RAPIDAPI_KEY` secret for the YouTube Search API
+- Book files uploaded to `store-resources` storage bucket via the admin edge function
+- The admin page uses a simple `useState` password gate -- once verified via edge function, the admin UI renders
+- Grade auto-detection pulls from the user's `profiles.grade_level` to pre-filter results
+- Download count incremented via a simple RPC or direct update when a user downloads
+
