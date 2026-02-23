@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.job-search]
 verify_jwt = false
+
+[functions.admin-verify]
+verify_jwt = false
+
+[functions.admin-resources]
+verify_jwt = false
