@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Zap, Target, GraduationCap, BarChart3, AlertTriangle } from 'lucide-react';
+import { Loader2, Zap, Target, GraduationCap, BarChart3, AlertTriangle, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useSubscription } from '@/hooks/useSubscription';
+import { Badge } from '@/components/ui/badge';
 
 interface ExamSubject {
   id: string;
@@ -22,6 +24,7 @@ const SubjectSelector = ({ examTypeId, examName, onSelectMode }: SubjectSelector
   const [subjects, setSubjects] = useState<ExamSubject[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ExamSubject | null>(null);
+  const { subscription, getRemainingUses } = useSubscription();
 
   useEffect(() => {
     const fetchSubjects = async () => {
@@ -37,10 +40,12 @@ const SubjectSelector = ({ examTypeId, examName, onSelectMode }: SubjectSelector
     fetchSubjects();
   }, [examTypeId]);
 
-  const modes: { id: Mode; icon: typeof Zap; label: string; desc: string; color: string }[] = [
-    { id: 'quick', icon: Zap, label: 'Quick Practice', desc: '10 questions, untimed', color: '#f59e0b' },
+  const remaining = getRemainingUses('examQuestion');
+
+  const modes: { id: Mode; icon: typeof Zap; label: string; desc: string; color: string; requiresPlus?: boolean }[] = [
+    { id: 'quick', icon: Zap, label: 'Quick Practice', desc: `10 questions, untimed${remaining !== Infinity ? ` • ${remaining} left today` : ''}`, color: '#f59e0b' },
     { id: 'topic', icon: Target, label: 'Topic Practice', desc: 'Pick a topic, 10-20 Qs', color: '#10b981' },
-    { id: 'mock', icon: GraduationCap, label: 'Mock Exam', desc: 'Full timed simulation', color: '#ef4444' },
+    { id: 'mock', icon: GraduationCap, label: 'Mock Exam', desc: 'Full timed CBT simulation', color: '#ef4444', requiresPlus: true },
     { id: 'performance', icon: BarChart3, label: 'My Performance', desc: 'Analytics & progress', color: '#3b82f6' },
     { id: 'weakness', icon: AlertTriangle, label: 'Weak Topics', desc: 'AI-identified gaps', color: '#8b5cf6' },
   ];
@@ -73,25 +78,31 @@ const SubjectSelector = ({ examTypeId, examName, onSelectMode }: SubjectSelector
         </div>
         <h2 className="text-lg font-display font-semibold text-foreground">Choose a Mode</h2>
         <div className="grid grid-cols-1 gap-3">
-          {modes.map((mode, i) => (
-            <motion.button
-              key={mode.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.05 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onSelectMode(selected, mode.id)}
-              className="flex items-center gap-4 p-4 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all text-left"
-            >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${mode.color}20` }}>
-                <mode.icon size={20} style={{ color: mode.color }} />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-foreground text-sm">{mode.label}</h3>
-                <p className="text-xs text-muted-foreground">{mode.desc}</p>
-              </div>
-            </motion.button>
-          ))}
+          {modes.map((mode, i) => {
+            const locked = mode.requiresPlus && !subscription.canUseMockExam;
+            return (
+              <motion.button
+                key={mode.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
+                whileTap={!locked ? { scale: 0.98 } : {}}
+                onClick={() => !locked && onSelectMode(selected, mode.id)}
+                className={`flex items-center gap-4 p-4 rounded-2xl bg-card border border-border transition-all text-left ${locked ? 'opacity-60' : 'hover:border-primary/50'}`}
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${mode.color}20` }}>
+                  {locked ? <Lock size={20} className="text-muted-foreground" /> : <mode.icon size={20} style={{ color: mode.color }} />}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-foreground text-sm">{mode.label}</h3>
+                    {locked && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Plus+</Badge>}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{locked ? 'Upgrade to Plus or Pro to unlock' : mode.desc}</p>
+                </div>
+              </motion.button>
+            );
+          })}
         </div>
       </div>
     );
