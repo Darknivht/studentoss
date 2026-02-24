@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, MapPin, Briefcase, ExternalLink, Loader2, Globe, Clock, DollarSign, Building2 } from 'lucide-react';
+import { Search, MapPin, Briefcase, ExternalLink, Loader2, Globe, Clock, DollarSign, Building2, CalendarDays } from 'lucide-react';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 
 interface JobListing {
@@ -36,6 +36,7 @@ const JobSearch = () => {
   const [location, setLocation] = useState('');
   const [jobType, setJobType] = useState('all');
   const [remote, setRemote] = useState('all');
+  const [datePosted, setDatePosted] = useState('month');
   const [results, setResults] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
@@ -59,7 +60,7 @@ const JobSearch = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke('job-search', {
-        body: { query, location, jobType, remote },
+        body: { query, location, jobType, remote, datePosted },
       });
 
       if (error) throw error;
@@ -125,7 +126,7 @@ const JobSearch = () => {
             placeholder="e.g. Software Engineer, Data Analyst, Marketing Intern..."
             onKeyDown={e => e.key === 'Enter' && searchJobs()}
           />
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Input value={location} onChange={e => setLocation(e.target.value)} placeholder="Location" />
             <Select value={jobType} onValueChange={setJobType}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -137,12 +138,29 @@ const JobSearch = () => {
                 <SelectItem value="contract">Contract</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <Select value={remote} onValueChange={setRemote}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Any</SelectItem>
-                <SelectItem value="remote">Remote</SelectItem>
+                <SelectItem value="all">Any Location</SelectItem>
+                <SelectItem value="remote">Remote Only</SelectItem>
                 <SelectItem value="onsite">On-site</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={datePosted} onValueChange={setDatePosted}>
+              <SelectTrigger>
+                <div className="flex items-center gap-1">
+                  <CalendarDays className="w-3 h-3" />
+                  <SelectValue />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Past 24 hours</SelectItem>
+                <SelectItem value="3days">Past 3 days</SelectItem>
+                <SelectItem value="week">Past week</SelectItem>
+                <SelectItem value="month">Past month</SelectItem>
+                <SelectItem value="all">Any time</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -198,7 +216,7 @@ const JobSearch = () => {
                 <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{job.location}</span>
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(job.postedDate)}</span>
+                    <span className="flex items-center gap-1 font-medium text-primary"><Clock className="w-3 h-3" />{formatDate(job.postedDate)}</span>
                     {formatSalary(job) && (
                       <span className="flex items-center gap-1 text-emerald-600"><DollarSign className="w-3 h-3" />{formatSalary(job)}</span>
                     )}

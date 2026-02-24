@@ -5,15 +5,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function searchJSearch(query: string, location: string, jobType: string, remote: string, apiKey: string) {
+async function searchJSearch(query: string, location: string, jobType: string, remote: string, apiKey: string, datePosted: string = "month") {
   let searchQuery = query;
   if (location) searchQuery += ` in ${location}`;
+
+  const validDatePosted = ["all", "today", "3days", "week", "month"].includes(datePosted) ? datePosted : "month";
 
   const params = new URLSearchParams({
     query: searchQuery,
     page: "1",
     num_pages: "1",
-    date_posted: "all",
+    date_posted: validDatePosted,
   });
 
   if (jobType && jobType !== "all") {
@@ -46,7 +48,7 @@ async function searchJSearch(query: string, location: string, jobType: string, r
 
   const data = await response.json();
 
-  return (data.data || []).map((job: any) => ({
+  const jobs = (data.data || []).map((job: any) => ({
     title: job.job_title || "Untitled",
     company: job.employer_name || "Unknown",
     companyLogo: job.employer_logo || null,
@@ -64,6 +66,16 @@ async function searchJSearch(query: string, location: string, jobType: string, r
     publisher: job.job_publisher || null,
     highlights: job.job_highlights?.Qualifications?.slice(0, 5) || [],
   }));
+
+  // Sort by posted date descending (newest first)
+  jobs.sort((a: any, b: any) => {
+    if (!a.postedDate && !b.postedDate) return 0;
+    if (!a.postedDate) return 1;
+    if (!b.postedDate) return -1;
+    return new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime();
+  });
+
+  return jobs;
 }
 
 async function searchRemotive(query: string) {
@@ -102,7 +114,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, location, jobType, remote } = await req.json();
+    const { query, location, jobType, remote, datePosted } = await req.json();
 
     if (!query) {
       return new Response(
@@ -119,7 +131,7 @@ serve(async (req) => {
     if (RAPIDAPI_KEY) {
       try {
         console.log("Trying JSearch API...");
-        jobs = await searchJSearch(query, location || "", jobType || "all", remote || "all", RAPIDAPI_KEY);
+        jobs = await searchJSearch(query, location || "", jobType || "all", remote || "all", RAPIDAPI_KEY, datePosted || "month");
         source = "jsearch";
         console.log(`JSearch returned ${jobs.length} results`);
       } catch (err) {
