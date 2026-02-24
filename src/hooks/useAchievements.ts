@@ -18,19 +18,32 @@ interface UserStats {
   focus_sessions: number;
   total_xp: number;
   groups_joined: number;
+  messages_sent: number;
+  challenges_sent: number;
+  perfect_quizzes: number;
+  study_minutes: number;
+  subjects_with_notes: number;
 }
 
 export const fetchUserStats = async (userId: string): Promise<UserStats> => {
-  const [profileRes, notesRes, quizzesRes, focusRes, flashcardsRes, groupsRes] = await Promise.all([
+  const [profileRes, notesRes, quizzesRes, focusRes, flashcardsRes, groupsRes, messagesRes, challengesRes, quizDataRes, courseNotesRes, studySessionsRes] = await Promise.all([
     supabase.from('profiles').select('current_streak, total_xp').eq('user_id', userId).maybeSingle(),
     supabase.from('notes').select('*', { count: 'exact', head: true }).eq('user_id', userId),
     supabase.from('quiz_attempts').select('*', { count: 'exact', head: true }).eq('user_id', userId),
     supabase.from('pomodoro_sessions').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('session_type', 'focus'),
     supabase.from('flashcards').select('repetitions').eq('user_id', userId),
     supabase.from('study_group_members').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('messages').select('*', { count: 'exact', head: true }).eq('sender_id', userId),
+    supabase.from('peer_challenges').select('*', { count: 'exact', head: true }).eq('challenger_id', userId),
+    supabase.from('quiz_attempts').select('score, total_questions').eq('user_id', userId),
+    supabase.from('notes').select('course_id').eq('user_id', userId).not('course_id', 'is', null),
+    supabase.from('study_sessions').select('total_minutes').eq('user_id', userId),
   ]);
 
   const flashcardsReviewed = flashcardsRes.data?.reduce((sum, fc) => sum + (fc.repetitions || 0), 0) || 0;
+  const perfectQuizzes = (quizDataRes.data || []).filter(q => q.score === q.total_questions && q.total_questions > 0).length;
+  const uniqueSubjects = new Set((courseNotesRes.data || []).map(n => n.course_id)).size;
+  const totalStudyMinutes = (studySessionsRes.data || []).reduce((sum, s) => sum + (s.total_minutes || 0), 0);
 
   return {
     notes_count: notesRes.count || 0,
@@ -40,6 +53,11 @@ export const fetchUserStats = async (userId: string): Promise<UserStats> => {
     focus_sessions: focusRes.count || 0,
     total_xp: profileRes.data?.total_xp || 0,
     groups_joined: groupsRes.count || 0,
+    messages_sent: messagesRes.count || 0,
+    challenges_sent: challengesRes.count || 0,
+    perfect_quizzes: perfectQuizzes,
+    study_minutes: totalStudyMinutes,
+    subjects_with_notes: uniqueSubjects,
   };
 };
 
