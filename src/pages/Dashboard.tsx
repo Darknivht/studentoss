@@ -17,6 +17,7 @@ import { useOfflineData, cacheDataLocally, getCachedData } from '@/hooks/useOffl
 import AdBanner from '@/components/ads/AdBanner';
 import { updateAllCoursesProgress } from '@/hooks/useCourseProgress';
 import AnnouncementBanner from '@/components/dashboard/AnnouncementBanner';
+import { Target, ChevronRight } from 'lucide-react';
 
 const OFFLINE_PROFILE_KEY = 'offline_profile_cache';
 
@@ -219,6 +220,25 @@ const Dashboard = () => {
 
       {/* Ad Banner for free users */}
       <AdBanner variant="inline" />
+
+      {/* Exam Prep Widget */}
+      <Link to="/exams">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileTap={{ scale: 0.98 }}
+          className="p-4 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 to-primary/5 flex items-center gap-4"
+        >
+          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+            <Target size={24} className="text-primary" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-display font-bold text-sm text-foreground">Exam Prep</h3>
+            <p className="text-xs text-muted-foreground">Practice WAEC, JAMB, NECO & more</p>
+          </div>
+          <ChevronRight size={18} className="text-muted-foreground" />
+        </motion.div>
+      </Link>
 
       {/* Study Progress Widget */}
       <StudyProgressWidget />
