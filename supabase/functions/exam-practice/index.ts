@@ -69,16 +69,40 @@ async function callAI(systemPrompt: string, userPrompt: string): Promise<string>
 }
 
 function extractJsonFromAI(raw: string): unknown {
-  // Try to extract JSON from markdown fences or raw
   const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   const toParse = fenceMatch ? fenceMatch[1].trim() : raw.trim();
   return JSON.parse(toParse);
+}
+
+// ─── Difficulty adaptation helper ────────────────────────────────────
+async function getUserDifficultyBias(
+  supabase: ReturnType<typeof serviceClient>,
+  userId: string | null,
+  subjectId: string,
+): Promise<"easy" | "medium" | "hard"> {
+  if (!userId) return "medium";
+
+  const { data: recent } = await supabase
+    .from("exam_attempts")
+    .select("is_correct")
+    .eq("user_id", userId)
+    .eq("subject_id", subjectId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (!recent || recent.length < 5) return "medium";
+
+  const accuracy = recent.filter((a) => a.is_correct).length / recent.length;
+  if (accuracy > 0.75) return "hard";
+  if (accuracy < 0.4) return "easy";
+  return "medium";
 }
 
 // ─── Action: generate-questions ──────────────────────────────────────
 async function generateQuestions(
   supabase: ReturnType<typeof serviceClient>,
   body: Record<string, unknown>,
+  userId: string | null,
 ) {
   const { exam_type_id, subject_id, topic_id, count = 10 } = body as {
     exam_type_id: string;
@@ -87,7 +111,8 @@ async function generateQuestions(
     count?: number;
   };
 
-  // 1. Try to fetch existing questions from the bank
+  const difficultyBias = await getUserDifficultyBias(supabase, userId, subject_id);
+
   let query = supabase
     .from("exam_questions")
     .select("*")
@@ -98,18 +123,32 @@ async function generateQuestions(
   if (topic_id) query = query.eq("topic_id", topic_id);
 
   const { data: existing } = await query.limit(200);
-  const pool = existing ?? [];
+  let pool = existing ?? [];
 
-  // Shuffle and pick
-  const shuffled = pool.sort(() => Math.random() - 0.5);
-  if (shuffled.length >= (count as number)) {
-    return { questions: shuffled.slice(0, count as number) };
+  // Bias selection toward the preferred difficulty
+  if (pool.length > (count as number)) {
+    const preferred = pool.filter((q) => q.difficulty === difficultyBias);
+    const others = pool.filter((q) => q.difficulty !== difficultyBias);
+    const prefCount = Math.min(preferred.length, Math.ceil((count as number) * 0.7));
+    const otherCount = (count as number) - prefCount;
+    const picked = [
+      ...preferred.sort(() => Math.random() - 0.5).slice(0, prefCount),
+      ...others.sort(() => Math.random() - 0.5).slice(0, otherCount),
+    ].sort(() => Math.random() - 0.5);
+    if (picked.length >= (count as number)) {
+      return { questions: picked.slice(0, count as number), difficulty_bias: difficultyBias };
+    }
+    pool = picked;
   }
 
-  // 2. Not enough questions → generate with AI
+  const shuffled = pool.sort(() => Math.random() - 0.5);
+  if (shuffled.length >= (count as number)) {
+    return { questions: shuffled.slice(0, count as number), difficulty_bias: difficultyBias };
+  }
+
+  // Not enough questions → generate with AI
   const needed = (count as number) - shuffled.length;
 
-  // Get context names
   const { data: examType } = await supabase.from("exam_types").select("name, description").eq("id", exam_type_id).single();
   const { data: subject } = await supabase.from("exam_subjects").select("name").eq("id", subject_id).single();
 
@@ -118,6 +157,12 @@ async function generateQuestions(
     const { data: topic } = await supabase.from("exam_topics").select("name").eq("id", topic_id).single();
     topicName = topic?.name ?? "";
   }
+
+  const difficultyInstruction = difficultyBias === "hard"
+    ? "Focus on harder questions: ~60% hard, ~30% medium, ~10% easy. The student is performing well."
+    : difficultyBias === "easy"
+    ? "Focus on easier questions: ~60% easy, ~30% medium, ~10% hard. The student needs confidence building."
+    : "Mix difficulties: ~30% easy, ~50% medium, ~20% hard.";
 
   const systemPrompt = `You are an expert exam question generator for ${examType?.name ?? "exams"}.
 Generate exactly ${needed} multiple-choice questions for the subject "${subject?.name ?? ""}".
@@ -131,7 +176,7 @@ Return ONLY a valid JSON array of objects, each with:
 - "explanation": string (why the correct answer is correct)
 - "difficulty": "easy" | "medium" | "hard"
 
-Mix difficulties: ~30% easy, ~50% medium, ~20% hard.
+${difficultyInstruction}
 Randomise the position of the correct answer.
 Make distractors plausible — represent common misconceptions.
 Return ONLY the JSON array, no other text.`;
@@ -139,7 +184,6 @@ Return ONLY the JSON array, no other text.`;
   const raw = await callAI(systemPrompt, `Generate ${needed} questions now.`);
   const generated = extractJsonFromAI(raw) as Array<Record<string, unknown>>;
 
-  // 3. Cache generated questions
   const toInsert = generated.map((q) => ({
     exam_type_id,
     subject_id,
@@ -158,7 +202,7 @@ Return ONLY the JSON array, no other text.`;
     .select();
 
   const allQuestions = [...shuffled, ...(inserted ?? [])];
-  return { questions: allQuestions.slice(0, count as number) };
+  return { questions: allQuestions.slice(0, count as number), difficulty_bias: difficultyBias };
 }
 
 // ─── Action: submit-answer ───────────────────────────────────────────
@@ -201,7 +245,6 @@ async function submitAnswer(
 
   if (error) throw error;
 
-  // Fetch explanation if question_id provided
   let explanation: string | null = null;
   if (question_id) {
     const { data: q } = await supabase.from("exam_questions").select("explanation, correct_index, options").eq("id", question_id).single();
@@ -222,7 +265,6 @@ async function getWeaknesses(
     subject_id: string;
   };
 
-  // Get last 200 attempts for this exam + subject
   const { data: attempts } = await supabase
     .from("exam_attempts")
     .select("topic_id, is_correct")
@@ -236,7 +278,6 @@ async function getWeaknesses(
     return { weaknesses: [], message: "Not enough data yet. Practice more questions!" };
   }
 
-  // Group by topic
   const topicStats: Record<string, { correct: number; total: number }> = {};
   for (const a of attempts) {
     const tid = a.topic_id ?? "__general__";
@@ -245,7 +286,6 @@ async function getWeaknesses(
     if (a.is_correct) topicStats[tid].correct++;
   }
 
-  // Get topic names
   const topicIds = Object.keys(topicStats).filter((id) => id !== "__general__");
   let topicNames: Record<string, string> = {};
   if (topicIds.length > 0) {
@@ -258,7 +298,6 @@ async function getWeaknesses(
     }
   }
 
-  // Calculate weaknesses
   const weaknesses = Object.entries(topicStats)
     .map(([tid, stats]) => ({
       topic_id: tid === "__general__" ? null : tid,
@@ -266,10 +305,10 @@ async function getWeaknesses(
       accuracy: Math.round((stats.correct / stats.total) * 100),
       total_attempts: stats.total,
       correct: stats.correct,
-      confidence: Math.min(1, stats.total / 10), // 0-1 confidence based on sample size
+      confidence: Math.min(1, stats.total / 10),
     }))
-    .filter((w) => w.total_attempts >= 3) // need at least 3 attempts
-    .sort((a, b) => a.accuracy - b.accuracy); // worst first
+    .filter((w) => w.total_attempts >= 3)
+    .sort((a, b) => a.accuracy - b.accuracy);
 
   const weak = weaknesses.filter((w) => w.accuracy < 60);
 
@@ -289,10 +328,8 @@ async function generateStudyPlan(
     daily_hours?: number;
   };
 
-  // Get weakness data
   const weakData = await getWeaknesses(supabase, userId, { exam_type_id, subject_id });
 
-  // Get context
   const { data: examType } = await supabase.from("exam_types").select("name").eq("id", exam_type_id).single();
   const { data: subject } = await supabase.from("exam_subjects").select("name").eq("id", subject_id).single();
 
@@ -340,7 +377,7 @@ serve(async (req) => {
 
     switch (action) {
       case "generate-questions": {
-        const result = await generateQuestions(supabase, body);
+        const result = await generateQuestions(supabase, body, user.id);
         return res(result);
       }
 
