@@ -16,6 +16,7 @@ import { checkAndResetStreak } from '@/lib/streak';
 import { useOfflineData, cacheDataLocally, getCachedData } from '@/hooks/useOfflineData';
 import AdBanner from '@/components/ads/AdBanner';
 import { updateAllCoursesProgress } from '@/hooks/useCourseProgress';
+import AnnouncementBanner from '@/components/dashboard/AnnouncementBanner';
 
 const OFFLINE_PROFILE_KEY = 'offline_profile_cache';
 
@@ -199,6 +200,9 @@ const Dashboard = () => {
           <Settings size={20} className="text-muted-foreground" />
         </Link>
       </motion.header>
+
+      {/* Announcements */}
+      <AnnouncementBanner />
 
       {/* Streak Card */}
       <StreakCard
