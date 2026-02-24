@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Clock, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
@@ -19,52 +20,87 @@ interface MockExamModeProps {
   examTypeId: string;
   subjectId: string;
   subjectName: string;
+  questionCount?: number;
+  timeLimitMinutes?: number;
   onBack: () => void;
 }
 
-const QUESTION_COUNT = 40;
-const TIME_LIMIT_SECONDS = 60 * 60; // 1 hour
-
-const MockExamMode = ({ examTypeId, subjectId, subjectName, onBack }: MockExamModeProps) => {
+const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, timeLimitMinutes = 60, onBack }: MockExamModeProps) => {
   const { user } = useAuth();
+  const { incrementUsage } = useSubscription();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(TIME_LIMIT_SECONDS);
+  const [timeLeft, setTimeLeft] = useState(timeLimitMinutes * 60);
   const [finished, setFinished] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
-    const fetch = async () => {
-      const { data } = await supabase
-        .from('exam_questions')
-        .select('*')
-        .eq('exam_type_id', examTypeId)
-        .eq('subject_id', subjectId)
-        .eq('is_active', true)
-        .limit(QUESTION_COUNT);
+    const fetchQuestions = async () => {
+      try {
+        // Use exam-practice edge function for AI-powered question generation
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        
+        const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exam-practice`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            action: 'generate-questions',
+            exam_type_id: examTypeId,
+            subject_id: subjectId,
+            count: questionCount,
+          }),
+        });
 
-      const mapped = (data || []).map(q => ({
-        id: q.id,
-        question: q.question,
-        options: Array.isArray(q.options) ? (q.options as string[]) : [],
-        correct_index: q.correct_index,
-        explanation: q.explanation,
-        topic_id: q.topic_id,
-      }));
+        const result = await resp.json();
+        
+        if (result.questions && result.questions.length > 0) {
+          const mapped = result.questions.map((q: any) => ({
+            id: q.id || crypto.randomUUID(),
+            question: q.question,
+            options: Array.isArray(q.options) ? q.options : [],
+            correct_index: q.correct_index,
+            explanation: q.explanation,
+            topic_id: q.topic_id || null,
+          }));
+          setQuestions(mapped);
+        }
+      } catch (error) {
+        console.error('Error fetching questions:', error);
+        // Fallback: direct DB query
+        const { data } = await supabase
+          .from('exam_questions')
+          .select('*')
+          .eq('exam_type_id', examTypeId)
+          .eq('subject_id', subjectId)
+          .eq('is_active', true)
+          .limit(questionCount);
 
-      // Shuffle
-      for (let i = mapped.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [mapped[i], mapped[j]] = [mapped[j], mapped[i]];
+        const mapped = (data || []).map(q => ({
+          id: q.id,
+          question: q.question,
+          options: Array.isArray(q.options) ? (q.options as string[]) : [],
+          correct_index: q.correct_index,
+          explanation: q.explanation,
+          topic_id: q.topic_id,
+        }));
+
+        for (let i = mapped.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [mapped[i], mapped[j]] = [mapped[j], mapped[i]];
+        }
+
+        setQuestions(mapped);
       }
-
-      setQuestions(mapped);
       setLoading(false);
     };
-    fetch();
-  }, [examTypeId, subjectId]);
+    fetchQuestions();
+  }, [examTypeId, subjectId, questionCount]);
 
   useEffect(() => {
     if (finished || loading) return;
@@ -97,6 +133,11 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, onBack }: MockExamMo
     }));
 
     await supabase.from('exam_attempts').insert(inserts);
+
+    // Increment usage for each question answered
+    for (let i = 0; i < questions.length; i++) {
+      await incrementUsage('examQuestion');
+    }
   }, [user, questions, answers, examTypeId, subjectId, sessionId]);
 
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
@@ -105,6 +146,7 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, onBack }: MockExamMo
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        <p className="ml-3 text-sm text-muted-foreground">Generating {questionCount} questions...</p>
       </div>
     );
   }

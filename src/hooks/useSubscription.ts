@@ -10,6 +10,7 @@ interface FeatureLimits {
   notesLimit: number;
   jobSearchesLimit: number;
   resumeTemplatesLimit: number;
+  examQuestionsLimit: number;
 }
 
 interface LifetimeLimits {
@@ -36,6 +37,7 @@ interface SubscriptionData {
   quizzesToday: number;
   flashcardsToday: number;
   notesToday: number;
+  examQuestionsToday: number;
   jobSearchesThisMonth: number;
   jobSearchesResetMonth: string;
   limits: FeatureLimits;
@@ -51,6 +53,7 @@ interface SubscriptionData {
   canUseChat: boolean;
   canUseGroupChat: boolean;
   canUseAdvancedTools: boolean;
+  canUseMockExam: boolean;
   showAds: boolean;
 }
 
@@ -61,6 +64,7 @@ const FREE_LIMITS: FeatureLimits = {
   notesLimit: 5,
   jobSearchesLimit: 3,
   resumeTemplatesLimit: 3,
+  examQuestionsLimit: 5,
 };
 
 const PLUS_LIMITS: FeatureLimits = {
@@ -70,6 +74,7 @@ const PLUS_LIMITS: FeatureLimits = {
   notesLimit: 15,
   jobSearchesLimit: 10,
   resumeTemplatesLimit: 7,
+  examQuestionsLimit: 30,
 };
 
 const PRO_LIMITS: FeatureLimits = {
@@ -79,6 +84,7 @@ const PRO_LIMITS: FeatureLimits = {
   notesLimit: Infinity,
   jobSearchesLimit: Infinity,
   resumeTemplatesLimit: 10,
+  examQuestionsLimit: Infinity,
 };
 
 const FREE_LIFETIME: LifetimeLimits = { totalNotes: 15, totalQuizzes: 20, totalFlashcardSets: 10, totalAIUses: 30 };
@@ -87,24 +93,24 @@ const PRO_LIFETIME: LifetimeLimits = { totalNotes: Infinity, totalQuizzes: Infin
 
 const FULL_ACCESS: SubscriptionData = {
   tier: 'pro', isPro: true, isPlus: true,
-  aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0,
+  aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0, examQuestionsToday: 0,
   jobSearchesThisMonth: 0, jobSearchesResetMonth: '',
   limits: PRO_LIMITS, lifetimeLimits: PRO_LIFETIME,
   totalNotesCount: 0, totalQuizzesCount: 0, totalFlashcardSetsCount: 0, totalAIUsesCount: 0,
   canUseAI: true, canCreateQuiz: true, canCreateFlashcard: true, canCreateNote: true,
-  canUseChat: true, canUseGroupChat: true, canUseAdvancedTools: true, showAds: false,
+  canUseChat: true, canUseGroupChat: true, canUseAdvancedTools: true, canUseMockExam: true, showAds: false,
 };
 
 export const useSubscription = () => {
   const { user } = useAuth();
   const [subscription, setSubscription] = useState<SubscriptionData>({
     tier: 'free', isPro: false, isPlus: false,
-    aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0,
+    aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0, examQuestionsToday: 0,
     jobSearchesThisMonth: 0, jobSearchesResetMonth: '',
     limits: FREE_LIMITS, lifetimeLimits: FREE_LIFETIME,
     totalNotesCount: 0, totalQuizzesCount: 0, totalFlashcardSetsCount: 0, totalAIUsesCount: 0,
     canUseAI: true, canCreateQuiz: true, canCreateFlashcard: true, canCreateNote: true,
-    canUseChat: true, canUseGroupChat: false, canUseAdvancedTools: false, showAds: true,
+    canUseChat: true, canUseGroupChat: false, canUseAdvancedTools: false, canUseMockExam: false, showAds: true,
   });
   const [loading, setLoading] = useState(true);
 
@@ -122,7 +128,7 @@ export const useSubscription = () => {
 
     try {
       // Fetch profile + lifetime counts in parallel
-      const [profileRes, notesCountRes, quizzesCountRes, flashcardsCountRes, aiCountRes] = await Promise.all([
+      const [profileRes, notesCountRes, quizzesCountRes, flashcardsCountRes, aiCountRes, examAttemptsCountRes] = await Promise.all([
         supabase.from('profiles')
           .select('subscription_tier, subscription_expires_at, ai_calls_today, ai_calls_reset_at, quizzes_today, flashcards_generated_today, notes_today, job_searches_this_month, job_searches_reset_month')
           .eq('user_id', user.id).single(),
@@ -130,6 +136,10 @@ export const useSubscription = () => {
         supabase.from('quiz_attempts').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
         supabase.from('flashcards').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
         supabase.from('chat_messages').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('role', 'user'),
+        // Count today's exam attempts
+        supabase.from('exam_attempts').select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .gte('created_at', new Date().toISOString().split('T')[0]),
       ]);
 
       if (profileRes.error) throw profileRes.error;
@@ -155,6 +165,7 @@ export const useSubscription = () => {
       const quizzesToday = data?.ai_calls_reset_at === today ? (data?.quizzes_today || 0) : 0;
       const flashcardsToday = data?.ai_calls_reset_at === today ? (data?.flashcards_generated_today || 0) : 0;
       const notesToday = data?.ai_calls_reset_at === today ? (data?.notes_today || 0) : 0;
+      const examQuestionsToday = examAttemptsCountRes.count || 0;
 
       const totalNotesCount = notesCountRes.count || 0;
       const totalQuizzesCount = quizzesCountRes.count || 0;
@@ -166,7 +177,7 @@ export const useSubscription = () => {
 
       setSubscription({
         tier, isPro, isPlus,
-        aiCallsToday, quizzesToday, flashcardsToday, notesToday,
+        aiCallsToday, quizzesToday, flashcardsToday, notesToday, examQuestionsToday,
         jobSearchesThisMonth, jobSearchesResetMonth,
         limits, lifetimeLimits,
         totalNotesCount, totalQuizzesCount, totalFlashcardSetsCount, totalAIUsesCount,
@@ -177,6 +188,7 @@ export const useSubscription = () => {
         canUseChat: true,
         canUseGroupChat: isPro || isPlus,
         canUseAdvancedTools: isPro,
+        canUseMockExam: isPro || isPlus,
         showAds: tier === 'free',
       });
     } catch (error) {
@@ -186,11 +198,11 @@ export const useSubscription = () => {
     }
   };
 
-  const gateFeature = useCallback((type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch'): GateResult => {
+  const gateFeature = useCallback((type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch' | 'examQuestion'): GateResult => {
     if (!SUBSCRIPTION_ENABLED) return { allowed: true, reason: null, currentUsage: 0, limit: Infinity, isLifetime: false, requiredTier: 'plus' };
     if (subscription.isPro) return { allowed: true, reason: null, currentUsage: 0, limit: Infinity, isLifetime: false, requiredTier: 'plus' };
 
-    // Monthly job search check (2/month for free, 10/month for plus)
+    // Monthly job search check
     if (type === 'jobSearch') {
       const monthlyLimit = subscription.isPlus ? 10 : 2;
       const currentMonth = new Date().toISOString().slice(0, 7);
@@ -201,6 +213,16 @@ export const useSubscription = () => {
       return { allowed: true, reason: null, currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
     }
 
+    // Exam questions daily check
+    if (type === 'examQuestion') {
+      const limit = subscription.limits.examQuestionsLimit;
+      const usage = subscription.examQuestionsToday;
+      if (usage >= limit) {
+        return { allowed: false, reason: 'daily', currentUsage: usage, limit, isLifetime: false, requiredTier: 'plus' };
+      }
+      return { allowed: true, reason: null, currentUsage: usage, limit, isLifetime: false, requiredTier: 'plus' };
+    }
+
     // Check lifetime first
     const lifetimeMap = {
       ai: { current: subscription.totalAIUsesCount, limit: subscription.lifetimeLimits.totalAIUses },
@@ -209,8 +231,8 @@ export const useSubscription = () => {
       note: { current: subscription.totalNotesCount, limit: subscription.lifetimeLimits.totalNotes },
     };
 
-    const lifetime = lifetimeMap[type];
-    if (lifetime.current >= lifetime.limit) {
+    const lifetime = lifetimeMap[type as keyof typeof lifetimeMap];
+    if (lifetime && lifetime.current >= lifetime.limit) {
       return { allowed: false, reason: 'lifetime', currentUsage: lifetime.current, limit: lifetime.limit, isLifetime: true, requiredTier: 'plus' };
     }
 
@@ -222,17 +244,23 @@ export const useSubscription = () => {
       note: { current: subscription.notesToday, limit: subscription.limits.notesLimit },
     };
 
-    const daily = dailyMap[type];
-    if (daily.current >= daily.limit) {
+    const daily = dailyMap[type as keyof typeof dailyMap];
+    if (daily && daily.current >= daily.limit) {
       return { allowed: false, reason: 'daily', currentUsage: daily.current, limit: daily.limit, isLifetime: false, requiredTier: 'plus' };
     }
 
-    return { allowed: true, reason: null, currentUsage: daily.current, limit: daily.limit, isLifetime: false, requiredTier: 'plus' };
+    return { allowed: true, reason: null, currentUsage: daily?.current ?? 0, limit: daily?.limit ?? Infinity, isLifetime: false, requiredTier: 'plus' };
   }, [subscription]);
 
-  const incrementUsage = async (type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch') => {
+  const incrementUsage = async (type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch' | 'examQuestion') => {
     if (!user) return false;
     if (!SUBSCRIPTION_ENABLED) return true;
+
+    // examQuestion usage is tracked via exam_attempts table, no profile field needed
+    if (type === 'examQuestion') {
+      setSubscription(prev => ({ ...prev, examQuestionsToday: prev.examQuestionsToday + 1 }));
+      return true;
+    }
 
     if (type === 'jobSearch') {
       try {
@@ -271,11 +299,11 @@ export const useSubscription = () => {
     }
   };
 
-  const checkLimit = (type: 'ai' | 'quiz' | 'flashcard' | 'note'): boolean => {
+  const checkLimit = (type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'examQuestion'): boolean => {
     return gateFeature(type).allowed;
   };
 
-  const getRemainingUses = (type: 'ai' | 'quiz' | 'flashcard' | 'note'): number => {
+  const getRemainingUses = (type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'examQuestion'): number => {
     if (!SUBSCRIPTION_ENABLED || subscription.isPro) return Infinity;
     const gate = gateFeature(type);
     return Math.max(0, gate.limit - gate.currentUsage);
