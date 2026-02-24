@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,15 +21,30 @@ export const YouTubeSection = () => {
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [curatedVideos, setCuratedVideos] = useState<any[]>([]);
 
+  useEffect(() => {
+    fetchCuratedVideos();
+  }, []);
+
+  const fetchCuratedVideos = async () => {
+    const { data } = await supabase
+      .from('store_resources')
+      .select('*')
+      .eq('category', 'video')
+      .order('created_at', { ascending: false });
+    if (data) setCuratedVideos(data);
+  };
+
+  const extractVideoId = (url: string) => {
+    const match = url.match(/(?:v=|\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    return match?.[1] || '';
+  };
+
   const searchYouTube = async () => {
     if (!query.trim()) return;
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('ai-study', {
-        body: {
-          action: 'youtube-search',
-          query: query.trim(),
-        },
+        body: { action: 'youtube-search', query: query.trim() },
       });
       if (error) throw error;
       if (data?.results) {
@@ -46,6 +61,27 @@ export const YouTubeSection = () => {
       setLoading(false);
     }
   };
+
+  const VideoCard = ({ video, onClick }: { video: Video; onClick: () => void }) => (
+    <Card className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow" onClick={onClick}>
+      <div className="aspect-video relative bg-muted">
+        {video.thumbnail ? (
+          <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Play className="w-8 h-8 text-muted-foreground" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+          <Play className="w-10 h-10 text-white fill-white" />
+        </div>
+      </div>
+      <CardContent className="p-3">
+        <h4 className="text-sm font-medium line-clamp-2">{video.title}</h4>
+        <p className="text-xs text-muted-foreground mt-1">{video.channelName}</p>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-4">
@@ -86,40 +122,43 @@ export const YouTubeSection = () => {
         </div>
       )}
 
+      {/* Curated Videos */}
+      {curatedVideos.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3">📚 Curated Videos</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {curatedVideos.map((v) => {
+              const videoId = v.youtube_url ? extractVideoId(v.youtube_url) : '';
+              return (
+                <VideoCard
+                  key={v.id}
+                  video={{
+                    id: videoId,
+                    title: v.title,
+                    thumbnail: v.thumbnail_url || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                    channelName: v.author || v.subject,
+                  }}
+                  onClick={() => setActiveVideo(videoId)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Search Results */}
       {results.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold mb-3">Search Results</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {results.map((video) => (
-              <Card
-                key={video.id}
-                className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => setActiveVideo(video.id)}
-              >
-                <div className="aspect-video relative bg-muted">
-                  {video.thumbnail ? (
-                    <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Play className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                    <Play className="w-10 h-10 text-white fill-white" />
-                  </div>
-                </div>
-                <CardContent className="p-3">
-                  <h4 className="text-sm font-medium line-clamp-2">{video.title}</h4>
-                  <p className="text-xs text-muted-foreground mt-1">{video.channelName}</p>
-                </CardContent>
-              </Card>
+              <VideoCard key={video.id} video={video} onClick={() => setActiveVideo(video.id)} />
             ))}
           </div>
         </div>
       )}
 
-      {results.length === 0 && !loading && (
+      {results.length === 0 && curatedVideos.length === 0 && !loading && (
         <div className="text-center py-12 text-muted-foreground">
           <Play className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="text-sm">Search for educational videos above</p>

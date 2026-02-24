@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookOpen, Video } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { ResourceCard } from "@/components/store/ResourceCard";
 import { ResourceFilters } from "@/components/store/ResourceFilters";
@@ -38,11 +40,11 @@ const Store = () => {
 
   const fetchResources = async () => {
     const { data, error } = await supabase
-      .from('store_resources' as any)
+      .from('store_resources')
       .select('*')
       .neq('category', 'video')
       .order('created_at', { ascending: false });
-    if (!error && data) setResources(data as any[]);
+    if (!error && data) setResources(data);
     setLoading(false);
   };
 
@@ -100,6 +102,37 @@ const Store = () => {
             grades={grades}
           />
 
+          {/* My Grade quick filter + count */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {userGrade && gradeLevel !== userGrade && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setGradeLevel(userGrade)}
+                >
+                  My Grade ({userGrade})
+                </Button>
+              )}
+              {gradeLevel !== 'all' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setGradeLevel('all')}
+                >
+                  Show All
+                </Button>
+              )}
+            </div>
+            {!loading && (
+              <Badge variant="secondary" className="text-xs">
+                {filtered.length} resource{filtered.length !== 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
+
           {loading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[...Array(6)].map((_, i) => (
@@ -116,7 +149,7 @@ const Store = () => {
             <div className="text-center py-12 text-muted-foreground">
               <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No resources found</p>
-              <p className="text-xs mt-1">Try adjusting your filters</p>
+              <p className="text-xs mt-1">Try adjusting your filters or check back later</p>
             </div>
           )}
         </TabsContent>
