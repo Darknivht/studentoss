@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Clock, Loader2, CheckCircle2, XCircle, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -35,6 +35,7 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
   const [timeLeft, setTimeLeft] = useState(timeLimitMinutes * 60);
   const [finished, setFinished] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
+  const [reviewWrong, setReviewWrong] = useState(false);
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -161,9 +162,59 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
     );
   }
 
+
   if (finished) {
     const score = questions.reduce((acc, q, i) => acc + (answers[i] === q.correct_index ? 1 : 0), 0);
     const pct = Math.round((score / questions.length) * 100);
+    const wrongQuestions = questions.filter((q, i) => answers[i] !== q.correct_index);
+
+    if (reviewWrong && wrongQuestions.length > 0) {
+      return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+          <div className="flex items-center justify-between">
+            <button onClick={() => setReviewWrong(false)} className="flex items-center gap-1 text-sm text-primary font-medium">
+              <ArrowLeft size={16} /> Back to Results
+            </button>
+            <span className="text-xs text-muted-foreground font-medium">
+              {wrongQuestions.length} wrong answer{wrongQuestions.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="space-y-4">
+            {wrongQuestions.map((q, idx) => {
+              const originalIdx = questions.indexOf(q);
+              return (
+                <motion.div key={q.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} className="p-4 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-3">
+                  <p className="text-sm font-medium text-foreground">{originalIdx + 1}. {q.question}</p>
+                  <div className="space-y-1.5">
+                    {q.options.map((opt, i) => (
+                      <div key={i} className={`flex items-center gap-2 p-2 rounded-lg text-sm ${
+                        i === q.correct_index ? 'bg-green-500/10 border border-green-500/30' :
+                        i === answers[originalIdx] ? 'bg-destructive/10 border border-destructive/30' :
+                        'text-muted-foreground'
+                      }`}>
+                        <span className="w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-semibold shrink-0">
+                          {String.fromCharCode(65 + i)}
+                        </span>
+                        <span className="flex-1">{opt}</span>
+                        {i === q.correct_index && <CheckCircle2 size={14} className="text-green-500 shrink-0" />}
+                        {i === answers[originalIdx] && i !== q.correct_index && <XCircle size={14} className="text-destructive shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                  {q.explanation && (
+                    <div className="p-2 rounded-lg bg-muted/50 border border-border">
+                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Explanation</p>
+                      <p className="text-xs text-foreground">{q.explanation}</p>
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
+          <Button onClick={onBack} className="w-full mt-4">Back to Subjects</Button>
+        </motion.div>
+      );
+    }
 
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 space-y-4">
@@ -171,6 +222,12 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
         <h2 className="text-2xl font-display font-bold text-foreground">{pct}% — Mock Exam</h2>
         <p className="text-muted-foreground">{score} / {questions.length} correct — {subjectName}</p>
         <Progress value={pct} className="w-48 mx-auto" />
+
+        {wrongQuestions.length > 0 && (
+          <Button variant="outline" onClick={() => setReviewWrong(true)} className="gap-2">
+            <Eye size={16} /> Review Wrong Answers ({wrongQuestions.length})
+          </Button>
+        )}
 
         <div className="mt-6 max-h-[300px] overflow-y-auto space-y-2 text-left px-2">
           {questions.map((q, i) => {

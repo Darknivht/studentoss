@@ -259,8 +259,20 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
 
             {showResult && q.explanation && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-xl bg-muted/50 border border-border">
-                <p className="text-xs font-semibold text-muted-foreground mb-1">Explanation</p>
-                <p className="text-sm text-foreground">{q.explanation}</p>
+                {gateFeature('examQuestion').allowed || gateInfo.limit > 5 ? (
+                  <>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">Explanation</p>
+                    <p className="text-sm text-foreground">{q.explanation}</p>
+                  </>
+                ) : (
+                  <div className="text-center py-2">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">🔒 Explanation Locked</p>
+                    <p className="text-xs text-muted-foreground">Upgrade to Plus or Pro to see detailed explanations</p>
+                    <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={() => window.location.href = '/upgrade'}>
+                      Upgrade Now
+                    </Button>
+                  </div>
+                )}
               </motion.div>
             )}
 
