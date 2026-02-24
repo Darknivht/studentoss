@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Eye, WifiOff, User, Lock } from 'lucide-react';
+import { Shield, Eye, User, Lock } from 'lucide-react';
 import ParentalControls from '@/components/safety/ParentalControls';
 import ParentDashboard from '@/components/safety/ParentDashboard';
-import OfflineMode from '@/components/safety/OfflineMode';
 import AppBlockerSettings from '@/components/settings/AppBlockerSettings';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,7 @@ const Safety = () => {
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Safety & Access</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Parental controls and offline features
+            Parental controls and activity monitoring
           </p>
         </div>
         <Button variant="ghost" size="icon" asChild>
@@ -37,7 +36,6 @@ const Safety = () => {
         </Button>
       </motion.header>
 
-      {/* App Blocker Quick Access */}
       <motion.button
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -54,7 +52,7 @@ const Safety = () => {
       </motion.button>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-4">
+        <TabsList className="grid w-full grid-cols-2 mb-4">
           <TabsTrigger value="controls" className="flex items-center gap-1 text-xs">
             <Shield className="w-4 h-4" />
             Controls
@@ -62,10 +60,6 @@ const Safety = () => {
           <TabsTrigger value="activity" className="flex items-center gap-1 text-xs">
             <Eye className="w-4 h-4" />
             Activity
-          </TabsTrigger>
-          <TabsTrigger value="offline" className="flex items-center gap-1 text-xs">
-            <WifiOff className="w-4 h-4" />
-            Offline
           </TabsTrigger>
         </TabsList>
 
@@ -75,10 +69,6 @@ const Safety = () => {
 
         <TabsContent value="activity" className="space-y-6">
           <ParentDashboard />
-        </TabsContent>
-
-        <TabsContent value="offline" className="space-y-6">
-          <OfflineMode />
         </TabsContent>
       </Tabs>
     </div>

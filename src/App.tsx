@@ -4,9 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { OfflineAIProvider } from "@/context/OfflineAIContext";
+
 import AppLayout from "@/components/layout/AppLayout";
-import OfflineSyncIndicator from "@/components/safety/OfflineSyncIndicator";
+
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Onboarding from "./pages/Onboarding";
@@ -66,8 +66,6 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <OfflineAIProvider>
-            <OfflineSyncIndicator />
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<HomeRoute />} />
@@ -95,7 +93,6 @@ const App = () => (
               <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </OfflineAIProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
