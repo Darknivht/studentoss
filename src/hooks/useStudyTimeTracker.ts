@@ -60,20 +60,31 @@ export function useStudyTimeTracker(): StudyTimeTrackerResult {
       }
     }
 
-    // Also sync from database
+    // Sync from database + include pomodoro sessions
     try {
-      const { data: sessions } = await supabase
-        .from('study_sessions')
-        .select('total_minutes')
-        .eq('user_id', user.id)
-        .eq('session_date', today)
-        .single();
+      const [sessionRes, pomodoroRes] = await Promise.all([
+        supabase
+          .from('study_sessions')
+          .select('total_minutes')
+          .eq('user_id', user.id)
+          .eq('session_date', today)
+          .single(),
+        supabase
+          .from('pomodoro_sessions')
+          .select('duration_minutes')
+          .eq('user_id', user.id)
+          .gte('completed_at', `${today}T00:00:00`)
+      ]);
 
-      if (sessions?.total_minutes) {
-        setTodayMinutes(sessions.total_minutes);
+      const sessionMinutes = sessionRes.data?.total_minutes || 0;
+      const pomodoroMinutes = pomodoroRes.data?.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) || 0;
+      const totalFromDb = Math.max(sessionMinutes, pomodoroMinutes, sessionMinutes + pomodoroMinutes);
+
+      if (totalFromDb > 0) {
+        setTodayMinutes(totalFromDb);
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
           date: today, 
-          minutes: sessions.total_minutes 
+          minutes: totalFromDb 
         }));
       }
     } catch {

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
-import { MoreVertical, Trash2 } from 'lucide-react';
+import { MoreVertical, Trash2, Info } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,7 +78,19 @@ const CourseCard = ({ id, name, icon, color, progress, onDelete, onClick, index 
         {/* Progress */}
         <div className="space-y-2">
           <div className="flex justify-between items-center text-xs">
-            <span className="text-muted-foreground">Progress</span>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">Progress</span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger onClick={(e) => e.stopPropagation()}>
+                    <Info size={12} className="text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[200px] text-xs">
+                    <p>Notes (30%) + Quizzes (30%) + Flashcards (40%)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <span className="font-medium" style={{ color }}>{progress}%</span>
           </div>
           <Progress 

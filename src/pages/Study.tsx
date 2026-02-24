@@ -76,6 +76,7 @@ const aiTools = [
 
 const Study = () => {
   const [activeTool, setActiveTool] = useState<ToolType>(null);
+  const [challengeRefreshKey, setChallengeRefreshKey] = useState(0);
 
   const toolMap: Record<string, JSX.Element> = {
     math: <MathSolver onBack={() => setActiveTool(null)} />,
@@ -126,7 +127,7 @@ const Study = () => {
         <p className="text-muted-foreground text-sm mt-1">AI-powered tools to supercharge your learning</p>
       </motion.header>
 
-      <DailyChallenges compact />
+      <DailyChallenges compact refreshKey={challengeRefreshKey} />
 
       <div className="grid grid-cols-2 gap-3">
         {studyTools.map((tool, index) => (

@@ -313,12 +313,15 @@ const CoursePage = () => {
           </div>
           <div className="flex-1">
             <h1 className="text-2xl font-display font-bold text-foreground">{course.name}</h1>
-            <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1">
               <Progress value={course.progress} className="flex-1 h-2" />
               <span className="text-sm font-medium" style={{ color: course.color }}>
                 {course.progress}%
               </span>
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Notes (30%) + Quizzes (30%) + Flashcards (40%)
+            </p>
           </div>
         </div>
       </motion.header>

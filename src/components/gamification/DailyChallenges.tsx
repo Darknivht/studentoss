@@ -42,9 +42,10 @@ export const calculateLevel = (xp: number): { level: number; currentLevelXp: num
 
 interface DailyChallengesProps {
   compact?: boolean;
+  refreshKey?: number;
 }
 
-const DailyChallenges = ({ compact = false }: DailyChallengesProps) => {
+const DailyChallenges = ({ compact = false, refreshKey = 0 }: DailyChallengesProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
@@ -53,6 +54,13 @@ const DailyChallenges = ({ compact = false }: DailyChallengesProps) => {
 
   useEffect(() => {
     if (user) fetchChallengesProgress();
+  }, [user, refreshKey]);
+
+  // Auto-refresh every 30 seconds to pick up activity changes
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(fetchChallengesProgress, 30000);
+    return () => clearInterval(interval);
   }, [user]);
 
   const fetchChallengesProgress = async () => {
