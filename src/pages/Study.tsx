@@ -5,7 +5,7 @@ import {
   BookOpen, Brain, FileText, Sparkles, Timer, Calculator, 
   Sigma, Microscope, Bug, Languages, Youtube, Mic, Zap, 
   ClipboardList, GraduationCap, Lightbulb, Volume2, MessageCircle,
-  Swords, FileCheck, Network, Shield, Quote, Search, Target
+  Swords, FileCheck, Network, Shield, Quote, Search, Target,
 } from 'lucide-react';
 import MathSolver from '@/components/ai-tools/MathSolver';
 import OCRToLatex from '@/components/ai-tools/OCRToLatex';
@@ -128,6 +128,23 @@ const Study = () => {
       </motion.header>
 
       <DailyChallenges compact refreshKey={challengeRefreshKey} />
+
+      {/* Exam Prep Banner */}
+      <Link to="/exams">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileTap={{ scale: 0.98 }}
+          className="p-4 rounded-2xl border border-primary/30 gradient-primary text-primary-foreground flex items-center gap-4"
+        >
+          <span className="text-3xl">🎯</span>
+          <div className="flex-1">
+            <h3 className="font-display font-bold text-base">Exam Prep</h3>
+            <p className="text-xs opacity-90">WAEC, JAMB, NECO, IELTS & more — practice past questions</p>
+          </div>
+          <Target size={20} className="opacity-80" />
+        </motion.div>
+      </Link>
 
       <div className="grid grid-cols-2 gap-3">
         {studyTools.map((tool, index) => (
