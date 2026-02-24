@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.admin-resources]
 verify_jwt = false
+
+[functions.exam-practice]
+verify_jwt = false

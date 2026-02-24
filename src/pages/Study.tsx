@@ -129,6 +129,8 @@ const Study = () => {
 
       <DailyChallenges compact refreshKey={challengeRefreshKey} />
 
+      <div className="mt-2" />
+
       {/* Exam Prep Banner */}
       <Link to="/exams">
         <motion.div
