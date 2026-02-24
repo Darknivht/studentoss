@@ -145,6 +145,113 @@ serve(async (req) => {
         });
       }
 
+      // ─── Exam Types CRUD ───
+      case 'list-exam-types': {
+        const { data, error } = await supabase.from('exam_types').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'create-exam-type': {
+        const { data, error } = await supabase.from('exam_types').insert(body.examType).select().single();
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'update-exam-type': {
+        const { data, error } = await supabase.from('exam_types').update(body.examType).eq('id', body.examTypeId).select().single();
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'delete-exam-type': {
+        const { error } = await supabase.from('exam_types').delete().eq('id', body.examTypeId);
+        if (error) throw error;
+        return json({ success: true });
+      }
+
+      // ─── Exam Subjects CRUD ───
+      case 'list-exam-subjects': {
+        let query = supabase.from('exam_subjects').select('*').order('name');
+        if (body.examTypeId) query = query.eq('exam_type_id', body.examTypeId);
+        const { data, error } = await query;
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'create-exam-subject': {
+        const { data, error } = await supabase.from('exam_subjects').insert(body.subject).select().single();
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'update-exam-subject': {
+        const { data, error } = await supabase.from('exam_subjects').update(body.subject).eq('id', body.subjectId).select().single();
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'delete-exam-subject': {
+        const { error } = await supabase.from('exam_subjects').delete().eq('id', body.subjectId);
+        if (error) throw error;
+        return json({ success: true });
+      }
+
+      // ─── Exam Topics CRUD ───
+      case 'list-exam-topics': {
+        let query = supabase.from('exam_topics').select('*').order('name');
+        if (body.subjectId) query = query.eq('subject_id', body.subjectId);
+        const { data, error } = await query;
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'create-exam-topic': {
+        const { data, error } = await supabase.from('exam_topics').insert(body.topic).select().single();
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'update-exam-topic': {
+        const { data, error } = await supabase.from('exam_topics').update(body.topic).eq('id', body.topicId).select().single();
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'delete-exam-topic': {
+        const { error } = await supabase.from('exam_topics').delete().eq('id', body.topicId);
+        if (error) throw error;
+        return json({ success: true });
+      }
+
+      // ─── Exam Questions CRUD ───
+      case 'list-exam-questions': {
+        let query = supabase.from('exam_questions').select('*').order('created_at', { ascending: false }).limit(200);
+        if (body.examTypeId) query = query.eq('exam_type_id', body.examTypeId);
+        if (body.subjectId) query = query.eq('subject_id', body.subjectId);
+        if (body.topicId) query = query.eq('topic_id', body.topicId);
+        if (body.difficulty) query = query.eq('difficulty', body.difficulty);
+        if (body.source) query = query.eq('source', body.source);
+        const { data, error } = await query;
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'create-exam-question': {
+        const { data, error } = await supabase.from('exam_questions').insert(body.question).select().single();
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'update-exam-question': {
+        const { data, error } = await supabase.from('exam_questions').update(body.question).eq('id', body.questionId).select().single();
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'delete-exam-question': {
+        const { error } = await supabase.from('exam_questions').delete().eq('id', body.questionId);
+        if (error) throw error;
+        return json({ success: true });
+      }
+      case 'bulk-import-questions': {
+        const { questions } = body;
+        if (!Array.isArray(questions) || questions.length === 0) {
+          return json({ error: 'No questions provided' }, 400);
+        }
+        const { data, error } = await supabase.from('exam_questions').insert(questions).select();
+        if (error) throw error;
+        return json({ data, count: data.length });
+      }
+
       default:
         return json({ error: 'Invalid action' }, 400);
     }

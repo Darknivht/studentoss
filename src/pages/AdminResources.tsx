@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lock, Plus, Trash2, Edit, Loader2, LogOut, Megaphone, Trophy, Users, BarChart3, CreditCard, Search } from "lucide-react";
+import { Lock, Plus, Trash2, Edit, Loader2, LogOut, Megaphone, Trophy, Users, BarChart3, CreditCard, Search, BookOpen, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -66,13 +66,14 @@ const AdminResources = () => {
       </div>
 
       <Tabs defaultValue="analytics" className="space-y-4">
-        <TabsList className="grid grid-cols-6 w-full">
+        <TabsList className="grid grid-cols-7 w-full">
           <TabsTrigger value="analytics" className="text-xs"><BarChart3 className="w-3 h-3 mr-1" />Analytics</TabsTrigger>
           <TabsTrigger value="resources" className="text-xs"><Plus className="w-3 h-3 mr-1" />Resources</TabsTrigger>
           <TabsTrigger value="announcements" className="text-xs"><Megaphone className="w-3 h-3 mr-1" />Announce</TabsTrigger>
           <TabsTrigger value="achievements" className="text-xs"><Trophy className="w-3 h-3 mr-1" />Achieve</TabsTrigger>
           <TabsTrigger value="users" className="text-xs"><Users className="w-3 h-3 mr-1" />Users</TabsTrigger>
           <TabsTrigger value="payments" className="text-xs"><CreditCard className="w-3 h-3 mr-1" />Payments</TabsTrigger>
+          <TabsTrigger value="exams" className="text-xs"><BookOpen className="w-3 h-3 mr-1" />Exams</TabsTrigger>
         </TabsList>
 
         <TabsContent value="analytics"><AnalyticsTab adminPassword={adminPassword} /></TabsContent>
@@ -81,6 +82,7 @@ const AdminResources = () => {
         <TabsContent value="achievements"><AchievementsTab adminPassword={adminPassword} /></TabsContent>
         <TabsContent value="users"><UsersTab adminPassword={adminPassword} /></TabsContent>
         <TabsContent value="payments"><PaymentsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="exams"><ExamsTab adminPassword={adminPassword} /></TabsContent>
       </Tabs>
     </div>
   );
@@ -557,6 +559,575 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+};
+
+// ─── Exams Tab ───
+const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
+  const [section, setSection] = useState<'types' | 'subjects' | 'topics' | 'questions'>('types');
+  const [examTypes, setExamTypes] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [topics, setTopics] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Selection state for cascading
+  const [selectedExamType, setSelectedExamType] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const [selectedTopic, setSelectedTopic] = useState<string>("");
+
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Forms
+  const [typeForm, setTypeForm] = useState({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true });
+  const [subjectForm, setSubjectForm] = useState({ name: "", icon: "📘", is_active: true });
+  const [topicForm, setTopicForm] = useState({ name: "", description: "", difficulty: "medium", is_active: true });
+  const [questionForm, setQuestionForm] = useState({ question: "", options: ["", "", "", ""], correct_index: 0, explanation: "", difficulty: "medium", year: "", source: "admin_added" });
+
+  // Filters for questions
+  const [qFilter, setQFilter] = useState({ difficulty: "", source: "" });
+
+  const invoke = async (action: string, extra: any = {}) => {
+    const { data, error } = await supabase.functions.invoke('admin-resources', { body: { password: adminPassword, action, ...extra } });
+    if (error) throw error;
+    return data;
+  };
+
+  const fetchExamTypes = async () => {
+    setLoading(true);
+    try {
+      const res = await invoke('list-exam-types');
+      setExamTypes(res.data || []);
+    } catch { }
+    setLoading(false);
+  };
+
+  const fetchSubjects = async (examTypeId: string) => {
+    setLoading(true);
+    try {
+      const res = await invoke('list-exam-subjects', { examTypeId });
+      setSubjects(res.data || []);
+    } catch { }
+    setLoading(false);
+  };
+
+  const fetchTopics = async (subjectId: string) => {
+    setLoading(true);
+    try {
+      const res = await invoke('list-exam-topics', { subjectId });
+      setTopics(res.data || []);
+    } catch { }
+    setLoading(false);
+  };
+
+  const fetchQuestions = async () => {
+    setLoading(true);
+    try {
+      const filters: any = {};
+      if (selectedExamType) filters.examTypeId = selectedExamType;
+      if (selectedSubject) filters.subjectId = selectedSubject;
+      if (selectedTopic) filters.topicId = selectedTopic;
+      if (qFilter.difficulty) filters.difficulty = qFilter.difficulty;
+      if (qFilter.source) filters.source = qFilter.source;
+      const res = await invoke('list-exam-questions', filters);
+      setQuestions(res.data || []);
+    } catch { }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchExamTypes(); }, []);
+  useEffect(() => { if (selectedExamType) { fetchSubjects(selectedExamType); setSelectedSubject(""); setSelectedTopic(""); } }, [selectedExamType]);
+  useEffect(() => { if (selectedSubject) { fetchTopics(selectedSubject); setSelectedTopic(""); } }, [selectedSubject]);
+
+  // ─── Exam Types CRUD ───
+  const handleTypeSubmit = async () => {
+    if (!typeForm.name || !typeForm.slug) { toast({ title: "Name and slug required", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      await invoke(editingId ? 'update-exam-type' : 'create-exam-type', { examType: typeForm, examTypeId: editingId });
+      toast({ title: editingId ? "Updated" : "Created" });
+      setEditingId(null);
+      setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true });
+      fetchExamTypes();
+    } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleTypeDelete = async (id: string) => {
+    if (!confirm("Delete this exam type? This will delete all related subjects, topics, and questions.")) return;
+    try {
+      await invoke('delete-exam-type', { examTypeId: id });
+      toast({ title: "Deleted" });
+      fetchExamTypes();
+    } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
+  };
+
+  const handleTypeEdit = (t: any) => {
+    setEditingId(t.id);
+    setTypeForm({ name: t.name, slug: t.slug, description: t.description || "", icon: t.icon || "📝", country: t.country || "Nigeria", is_active: t.is_active });
+  };
+
+  // ─── Subjects CRUD ───
+  const handleSubjectSubmit = async () => {
+    if (!subjectForm.name || !selectedExamType) { toast({ title: "Select exam type and enter name", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const subject = { ...subjectForm, exam_type_id: selectedExamType };
+      await invoke(editingId ? 'update-exam-subject' : 'create-exam-subject', { subject, subjectId: editingId });
+      toast({ title: editingId ? "Updated" : "Created" });
+      setEditingId(null);
+      setSubjectForm({ name: "", icon: "📘", is_active: true });
+      fetchSubjects(selectedExamType);
+    } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleSubjectDelete = async (id: string) => {
+    if (!confirm("Delete this subject?")) return;
+    try {
+      await invoke('delete-exam-subject', { subjectId: id });
+      fetchSubjects(selectedExamType);
+    } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
+  };
+
+  const handleSubjectEdit = (s: any) => {
+    setEditingId(s.id);
+    setSubjectForm({ name: s.name, icon: s.icon || "📘", is_active: s.is_active });
+  };
+
+  // ─── Topics CRUD ───
+  const handleTopicSubmit = async () => {
+    if (!topicForm.name || !selectedSubject) { toast({ title: "Select subject and enter name", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const topic = { ...topicForm, subject_id: selectedSubject };
+      await invoke(editingId ? 'update-exam-topic' : 'create-exam-topic', { topic, topicId: editingId });
+      toast({ title: editingId ? "Updated" : "Created" });
+      setEditingId(null);
+      setTopicForm({ name: "", description: "", difficulty: "medium", is_active: true });
+      fetchTopics(selectedSubject);
+    } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleTopicDelete = async (id: string) => {
+    if (!confirm("Delete this topic?")) return;
+    try {
+      await invoke('delete-exam-topic', { topicId: id });
+      fetchTopics(selectedSubject);
+    } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
+  };
+
+  const handleTopicEdit = (t: any) => {
+    setEditingId(t.id);
+    setTopicForm({ name: t.name, description: t.description || "", difficulty: t.difficulty, is_active: t.is_active });
+  };
+
+  // ─── Questions CRUD ───
+  const handleQuestionSubmit = async () => {
+    if (!questionForm.question || !selectedExamType || !selectedSubject) { toast({ title: "Select exam/subject and enter question", variant: "destructive" }); return; }
+    if (questionForm.options.some(o => !o.trim())) { toast({ title: "All 4 options required", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const question = {
+        ...questionForm,
+        exam_type_id: selectedExamType,
+        subject_id: selectedSubject,
+        topic_id: selectedTopic || null,
+        options: questionForm.options,
+        year: questionForm.year || null,
+      };
+      await invoke(editingId ? 'update-exam-question' : 'create-exam-question', { question, questionId: editingId });
+      toast({ title: editingId ? "Updated" : "Created" });
+      setEditingId(null);
+      setQuestionForm({ question: "", options: ["", "", "", ""], correct_index: 0, explanation: "", difficulty: "medium", year: "", source: "admin_added" });
+      fetchQuestions();
+    } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleQuestionDelete = async (id: string) => {
+    if (!confirm("Delete this question?")) return;
+    try {
+      await invoke('delete-exam-question', { questionId: id });
+      fetchQuestions();
+    } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
+  };
+
+  const handleQuestionEdit = (q: any) => {
+    setEditingId(q.id);
+    const opts = Array.isArray(q.options) ? q.options : ["", "", "", ""];
+    setQuestionForm({ question: q.question, options: opts, correct_index: q.correct_index, explanation: q.explanation || "", difficulty: q.difficulty, year: q.year || "", source: q.source });
+  };
+
+  // ─── Bulk Import ───
+  const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const questions = Array.isArray(parsed) ? parsed : parsed.questions;
+      if (!Array.isArray(questions) || questions.length === 0) { toast({ title: "Invalid JSON format", variant: "destructive" }); return; }
+      // Attach exam_type_id and subject_id if not present
+      const enriched = questions.map((q: any) => ({
+        ...q,
+        exam_type_id: q.exam_type_id || selectedExamType,
+        subject_id: q.subject_id || selectedSubject,
+        topic_id: q.topic_id || selectedTopic || null,
+        source: q.source || 'admin_added',
+      }));
+      setSubmitting(true);
+      const res = await invoke('bulk-import-questions', { questions: enriched });
+      toast({ title: `Imported ${res.count} questions` });
+      fetchQuestions();
+    } catch (err: any) { toast({ title: "Import failed", description: err.message, variant: "destructive" }); }
+    finally { setSubmitting(false); e.target.value = ""; }
+  };
+
+  const selectedExamTypeName = examTypes.find(t => t.id === selectedExamType)?.name || "";
+  const selectedSubjectName = subjects.find(s => s.id === selectedSubject)?.name || "";
+
+  return (
+    <div className="space-y-4">
+      {/* Section Selector */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { key: 'types' as const, label: 'Exam Types', icon: '🎓' },
+          { key: 'subjects' as const, label: 'Subjects', icon: '📘' },
+          { key: 'topics' as const, label: 'Topics', icon: '📋' },
+          { key: 'questions' as const, label: 'Questions', icon: '❓' },
+        ].map(s => (
+          <Button key={s.key} size="sm" variant={section === s.key ? "default" : "outline"} onClick={() => { setSection(s.key); setEditingId(null); }}>
+            {s.icon} {s.label}
+          </Button>
+        ))}
+      </div>
+
+      {/* Cascading Selectors */}
+      {section !== 'types' && (
+        <Card>
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label>Exam Type</Label>
+                <Select value={selectedExamType} onValueChange={setSelectedExamType}>
+                  <SelectTrigger><SelectValue placeholder="Select exam..." /></SelectTrigger>
+                  <SelectContent>
+                    {examTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.icon} {t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {(section === 'topics' || section === 'questions') && (
+                <div>
+                  <Label>Subject</Label>
+                  <Select value={selectedSubject} onValueChange={setSelectedSubject} disabled={!selectedExamType}>
+                    <SelectTrigger><SelectValue placeholder="Select subject..." /></SelectTrigger>
+                    <SelectContent>
+                      {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.icon} {s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {section === 'questions' && (
+                <div>
+                  <Label>Topic (optional)</Label>
+                  <Select value={selectedTopic} onValueChange={setSelectedTopic} disabled={!selectedSubject}>
+                    <SelectTrigger><SelectValue placeholder="All topics" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All topics</SelectItem>
+                      {topics.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── Exam Types Section ─── */}
+      {section === 'types' && (
+        <>
+          <Card>
+            <CardHeader><CardTitle className="text-lg">{editingId ? "Edit Exam Type" : "Add Exam Type"}</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><Label>Name *</Label><Input value={typeForm.name} onChange={(e) => setTypeForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. JAMB UTME" /></div>
+                <div><Label>Slug *</Label><Input value={typeForm.slug} onChange={(e) => setTypeForm(f => ({ ...f, slug: e.target.value }))} placeholder="e.g. jamb" /></div>
+                <div><Label>Icon (emoji)</Label><Input value={typeForm.icon} onChange={(e) => setTypeForm(f => ({ ...f, icon: e.target.value }))} /></div>
+                <div><Label>Country</Label><Input value={typeForm.country} onChange={(e) => setTypeForm(f => ({ ...f, country: e.target.value }))} /></div>
+              </div>
+              <div><Label>Description</Label><Textarea value={typeForm.description} onChange={(e) => setTypeForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
+              <div className="flex items-center gap-2"><Switch checked={typeForm.is_active} onCheckedChange={(v) => setTypeForm(f => ({ ...f, is_active: v }))} /><Label>Active</Label></div>
+              <div className="flex gap-2">
+                <Button onClick={handleTypeSubmit} disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{editingId ? "Update" : "Add"}</Button>
+                {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true }); }}>Cancel</Button>}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-lg">All Exam Types ({examTypes.length})</CardTitle></CardHeader>
+            <CardContent>
+              {loading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
+                <div className="space-y-2">
+                  {examTypes.map(t => (
+                    <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{t.icon}</span>
+                        <div>
+                          <p className="font-medium">{t.name}</p>
+                          <p className="text-xs text-muted-foreground">{t.slug} · {t.country}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={t.is_active ? "default" : "secondary"} className="text-xs">{t.is_active ? "Active" : "Inactive"}</Badge>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleTypeEdit(t)}><Edit className="w-3 h-3" /></Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleTypeDelete(t.id)}><Trash2 className="w-3 h-3" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                  {examTypes.length === 0 && <p className="text-center text-muted-foreground py-4">No exam types yet</p>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* ─── Subjects Section ─── */}
+      {section === 'subjects' && (
+        <>
+          {!selectedExamType ? (
+            <Card><CardContent className="py-8 text-center text-muted-foreground">Select an exam type above to manage its subjects</CardContent></Card>
+          ) : (
+            <>
+              <Card>
+                <CardHeader><CardTitle className="text-lg">{editingId ? "Edit Subject" : `Add Subject to ${selectedExamTypeName}`}</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><Label>Name *</Label><Input value={subjectForm.name} onChange={(e) => setSubjectForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mathematics" /></div>
+                    <div><Label>Icon (emoji)</Label><Input value={subjectForm.icon} onChange={(e) => setSubjectForm(f => ({ ...f, icon: e.target.value }))} /></div>
+                  </div>
+                  <div className="flex items-center gap-2"><Switch checked={subjectForm.is_active} onCheckedChange={(v) => setSubjectForm(f => ({ ...f, is_active: v }))} /><Label>Active</Label></div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleSubjectSubmit} disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{editingId ? "Update" : "Add"}</Button>
+                    {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setSubjectForm({ name: "", icon: "📘", is_active: true }); }}>Cancel</Button>}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-lg">Subjects ({subjects.length})</CardTitle></CardHeader>
+                <CardContent>
+                  {loading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
+                    <div className="space-y-2">
+                      {subjects.map(s => (
+                        <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xl">{s.icon}</span>
+                            <p className="font-medium">{s.name}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={s.is_active ? "default" : "secondary"} className="text-xs">{s.is_active ? "Active" : "Inactive"}</Badge>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleSubjectEdit(s)}><Edit className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleSubjectDelete(s.id)}><Trash2 className="w-3 h-3" /></Button>
+                          </div>
+                        </div>
+                      ))}
+                      {subjects.length === 0 && <p className="text-center text-muted-foreground py-4">No subjects yet</p>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </>
+      )}
+
+      {/* ─── Topics Section ─── */}
+      {section === 'topics' && (
+        <>
+          {!selectedSubject ? (
+            <Card><CardContent className="py-8 text-center text-muted-foreground">Select an exam type and subject above to manage topics</CardContent></Card>
+          ) : (
+            <>
+              <Card>
+                <CardHeader><CardTitle className="text-lg">{editingId ? "Edit Topic" : `Add Topic to ${selectedSubjectName}`}</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><Label>Name *</Label><Input value={topicForm.name} onChange={(e) => setTopicForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Organic Chemistry" /></div>
+                    <div><Label>Difficulty</Label>
+                      <Select value={topicForm.difficulty} onValueChange={(v) => setTopicForm(f => ({ ...f, difficulty: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="easy">Easy</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="hard">Hard</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div><Label>Description</Label><Textarea value={topicForm.description} onChange={(e) => setTopicForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
+                  <div className="flex items-center gap-2"><Switch checked={topicForm.is_active} onCheckedChange={(v) => setTopicForm(f => ({ ...f, is_active: v }))} /><Label>Active</Label></div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleTopicSubmit} disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{editingId ? "Update" : "Add"}</Button>
+                    {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setTopicForm({ name: "", description: "", difficulty: "medium", is_active: true }); }}>Cancel</Button>}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-lg">Topics ({topics.length})</CardTitle></CardHeader>
+                <CardContent>
+                  {loading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
+                    <div className="space-y-2">
+                      {topics.map(t => (
+                        <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border">
+                          <div>
+                            <p className="font-medium">{t.name}</p>
+                            {t.description && <p className="text-xs text-muted-foreground line-clamp-1">{t.description}</p>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs capitalize">{t.difficulty}</Badge>
+                            <Badge variant={t.is_active ? "default" : "secondary"} className="text-xs">{t.is_active ? "Active" : "Inactive"}</Badge>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleTopicEdit(t)}><Edit className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleTopicDelete(t.id)}><Trash2 className="w-3 h-3" /></Button>
+                          </div>
+                        </div>
+                      ))}
+                      {topics.length === 0 && <p className="text-center text-muted-foreground py-4">No topics yet</p>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </>
+      )}
+
+      {/* ─── Questions Section ─── */}
+      {section === 'questions' && (
+        <>
+          {!selectedSubject ? (
+            <Card><CardContent className="py-8 text-center text-muted-foreground">Select an exam type and subject above to manage questions</CardContent></Card>
+          ) : (
+            <>
+              <Card>
+                <CardHeader><CardTitle className="text-lg">{editingId ? "Edit Question" : "Add Question"}</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div><Label>Question *</Label><Textarea value={questionForm.question} onChange={(e) => setQuestionForm(f => ({ ...f, question: e.target.value }))} rows={3} placeholder="Enter the question text..." /></div>
+                  <div className="space-y-2">
+                    <Label>Options (4 required) *</Label>
+                    {questionForm.options.map((opt, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="correct"
+                          checked={questionForm.correct_index === i}
+                          onChange={() => setQuestionForm(f => ({ ...f, correct_index: i }))}
+                          className="accent-primary"
+                        />
+                        <Input
+                          value={opt}
+                          onChange={(e) => {
+                            const newOpts = [...questionForm.options];
+                            newOpts[i] = e.target.value;
+                            setQuestionForm(f => ({ ...f, options: newOpts }));
+                          }}
+                          placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                        />
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground">Select the radio button next to the correct answer</p>
+                  </div>
+                  <div><Label>Explanation</Label><Textarea value={questionForm.explanation} onChange={(e) => setQuestionForm(f => ({ ...f, explanation: e.target.value }))} rows={2} placeholder="Why is this the correct answer?" /></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div><Label>Difficulty</Label>
+                      <Select value={questionForm.difficulty} onValueChange={(v) => setQuestionForm(f => ({ ...f, difficulty: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="easy">Easy</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="hard">Hard</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                    <div><Label>Year</Label><Input value={questionForm.year} onChange={(e) => setQuestionForm(f => ({ ...f, year: e.target.value }))} placeholder="e.g. 2024" /></div>
+                    <div><Label>Source</Label>
+                      <Select value={questionForm.source} onValueChange={(v) => setQuestionForm(f => ({ ...f, source: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="admin_added">Admin Added</SelectItem><SelectItem value="past_question">Past Question</SelectItem><SelectItem value="ai_generated">AI Generated</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleQuestionSubmit} disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{editingId ? "Update" : "Add"}</Button>
+                    {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setQuestionForm({ question: "", options: ["", "", "", ""], correct_index: 0, explanation: "", difficulty: "medium", year: "", source: "admin_added" }); }}>Cancel</Button>}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Bulk Import + Filters */}
+              <Card>
+                <CardContent className="pt-4 space-y-4">
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                      <Label>Bulk Import (JSON)</Label>
+                      <Input type="file" accept=".json" onChange={handleBulkImport} disabled={submitting} />
+                    </div>
+                    <div>
+                      <Label>Filter Difficulty</Label>
+                      <Select value={qFilter.difficulty} onValueChange={(v) => setQFilter(f => ({ ...f, difficulty: v }))}>
+                        <SelectTrigger className="w-32"><SelectValue placeholder="All" /></SelectTrigger>
+                        <SelectContent><SelectItem value="">All</SelectItem><SelectItem value="easy">Easy</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="hard">Hard</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Filter Source</Label>
+                      <Select value={qFilter.source} onValueChange={(v) => setQFilter(f => ({ ...f, source: v }))}>
+                        <SelectTrigger className="w-36"><SelectValue placeholder="All" /></SelectTrigger>
+                        <SelectContent><SelectItem value="">All</SelectItem><SelectItem value="admin_added">Admin</SelectItem><SelectItem value="past_question">Past Q</SelectItem><SelectItem value="ai_generated">AI</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={fetchQuestions} size="sm"><Search className="w-3 h-3 mr-1" />Load</Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-lg">Questions ({questions.length})</CardTitle></CardHeader>
+                <CardContent>
+                  {loading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
+                    <div className="space-y-3">
+                      {questions.map(q => {
+                        const opts = Array.isArray(q.options) ? q.options : [];
+                        return (
+                          <div key={q.id} className="p-3 rounded-lg border space-y-2">
+                            <div className="flex items-start justify-between">
+                              <p className="font-medium text-sm flex-1">{q.question}</p>
+                              <div className="flex gap-1 ml-2">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleQuestionEdit(q)}><Edit className="w-3 h-3" /></Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleQuestionDelete(q.id)}><Trash2 className="w-3 h-3" /></Button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1">
+                              {opts.map((o: string, i: number) => (
+                                <p key={i} className={`text-xs p-1 rounded ${i === q.correct_index ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground'}`}>
+                                  {String.fromCharCode(65 + i)}. {o}
+                                </p>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <Badge variant="outline" className="text-xs capitalize">{q.difficulty}</Badge>
+                              <Badge variant="outline" className="text-xs">{q.source}</Badge>
+                              {q.year && <Badge variant="outline" className="text-xs">{q.year}</Badge>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {questions.length === 0 && <p className="text-center text-muted-foreground py-4">No questions yet. Add one above or use bulk import.</p>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 };
