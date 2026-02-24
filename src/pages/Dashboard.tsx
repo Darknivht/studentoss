@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom';
 import { checkAndResetStreak } from '@/lib/streak';
 import { useOfflineData, cacheDataLocally, getCachedData } from '@/hooks/useOfflineData';
 import AdBanner from '@/components/ads/AdBanner';
+import { updateAllCoursesProgress } from '@/hooks/useCourseProgress';
 
 const OFFLINE_PROFILE_KEY = 'offline_profile_cache';
 
@@ -72,6 +73,9 @@ const Dashboard = () => {
           // Cache profile for offline use
           cacheDataLocally(OFFLINE_PROFILE_KEY, updatedProfile);
         }
+
+        // Auto-recalculate all course progress
+        await updateAllCoursesProgress(user!.id);
 
         // Fetch courses with offline-aware method (it caches automatically)
         const coursesData = await offlineData.fetchCourses();
