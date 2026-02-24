@@ -209,6 +209,303 @@ export type Database = {
         }
         Relationships: []
       }
+      exam_attempts: {
+        Row: {
+          created_at: string
+          exam_type_id: string
+          id: string
+          is_correct: boolean
+          question_id: string | null
+          selected_index: number
+          session_id: string
+          subject_id: string
+          time_spent_seconds: number | null
+          topic_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exam_type_id: string
+          id?: string
+          is_correct: boolean
+          question_id?: string | null
+          selected_index: number
+          session_id?: string
+          subject_id: string
+          time_spent_seconds?: number | null
+          topic_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exam_type_id?: string
+          id?: string
+          is_correct?: boolean
+          question_id?: string | null
+          selected_index?: number
+          session_id?: string
+          subject_id?: string
+          time_spent_seconds?: number | null
+          topic_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_attempts_exam_type_id_fkey"
+            columns: ["exam_type_id"]
+            isOneToOne: false
+            referencedRelation: "exam_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_attempts_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "exam_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_attempts_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "exam_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_attempts_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "exam_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_questions: {
+        Row: {
+          correct_index: number
+          created_at: string
+          difficulty: string
+          exam_type_id: string
+          explanation: string | null
+          id: string
+          is_active: boolean
+          options: Json
+          question: string
+          source: string
+          subject_id: string
+          topic_id: string | null
+          year: string | null
+        }
+        Insert: {
+          correct_index?: number
+          created_at?: string
+          difficulty?: string
+          exam_type_id: string
+          explanation?: string | null
+          id?: string
+          is_active?: boolean
+          options?: Json
+          question: string
+          source?: string
+          subject_id: string
+          topic_id?: string | null
+          year?: string | null
+        }
+        Update: {
+          correct_index?: number
+          created_at?: string
+          difficulty?: string
+          exam_type_id?: string
+          explanation?: string | null
+          id?: string
+          is_active?: boolean
+          options?: Json
+          question?: string
+          source?: string
+          subject_id?: string
+          topic_id?: string | null
+          year?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_questions_exam_type_id_fkey"
+            columns: ["exam_type_id"]
+            isOneToOne: false
+            referencedRelation: "exam_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_questions_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "exam_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_questions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "exam_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_subjects: {
+        Row: {
+          created_at: string
+          exam_type_id: string
+          icon: string | null
+          id: string
+          is_active: boolean
+          name: string
+          topics_count: number
+        }
+        Insert: {
+          created_at?: string
+          exam_type_id: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          topics_count?: number
+        }
+        Update: {
+          created_at?: string
+          exam_type_id?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          topics_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_subjects_exam_type_id_fkey"
+            columns: ["exam_type_id"]
+            isOneToOne: false
+            referencedRelation: "exam_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_subscriptions: {
+        Row: {
+          amount_paid: number | null
+          created_at: string
+          exam_type_id: string | null
+          expires_at: string | null
+          id: string
+          payment_reference: string | null
+          plan: string
+          starts_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount_paid?: number | null
+          created_at?: string
+          exam_type_id?: string | null
+          expires_at?: string | null
+          id?: string
+          payment_reference?: string | null
+          plan?: string
+          starts_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount_paid?: number | null
+          created_at?: string
+          exam_type_id?: string | null
+          expires_at?: string | null
+          id?: string
+          payment_reference?: string | null
+          plan?: string
+          starts_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_subscriptions_exam_type_id_fkey"
+            columns: ["exam_type_id"]
+            isOneToOne: false
+            referencedRelation: "exam_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_topics: {
+        Row: {
+          created_at: string
+          description: string | null
+          difficulty: string
+          id: string
+          is_active: boolean
+          name: string
+          subject_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          difficulty?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          subject_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          difficulty?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          subject_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_topics_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "exam_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_types: {
+        Row: {
+          country: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       flashcards: {
         Row: {
           back: string
