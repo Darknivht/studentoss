@@ -252,6 +252,16 @@ serve(async (req) => {
         return json({ data, count: data.length });
       }
 
+      // ─── Exam PDFs ───
+      case 'list-exam-pdfs': {
+        let query = supabase.from('exam_pdfs').select('*').order('created_at', { ascending: false });
+        if (body.examTypeId) query = query.eq('exam_type_id', body.examTypeId);
+        if (body.subjectId) query = query.eq('subject_id', body.subjectId);
+        const { data, error } = await query;
+        if (error) throw error;
+        return json({ data });
+      }
+
       default:
         return json({ error: 'Invalid action' }, 400);
     }

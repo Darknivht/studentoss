@@ -396,6 +396,56 @@ serve(async (req) => {
         return res(result);
       }
 
+      case "extract-pdf-questions": {
+        const { exam_type_id, subject_id, pdf_text, filename, file_url } = body as {
+          exam_type_id: string; subject_id: string; pdf_text: string; filename: string; file_url: string;
+        };
+
+        const { data: examType } = await supabase.from("exam_types").select("name").eq("id", exam_type_id).single();
+        const { data: subject } = await supabase.from("exam_subjects").select("name").eq("id", subject_id).single();
+
+        const systemPrompt = `You are an expert exam question extractor. Extract multiple-choice questions from the provided text.
+The text is from a PDF related to ${examType?.name ?? "exams"}, subject: ${subject?.name ?? "unknown"}.
+
+For each question found or derivable from the content, create a structured MCQ with:
+- "question": the question text
+- "options": array of exactly 4 answer choices
+- "correct_index": integer 0-3 for the correct answer
+- "explanation": a detailed step-by-step explanation that:
+  1. Explains WHY the correct answer is right
+  2. Explains WHY each wrong option is incorrect
+  3. References relevant concepts, formulas, or rules
+- "difficulty": "easy" | "medium" | "hard"
+
+Return ONLY a valid JSON array. Generate as many questions as possible (up to 30).`;
+
+        const truncatedText = pdf_text.slice(0, 15000);
+        const raw = await callAI(systemPrompt, `Extract questions from this text:\n\n${truncatedText}`);
+        const generated = extractJsonFromAI(raw) as Array<Record<string, unknown>>;
+
+        const toInsert = generated.map((q) => ({
+          exam_type_id,
+          subject_id,
+          question: q.question as string,
+          options: q.options,
+          correct_index: (q.correct_index as number) || 0,
+          explanation: (q.explanation as string) || null,
+          difficulty: (q.difficulty as string) || "medium",
+          source: "pdf_extracted",
+        }));
+
+        const { data: inserted } = await supabase.from("exam_questions").insert(toInsert).select();
+        const count = inserted?.length ?? 0;
+
+        // Record the PDF upload
+        await supabase.from("exam_pdfs").insert({
+          exam_type_id, subject_id, file_url, filename,
+          uploaded_by: user.id, questions_generated: count, status: "completed",
+        });
+
+        return res({ questions_generated: count, questions: inserted });
+      }
+
       default:
         return res({ error: `Unknown action: ${action}` }, 400);
     }
