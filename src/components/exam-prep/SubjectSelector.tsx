@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Zap, Target, GraduationCap, BarChart3, AlertTriangle, Lock, Calendar, FileText, Layers, Bookmark, Lightbulb } from 'lucide-react';
+import { Loader2, Zap, Target, GraduationCap, BarChart3, AlertTriangle, Lock, Calendar, FileText, Layers, Bookmark, Lightbulb, BookOpen } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,7 @@ interface ExamSubject {
   topics_count: number;
 }
 
-type Mode = 'quick' | 'topic' | 'mock' | 'performance' | 'weakness' | 'year' | 'study-material' | 'bookmarks' | 'study-plan';
+type Mode = 'quick' | 'topic' | 'mock' | 'performance' | 'weakness' | 'year' | 'study-material' | 'bookmarks' | 'study-plan' | 'guided-learning';
 
 interface SubjectSelectorProps {
   examTypeId: string;
@@ -45,6 +45,7 @@ const SubjectSelector = ({ examTypeId, examName, examMode, onSelectMode, onStart
   const remaining = getRemainingUses('examQuestion');
 
   const modes: { id: Mode; icon: typeof Zap; label: string; desc: string; color: string; requiresPlus?: boolean }[] = [
+    { id: 'guided-learning', icon: BookOpen, label: 'Guided Learning', desc: 'AI teaches then tests you', color: '#059669' },
     { id: 'quick', icon: Zap, label: 'Quick Practice', desc: `10 questions, untimed${remaining !== Infinity ? ` • ${remaining} left today` : ''}`, color: '#f59e0b' },
     { id: 'topic', icon: Target, label: 'Topic Practice', desc: 'Pick a topic, 10-20 Qs', color: '#10b981' },
     { id: 'year', icon: Calendar, label: 'Past Questions by Year', desc: 'Filter by exam year', color: '#6366f1' },

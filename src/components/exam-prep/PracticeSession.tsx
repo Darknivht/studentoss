@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, ChevronRight, Bookmark, BookmarkCheck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, ChevronRight, Bookmark, BookmarkCheck, Flag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -283,6 +283,16 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
           </button>
           <div className="flex items-center gap-2">
             {adaptiveHint && <span className="text-xs">{adaptiveHint}</span>}
+            <button onClick={() => {
+              if (!user) return;
+              const reason = prompt('Report reason: incorrect, confusing, or duplicate?', 'incorrect');
+              if (!reason) return;
+              supabase.from('question_reports').insert({ user_id: user.id, question_id: q.id, reason }).then(() => {
+                toast({ title: 'Question reported', description: 'Admin will review it.' });
+              });
+            }} className="p-1" title="Report question">
+              <Flag size={16} className="text-muted-foreground hover:text-destructive" />
+            </button>
             <button onClick={() => toggleBookmark(q.id)} className="p-1">
               {isBookmarked ? <BookmarkCheck size={18} className="text-primary" /> : <Bookmark size={18} className="text-muted-foreground" />}
             </button>
