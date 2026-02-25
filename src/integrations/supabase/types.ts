@@ -280,6 +280,57 @@ export type Database = {
           },
         ]
       }
+      exam_pdfs: {
+        Row: {
+          created_at: string | null
+          exam_type_id: string
+          file_url: string
+          filename: string
+          id: string
+          questions_generated: number | null
+          status: string | null
+          subject_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          exam_type_id: string
+          file_url: string
+          filename: string
+          id?: string
+          questions_generated?: number | null
+          status?: string | null
+          subject_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          exam_type_id?: string
+          file_url?: string
+          filename?: string
+          id?: string
+          questions_generated?: number | null
+          status?: string | null
+          subject_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_pdfs_exam_type_id_fkey"
+            columns: ["exam_type_id"]
+            isOneToOne: false
+            referencedRelation: "exam_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_pdfs_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "exam_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_questions: {
         Row: {
           correct_index: number
@@ -478,31 +529,43 @@ export type Database = {
           country: string | null
           created_at: string
           description: string | null
+          exam_mode: string
           icon: string | null
           id: string
           is_active: boolean
           name: string
+          questions_per_subject: number
           slug: string
+          subjects_required: number
+          time_limit_minutes: number
         }
         Insert: {
           country?: string | null
           created_at?: string
           description?: string | null
+          exam_mode?: string
           icon?: string | null
           id?: string
           is_active?: boolean
           name: string
+          questions_per_subject?: number
           slug: string
+          subjects_required?: number
+          time_limit_minutes?: number
         }
         Update: {
           country?: string | null
           created_at?: string
           description?: string | null
+          exam_mode?: string
           icon?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          questions_per_subject?: number
           slug?: string
+          subjects_required?: number
+          time_limit_minutes?: number
         }
         Relationships: []
       }

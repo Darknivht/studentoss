@@ -10,6 +10,10 @@ interface ExamType {
   description: string | null;
   icon: string | null;
   country: string | null;
+  exam_mode: string;
+  subjects_required: number;
+  time_limit_minutes: number;
+  questions_per_subject: number;
 }
 
 interface ExamSelectorProps {
@@ -27,7 +31,13 @@ const ExamSelector = ({ onSelect }: ExamSelectorProps) => {
         .select('*')
         .eq('is_active', true)
         .order('name');
-      setExams(data || []);
+      setExams((data || []).map((d: any) => ({
+        ...d,
+        exam_mode: d.exam_mode || 'per_subject',
+        subjects_required: d.subjects_required || 1,
+        time_limit_minutes: d.time_limit_minutes || 60,
+        questions_per_subject: d.questions_per_subject || 40,
+      })));
       setLoading(false);
     };
     fetchExams();
@@ -71,11 +81,18 @@ const ExamSelector = ({ onSelect }: ExamSelectorProps) => {
               {exam.description && (
                 <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{exam.description}</p>
               )}
-              {exam.country && (
-                <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                  {exam.country}
-                </span>
-              )}
+              <div className="flex gap-2 mt-1">
+                {exam.country && (
+                  <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    {exam.country}
+                  </span>
+                )}
+                {exam.exam_mode === 'multi_subject' && (
+                  <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                    Full CBT
+                  </span>
+                )}
+              </div>
             </div>
             <ArrowRight size={18} className="text-muted-foreground" />
           </motion.button>

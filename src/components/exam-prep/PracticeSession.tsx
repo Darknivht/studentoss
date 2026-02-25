@@ -7,6 +7,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 
 interface Question {
   id: string;
@@ -262,7 +263,7 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
                 {gateFeature('examQuestion').allowed || gateInfo.limit > 5 ? (
                   <>
                     <p className="text-xs font-semibold text-muted-foreground mb-1">Explanation</p>
-                    <p className="text-sm text-foreground">{q.explanation}</p>
+                    <MarkdownRenderer content={q.explanation} className="text-sm" />
                   </>
                 ) : (
                   <div className="text-center py-2">

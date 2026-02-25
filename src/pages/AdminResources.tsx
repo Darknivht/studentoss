@@ -565,7 +565,7 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
 
 // ─── Exams Tab ───
 const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
-  const [section, setSection] = useState<'types' | 'subjects' | 'topics' | 'questions'>('types');
+  const [section, setSection] = useState<'types' | 'subjects' | 'topics' | 'questions' | 'pdf-import'>('types');
   const [examTypes, setExamTypes] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
@@ -582,7 +582,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Forms
-  const [typeForm, setTypeForm] = useState({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true });
+  const [typeForm, setTypeForm] = useState({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40 });
   const [subjectForm, setSubjectForm] = useState({ name: "", icon: "📘", is_active: true });
   const [topicForm, setTopicForm] = useState({ name: "", description: "", difficulty: "medium", is_active: true });
   const [questionForm, setQuestionForm] = useState({ question: "", options: ["", "", "", ""], correct_index: 0, explanation: "", difficulty: "medium", year: "", source: "admin_added" });
@@ -650,7 +650,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
       await invoke(editingId ? 'update-exam-type' : 'create-exam-type', { examType: typeForm, examTypeId: editingId });
       toast({ title: editingId ? "Updated" : "Created" });
       setEditingId(null);
-      setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true });
+      setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40 });
       fetchExamTypes();
     } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
     finally { setSubmitting(false); }
@@ -667,7 +667,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
 
   const handleTypeEdit = (t: any) => {
     setEditingId(t.id);
-    setTypeForm({ name: t.name, slug: t.slug, description: t.description || "", icon: t.icon || "📝", country: t.country || "Nigeria", is_active: t.is_active });
+    setTypeForm({ name: t.name, slug: t.slug, description: t.description || "", icon: t.icon || "📝", country: t.country || "Nigeria", is_active: t.is_active, exam_mode: t.exam_mode || "per_subject", subjects_required: t.subjects_required || 1, time_limit_minutes: t.time_limit_minutes || 60, questions_per_subject: t.questions_per_subject || 40 });
   };
 
   // ─── Subjects CRUD ───
@@ -800,6 +800,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
           { key: 'subjects' as const, label: 'Subjects', icon: '📘' },
           { key: 'topics' as const, label: 'Topics', icon: '📋' },
           { key: 'questions' as const, label: 'Questions', icon: '❓' },
+          { key: 'pdf-import' as const, label: 'PDF Import', icon: '📄' },
         ].map(s => (
           <Button key={s.key} size="sm" variant={section === s.key ? "default" : "outline"} onClick={() => { setSection(s.key); setEditingId(null); }}>
             {s.icon} {s.label}
@@ -862,10 +863,28 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
                 <div><Label>Country</Label><Input value={typeForm.country} onChange={(e) => setTypeForm(f => ({ ...f, country: e.target.value }))} /></div>
               </div>
               <div><Label>Description</Label><Textarea value={typeForm.description} onChange={(e) => setTypeForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><Label>Exam Mode</Label>
+                  <Select value={typeForm.exam_mode} onValueChange={(v) => setTypeForm(f => ({ ...f, exam_mode: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="per_subject">Per Subject</SelectItem>
+                      <SelectItem value="multi_subject">Multi-Subject CBT</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {typeForm.exam_mode === 'multi_subject' && (
+                  <>
+                    <div><Label>Subjects Required</Label><Input type="number" value={typeForm.subjects_required} onChange={(e) => setTypeForm(f => ({ ...f, subjects_required: parseInt(e.target.value) || 1 }))} /></div>
+                    <div><Label>Time Limit (min)</Label><Input type="number" value={typeForm.time_limit_minutes} onChange={(e) => setTypeForm(f => ({ ...f, time_limit_minutes: parseInt(e.target.value) || 60 }))} /></div>
+                    <div><Label>Questions/Subject</Label><Input type="number" value={typeForm.questions_per_subject} onChange={(e) => setTypeForm(f => ({ ...f, questions_per_subject: parseInt(e.target.value) || 40 }))} /></div>
+                  </>
+                )}
+              </div>
               <div className="flex items-center gap-2"><Switch checked={typeForm.is_active} onCheckedChange={(v) => setTypeForm(f => ({ ...f, is_active: v }))} /><Label>Active</Label></div>
               <div className="flex gap-2">
                 <Button onClick={handleTypeSubmit} disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{editingId ? "Update" : "Add"}</Button>
-                {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true }); }}>Cancel</Button>}
+                {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40 }); }}>Cancel</Button>}
               </div>
             </CardContent>
           </Card>
@@ -1128,7 +1147,152 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
           )}
         </>
       )}
+
+      {/* ─── PDF Import Section ─── */}
+      {section === 'pdf-import' && (
+        <PdfImportSection adminPassword={adminPassword} examTypes={examTypes} subjects={subjects} selectedExamType={selectedExamType} selectedSubject={selectedSubject} />
+      )}
     </div>
+  );
+};
+
+// ─── PDF Import Section ───
+const PdfImportSection = ({ adminPassword, examTypes, subjects, selectedExamType, selectedSubject }: {
+  adminPassword: string;
+  examTypes: any[];
+  subjects: any[];
+  selectedExamType: string;
+  selectedSubject: string;
+}) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [result, setResult] = useState<{ count: number; message: string } | null>(null);
+  const [pdfs, setPdfs] = useState<any[]>([]);
+  const [loadingPdfs, setLoadingPdfs] = useState(false);
+
+  const fetchPdfs = async () => {
+    if (!selectedExamType) return;
+    setLoadingPdfs(true);
+    const { data } = await supabase.functions.invoke('admin-resources', {
+      body: { password: adminPassword, action: 'list-exam-pdfs', examTypeId: selectedExamType, subjectId: selectedSubject || undefined }
+    });
+    setPdfs(data?.data || []);
+    setLoadingPdfs(false);
+  };
+
+  useEffect(() => { fetchPdfs(); }, [selectedExamType, selectedSubject]);
+
+  const handleUpload = async () => {
+    if (!file || !selectedExamType || !selectedSubject) {
+      toast({ title: "Select exam type, subject and a PDF file", variant: "destructive" });
+      return;
+    }
+    setProcessing(true);
+    setResult(null);
+
+    try {
+      // 1. Upload PDF to storage
+      const filePath = `exam-pdfs/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('exam-pdfs').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      // 2. Extract text from PDF
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      const extractResp = await supabase.functions.invoke('extract-pdf-text', {
+        body: { bucket: 'exam-pdfs', path: filePath }
+      });
+
+      if (extractResp.error) throw new Error('Failed to extract PDF text');
+      const pdfText = extractResp.data?.text || '';
+
+      if (!pdfText.trim()) {
+        setResult({ count: 0, message: 'No text could be extracted from this PDF. Try OCR or a different file.' });
+        setProcessing(false);
+        return;
+      }
+
+      // 3. Generate questions from PDF text via exam-practice edge function
+      const genResp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exam-practice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          action: 'extract-pdf-questions',
+          exam_type_id: selectedExamType,
+          subject_id: selectedSubject,
+          pdf_text: pdfText,
+          filename: file.name,
+          file_url: filePath,
+        }),
+      });
+
+      const genResult = await genResp.json();
+      if (genResult.error) throw new Error(genResult.error);
+
+      setResult({ count: genResult.questions_generated || 0, message: `Generated ${genResult.questions_generated} questions from "${file.name}"` });
+      setFile(null);
+      fetchPdfs();
+    } catch (err: any) {
+      toast({ title: "PDF import failed", description: err.message, variant: "destructive" });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <>
+      {!selectedExamType || !selectedSubject ? (
+        <Card><CardContent className="py-8 text-center text-muted-foreground">Select an exam type and subject above to import PDFs</CardContent></Card>
+      ) : (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle className="text-lg">📄 Import Questions from PDF</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Upload a PDF (past papers, textbooks, question banks). AI will extract and generate structured questions with detailed explanations.
+              </p>
+              <div><Label>PDF File</Label><Input type="file" accept=".pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} /></div>
+              <Button onClick={handleUpload} disabled={processing || !file}>
+                {processing && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                {processing ? 'Extracting & Generating...' : 'Upload & Generate Questions'}
+              </Button>
+              {result && (
+                <div className={`p-3 rounded-lg border ${result.count > 0 ? 'border-green-500/30 bg-green-500/5' : 'border-muted bg-muted/50'}`}>
+                  <p className="text-sm font-medium">{result.message}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-lg">PDF Upload History</CardTitle></CardHeader>
+            <CardContent>
+              {loadingPdfs ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+              ) : pdfs.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No PDFs uploaded yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {pdfs.map((pdf: any) => (
+                    <div key={pdf.id} className="flex items-center justify-between p-3 rounded-lg border">
+                      <div>
+                        <p className="font-medium text-sm">{pdf.filename}</p>
+                        <p className="text-xs text-muted-foreground">{pdf.questions_generated} questions · {pdf.status} · {new Date(pdf.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <Badge variant={pdf.status === 'completed' ? 'default' : 'secondary'} className="text-xs capitalize">{pdf.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </>
   );
 };
 

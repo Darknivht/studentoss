@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 
 interface Question {
   id: string;
@@ -204,7 +205,7 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
                   {q.explanation && (
                     <div className="p-2 rounded-lg bg-muted/50 border border-border">
                       <p className="text-xs font-semibold text-muted-foreground mb-0.5">Explanation</p>
-                      <p className="text-xs text-foreground">{q.explanation}</p>
+                      <MarkdownRenderer content={q.explanation} className="text-xs" />
                     </div>
                   )}
                 </motion.div>

@@ -9,10 +9,15 @@ import MockExamMode from '@/components/exam-prep/MockExamMode';
 import ExamPerformance from '@/components/exam-prep/ExamPerformance';
 import WeaknessReport from '@/components/exam-prep/WeaknessReport';
 import TopicSelector from '@/components/exam-prep/TopicSelector';
+import MultiSubjectCBT from '@/components/exam-prep/MultiSubjectCBT';
 
 interface SelectedExam {
   id: string;
   name: string;
+  exam_mode: string;
+  subjects_required: number;
+  time_limit_minutes: number;
+  questions_per_subject: number;
 }
 
 interface SelectedSubject {
@@ -20,7 +25,7 @@ interface SelectedSubject {
   name: string;
 }
 
-type View = 'exams' | 'subjects' | 'topic-select' | 'practice' | 'mock' | 'performance' | 'weakness';
+type View = 'exams' | 'subjects' | 'topic-select' | 'practice' | 'mock' | 'performance' | 'weakness' | 'multi-cbt';
 
 const ExamPrep = () => {
   const navigate = useNavigate();
@@ -45,7 +50,7 @@ const ExamPrep = () => {
     <div className="p-6 space-y-5 pb-24">
       <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
         {view !== 'exams' && (
-          <button onClick={view === 'subjects' ? resetToExams : resetToSubjects} className="text-primary">
+          <button onClick={view === 'subjects' || view === 'multi-cbt' ? resetToExams : resetToSubjects} className="text-primary">
             <ArrowLeft size={20} />
           </button>
         )}
@@ -58,7 +63,34 @@ const ExamPrep = () => {
       </motion.header>
 
       {view === 'exams' && (
-        <ExamSelector onSelect={(e) => { setExam({ id: e.id, name: e.name }); setView('subjects'); }} />
+        <ExamSelector onSelect={(e) => {
+          const selectedExam: SelectedExam = {
+            id: e.id,
+            name: e.name,
+            exam_mode: e.exam_mode || 'per_subject',
+            subjects_required: e.subjects_required || 1,
+            time_limit_minutes: e.time_limit_minutes || 60,
+            questions_per_subject: e.questions_per_subject || 40,
+          };
+          setExam(selectedExam);
+          // Route based on exam mode
+          if (selectedExam.exam_mode === 'multi_subject') {
+            setView('multi-cbt');
+          } else {
+            setView('subjects');
+          }
+        }} />
+      )}
+
+      {view === 'multi-cbt' && exam && (
+        <MultiSubjectCBT
+          examTypeId={exam.id}
+          examName={exam.name}
+          subjectsRequired={exam.subjects_required}
+          timeLimitMinutes={exam.time_limit_minutes}
+          questionsPerSubject={exam.questions_per_subject}
+          onBack={resetToExams}
+        />
       )}
 
       {view === 'subjects' && exam && (
