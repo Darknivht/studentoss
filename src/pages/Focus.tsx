@@ -89,11 +89,8 @@ const Focus = () => {
                 <Shield className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-foreground">Focus Session</h3>
-                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-500/20 text-amber-600 border border-amber-500/30">BETA</span>
-                </div>
-                <p className="text-sm text-muted-foreground">Block apps & stay focused</p>
+              <h3 className="font-semibold text-foreground">Focus Session</h3>
+                <p className="text-sm text-muted-foreground">Set a timer & stay focused</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
