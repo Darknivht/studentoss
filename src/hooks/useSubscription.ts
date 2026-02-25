@@ -64,7 +64,7 @@ const FREE_LIMITS: FeatureLimits = {
   notesLimit: 5,
   jobSearchesLimit: 3,
   resumeTemplatesLimit: 3,
-  examQuestionsLimit: 5,
+  examQuestionsLimit: 0,
 };
 
 const PLUS_LIMITS: FeatureLimits = {

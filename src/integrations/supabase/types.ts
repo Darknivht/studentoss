@@ -533,6 +533,7 @@ export type Database = {
           icon: string | null
           id: string
           is_active: boolean
+          logo_url: string | null
           name: string
           questions_per_subject: number
           slug: string
@@ -547,6 +548,7 @@ export type Database = {
           icon?: string | null
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           name: string
           questions_per_subject?: number
           slug: string
@@ -561,6 +563,7 @@ export type Database = {
           icon?: string | null
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           name?: string
           questions_per_subject?: number
           slug?: string

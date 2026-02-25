@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +10,9 @@ import ExamPerformance from '@/components/exam-prep/ExamPerformance';
 import WeaknessReport from '@/components/exam-prep/WeaknessReport';
 import TopicSelector from '@/components/exam-prep/TopicSelector';
 import MultiSubjectCBT from '@/components/exam-prep/MultiSubjectCBT';
+import YearSelector from '@/components/exam-prep/YearSelector';
+import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface SelectedExam {
   id: string;
@@ -25,18 +28,31 @@ interface SelectedSubject {
   name: string;
 }
 
-type View = 'exams' | 'subjects' | 'topic-select' | 'practice' | 'mock' | 'performance' | 'weakness' | 'multi-cbt';
+type View = 'exams' | 'subjects' | 'topic-select' | 'year-select' | 'practice' | 'mock' | 'performance' | 'weakness' | 'multi-cbt';
 
 const ExamPrep = () => {
   const navigate = useNavigate();
+  const { subscription, loading: subLoading } = useSubscription();
   const [view, setView] = useState<View>('exams');
   const [exam, setExam] = useState<SelectedExam | null>(null);
   const [subject, setSubject] = useState<SelectedSubject | null>(null);
   const [topicId, setTopicId] = useState<string | undefined>();
+  const [year, setYear] = useState<string | undefined>();
+  const [source, setSource] = useState<string | undefined>();
+  const [gateOpen, setGateOpen] = useState(false);
+
+  // Block free users from Exam Prep entirely
+  useEffect(() => {
+    if (!subLoading && subscription.tier === 'free') {
+      setGateOpen(true);
+    }
+  }, [subLoading, subscription.tier]);
 
   const resetToSubjects = () => {
     setView('subjects');
     setTopicId(undefined);
+    setYear(undefined);
+    setSource(undefined);
   };
 
   const resetToExams = () => {
@@ -44,12 +60,18 @@ const ExamPrep = () => {
     setExam(null);
     setSubject(null);
     setTopicId(undefined);
+    setYear(undefined);
+    setSource(undefined);
   };
 
   return (
     <div className="p-6 space-y-5 pb-24">
       <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
-        {view !== 'exams' && (
+        {view === 'exams' ? (
+          <button onClick={() => navigate('/dashboard')} className="text-primary">
+            <ArrowLeft size={20} />
+          </button>
+        ) : (
           <button onClick={view === 'subjects' || view === 'multi-cbt' ? resetToExams : resetToSubjects} className="text-primary">
             <ArrowLeft size={20} />
           </button>
@@ -73,12 +95,8 @@ const ExamPrep = () => {
             questions_per_subject: e.questions_per_subject || 40,
           };
           setExam(selectedExam);
-          // Route based on exam mode
-          if (selectedExam.exam_mode === 'multi_subject') {
-            setView('multi-cbt');
-          } else {
-            setView('subjects');
-          }
+          // Always go to subjects first
+          setView('subjects');
         }} />
       )}
 
@@ -89,7 +107,7 @@ const ExamPrep = () => {
           subjectsRequired={exam.subjects_required}
           timeLimitMinutes={exam.time_limit_minutes}
           questionsPerSubject={exam.questions_per_subject}
-          onBack={resetToExams}
+          onBack={resetToSubjects}
         />
       )}
 
@@ -97,6 +115,7 @@ const ExamPrep = () => {
         <SubjectSelector
           examTypeId={exam.id}
           examName={exam.name}
+          examMode={exam.exam_mode}
           onSelectMode={(subj, mode) => {
             setSubject({ id: subj.id, name: subj.name });
             if (mode === 'quick') setView('practice');
@@ -104,7 +123,26 @@ const ExamPrep = () => {
             else if (mode === 'mock') setView('mock');
             else if (mode === 'performance') setView('performance');
             else if (mode === 'weakness') setView('weakness');
+            else if (mode === 'year') setView('year-select');
+            else if (mode === 'study-material') {
+              setSource('pdf_extracted');
+              setView('practice');
+            }
           }}
+          onStartCBT={() => setView('multi-cbt')}
+        />
+      )}
+
+      {view === 'year-select' && exam && subject && (
+        <YearSelector
+          examTypeId={exam.id}
+          subjectId={subject.id}
+          subjectName={subject.name}
+          onSelect={(y) => {
+            setYear(y || undefined);
+            setView('practice');
+          }}
+          onBack={resetToSubjects}
         />
       )}
 
@@ -123,6 +161,8 @@ const ExamPrep = () => {
           subjectId={subject.id}
           subjectName={subject.name}
           topicId={topicId}
+          year={year}
+          source={source}
           questionCount={10}
           onBack={resetToSubjects}
         />
@@ -155,6 +195,18 @@ const ExamPrep = () => {
           onPracticeTopic={(tId) => { setTopicId(tId); setView('practice'); }}
         />
       )}
+
+      <FeatureGateDialog
+        open={gateOpen}
+        onOpenChange={(open) => {
+          setGateOpen(open);
+          if (!open && subscription.tier === 'free') navigate('/dashboard');
+        }}
+        feature="Exam Prep access"
+        currentUsage={0}
+        limit={0}
+        requiredTier="plus"
+      />
     </div>
   );
 };

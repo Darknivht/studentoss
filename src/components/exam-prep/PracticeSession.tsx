@@ -24,11 +24,13 @@ interface PracticeSessionProps {
   subjectId: string;
   subjectName: string;
   topicId?: string;
+  year?: string;
+  source?: string;
   questionCount?: number;
   onBack: () => void;
 }
 
-const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, questionCount = 10, onBack }: PracticeSessionProps) => {
+const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, source, questionCount = 10, onBack }: PracticeSessionProps) => {
   const { user } = useAuth();
   const { gateFeature, incrementUsage } = useSubscription();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -54,6 +56,37 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
       }
 
       try {
+        // If filtering by year or source, go direct to DB
+        if (year || source) {
+          let query = supabase
+            .from('exam_questions')
+            .select('*')
+            .eq('exam_type_id', examTypeId)
+            .eq('subject_id', subjectId)
+            .eq('is_active', true);
+          if (topicId) query = query.eq('topic_id', topicId);
+          if (year) query = query.eq('year', year);
+          if (source) query = query.eq('source', source);
+          const { data } = await query.limit(questionCount);
+          const mapped = (data || []).map(q => ({
+            id: q.id,
+            question: q.question,
+            options: Array.isArray(q.options) ? (q.options as string[]) : [],
+            correct_index: q.correct_index,
+            explanation: q.explanation,
+            difficulty: q.difficulty,
+            topic_id: q.topic_id,
+          }));
+          // Shuffle
+          for (let i = mapped.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [mapped[i], mapped[j]] = [mapped[j], mapped[i]];
+          }
+          setQuestions(mapped);
+          setLoading(false);
+          return;
+        }
+
         // Use exam-practice edge function for AI-powered question generation
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token;
@@ -116,7 +149,7 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
       setLoading(false);
     };
     fetchQuestions();
-  }, [examTypeId, subjectId, topicId, questionCount]);
+  }, [examTypeId, subjectId, topicId, year, source, questionCount]);
 
   const handleSelect = async (index: number) => {
     if (showResult) return;
@@ -127,7 +160,6 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
     const correct = index === q.correct_index;
     if (correct) setScore(s => s + 1);
 
-    // Increment exam usage
     await incrementUsage('examQuestion');
 
     if (user) {
@@ -148,7 +180,6 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
     if (currentIndex + 1 >= questions.length) {
       setFinished(true);
     } else {
-      // Check if user can continue
       const gate = gateFeature('examQuestion');
       if (!gate.allowed) {
         setGateInfo({ currentUsage: gate.currentUsage, limit: gate.limit });
@@ -176,7 +207,9 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
       <div className="text-center py-20">
         <p className="text-4xl mb-3">📭</p>
         <h3 className="font-semibold text-foreground">No questions available</h3>
-        <p className="text-sm text-muted-foreground mt-1">Questions for this subject haven't been added yet.</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {source ? 'No study material questions found for this subject.' : year ? `No questions found for year ${year}.` : "Questions for this subject haven't been added yet."}
+        </p>
         <Button variant="outline" className="mt-4" onClick={onBack}>Go Back</Button>
       </div>
     );
@@ -193,14 +226,7 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
           <Progress value={pct} className="w-48 mx-auto" />
           <Button onClick={onBack} className="mt-4">Back to Subjects</Button>
         </motion.div>
-        <FeatureGateDialog
-          open={gateOpen}
-          onOpenChange={setGateOpen}
-          feature="Exam Questions"
-          currentUsage={gateInfo.currentUsage}
-          limit={gateInfo.limit}
-          requiredTier="plus"
-        />
+        <FeatureGateDialog open={gateOpen} onOpenChange={setGateOpen} feature="Exam Questions" currentUsage={gateInfo.currentUsage} limit={gateInfo.limit} requiredTier="plus" />
       </>
     );
   }
@@ -286,14 +312,7 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, question
           </motion.div>
         </AnimatePresence>
       </div>
-      <FeatureGateDialog
-        open={gateOpen}
-        onOpenChange={setGateOpen}
-        feature="Exam Questions"
-        currentUsage={gateInfo.currentUsage}
-        limit={gateInfo.limit}
-        requiredTier="plus"
-      />
+      <FeatureGateDialog open={gateOpen} onOpenChange={setGateOpen} feature="Exam Questions" currentUsage={gateInfo.currentUsage} limit={gateInfo.limit} requiredTier="plus" />
     </>
   );
 };

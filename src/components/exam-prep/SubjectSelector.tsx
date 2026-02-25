@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Zap, Target, GraduationCap, BarChart3, AlertTriangle, Lock } from 'lucide-react';
+import { Loader2, Zap, Target, GraduationCap, BarChart3, AlertTriangle, Lock, Calendar, FileText, Layers } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Badge } from '@/components/ui/badge';
@@ -12,15 +12,17 @@ interface ExamSubject {
   topics_count: number;
 }
 
-type Mode = 'quick' | 'topic' | 'mock' | 'performance' | 'weakness';
+type Mode = 'quick' | 'topic' | 'mock' | 'performance' | 'weakness' | 'year' | 'study-material';
 
 interface SubjectSelectorProps {
   examTypeId: string;
   examName: string;
+  examMode?: string;
   onSelectMode: (subject: ExamSubject, mode: Mode) => void;
+  onStartCBT?: () => void;
 }
 
-const SubjectSelector = ({ examTypeId, examName, onSelectMode }: SubjectSelectorProps) => {
+const SubjectSelector = ({ examTypeId, examName, examMode, onSelectMode, onStartCBT }: SubjectSelectorProps) => {
   const [subjects, setSubjects] = useState<ExamSubject[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ExamSubject | null>(null);
@@ -45,8 +47,10 @@ const SubjectSelector = ({ examTypeId, examName, onSelectMode }: SubjectSelector
   const modes: { id: Mode; icon: typeof Zap; label: string; desc: string; color: string; requiresPlus?: boolean }[] = [
     { id: 'quick', icon: Zap, label: 'Quick Practice', desc: `10 questions, untimed${remaining !== Infinity ? ` • ${remaining} left today` : ''}`, color: '#f59e0b' },
     { id: 'topic', icon: Target, label: 'Topic Practice', desc: 'Pick a topic, 10-20 Qs', color: '#10b981' },
-    { id: 'mock', icon: GraduationCap, label: 'Mock Exam', desc: 'Full timed CBT simulation', color: '#ef4444', requiresPlus: true },
-    { id: 'performance', icon: BarChart3, label: 'My Performance', desc: 'Analytics & progress', color: '#3b82f6' },
+    { id: 'year', icon: Calendar, label: 'Past Questions by Year', desc: 'Filter by exam year', color: '#6366f1' },
+    { id: 'study-material', icon: FileText, label: 'Study Material Practice', desc: 'From admin-uploaded PDFs', color: '#ec4899' },
+    { id: 'mock', icon: GraduationCap, label: 'Mock Exam', desc: 'Full timed simulation', color: '#ef4444', requiresPlus: true },
+    { id: 'performance', icon: BarChart3, label: 'My Performance', desc: 'Analytics & trend charts', color: '#3b82f6' },
     { id: 'weakness', icon: AlertTriangle, label: 'Weak Topics', desc: 'AI-identified gaps', color: '#8b5cf6' },
   ];
 
@@ -103,6 +107,31 @@ const SubjectSelector = ({ examTypeId, examName, onSelectMode }: SubjectSelector
               </motion.button>
             );
           })}
+
+          {/* Full CBT button for multi_subject exams */}
+          {examMode === 'multi_subject' && onStartCBT && (
+            <motion.button
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: modes.length * 0.05 }}
+              whileTap={subscription.canUseMockExam ? { scale: 0.98 } : {}}
+              onClick={() => subscription.canUseMockExam && onStartCBT()}
+              className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${subscription.canUseMockExam ? 'bg-primary/5 border-primary/30 hover:border-primary/50' : 'bg-card border-border opacity-60'}`}
+            >
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/20">
+                {subscription.canUseMockExam ? <Layers size={20} className="text-primary" /> : <Lock size={20} className="text-muted-foreground" />}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground text-sm">Full CBT Simulation</h3>
+                  {!subscription.canUseMockExam && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Plus+</Badge>}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {subscription.canUseMockExam ? 'Multi-subject timed exam simulation' : 'Upgrade to Plus or Pro to unlock'}
+                </p>
+              </div>
+            </motion.button>
+          )}
         </div>
       </div>
     );

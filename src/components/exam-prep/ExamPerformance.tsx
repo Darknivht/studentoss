@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface TopicPerf {
   topicId: string | null;
@@ -21,21 +22,26 @@ interface ExamPerformanceProps {
   onBack: () => void;
 }
 
+const CHART_COLORS = ['hsl(var(--primary))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
+
 const ExamPerformance = ({ examTypeId, subjectId, subjectName, onBack }: ExamPerformanceProps) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [overall, setOverall] = useState({ total: 0, correct: 0 });
   const [topicPerfs, setTopicPerfs] = useState<TopicPerf[]>([]);
+  const [trendData, setTrendData] = useState<any[]>([]);
+  const [trendTopics, setTrendTopics] = useState<string[]>([]);
 
   useEffect(() => {
     if (!user) return;
-    const fetch = async () => {
+    const fetchData = async () => {
       const { data: attempts } = await supabase
         .from('exam_attempts')
-        .select('is_correct, topic_id')
+        .select('is_correct, topic_id, created_at, session_id')
         .eq('user_id', user.id)
         .eq('exam_type_id', examTypeId)
-        .eq('subject_id', subjectId);
+        .eq('subject_id', subjectId)
+        .order('created_at', { ascending: true });
 
       const { data: topics } = await supabase
         .from('exam_topics')
@@ -49,6 +55,7 @@ const ExamPerformance = ({ examTypeId, subjectId, subjectName, onBack }: ExamPer
       const totalCorrect = atts.filter(a => a.is_correct).length;
       setOverall({ total: atts.length, correct: totalCorrect });
 
+      // Per-topic breakdown
       const byTopic = new Map<string, { total: number; correct: number }>();
       atts.forEach(a => {
         const key = a.topic_id || '_general';
@@ -68,9 +75,40 @@ const ExamPerformance = ({ examTypeId, subjectId, subjectName, onBack }: ExamPer
       });
       perfs.sort((a, b) => a.pct - b.pct);
       setTopicPerfs(perfs);
+
+      // Build trend data grouped by session date
+      const sessionMap = new Map<string, Map<string, { total: number; correct: number }>>();
+      atts.forEach(a => {
+        const date = a.created_at.split('T')[0];
+        if (!sessionMap.has(date)) sessionMap.set(date, new Map());
+        const dateMap = sessionMap.get(date)!;
+
+        // Overall
+        const ov = dateMap.get('Overall') || { total: 0, correct: 0 };
+        dateMap.set('Overall', { total: ov.total + 1, correct: ov.correct + (a.is_correct ? 1 : 0) });
+
+        // Per topic
+        const topicName = a.topic_id ? (topicMap.get(a.topic_id) || 'Unknown') : 'General';
+        const tv = dateMap.get(topicName) || { total: 0, correct: 0 };
+        dateMap.set(topicName, { total: tv.total + 1, correct: tv.correct + (a.is_correct ? 1 : 0) });
+      });
+
+      const allTopicNames = new Set<string>();
+      const chartData: any[] = [];
+      sessionMap.forEach((dateMap, date) => {
+        const entry: any = { date };
+        dateMap.forEach((v, name) => {
+          entry[name] = Math.round((v.correct / v.total) * 100);
+          allTopicNames.add(name);
+        });
+        chartData.push(entry);
+      });
+
+      setTrendData(chartData);
+      setTrendTopics(Array.from(allTopicNames));
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, [user, examTypeId, subjectId]);
 
   const TrendIcon = ({ pct }: { pct: number }) => {
@@ -111,6 +149,38 @@ const ExamPerformance = ({ examTypeId, subjectId, subjectName, onBack }: ExamPer
             <p className="text-sm text-muted-foreground mt-1">{overall.correct} / {overall.total} questions correct</p>
             <Progress value={overallPct} className="mt-3" />
           </motion.div>
+
+          {/* Trend Chart */}
+          {trendData.length > 1 && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="p-4 rounded-2xl bg-card border border-border">
+              <h3 className="text-sm font-semibold text-foreground mb-3">Accuracy Over Time</h3>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
+                      labelStyle={{ color: 'hsl(var(--foreground))' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    {trendTopics.map((name, i) => (
+                      <Line
+                        key={name}
+                        type="monotone"
+                        dataKey={name}
+                        stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                        strokeWidth={name === 'Overall' ? 2.5 : 1.5}
+                        dot={{ r: 3 }}
+                        connectNulls
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+          )}
 
           <h3 className="text-sm font-semibold text-foreground pt-2">By Topic</h3>
           <div className="space-y-2">
