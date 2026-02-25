@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Mic, MicOff, Volume2, Loader2, StopCircle, AlertCircle, Keyboard, Copy, RefreshCw, Settings, BookOpen, FileText, Download, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Volume2, Loader2, StopCircle, AlertCircle, Keyboard, Copy, RefreshCw, Settings, BookOpen, FileText, Download, GraduationCap, Share2, FileDown, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -13,6 +13,7 @@ import { formatAIResponse, stripMarkdown } from '@/lib/formatters';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { printMarkdownContent, shareContent } from '@/components/export/ExportUtils';
 
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
@@ -325,6 +326,42 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
     }
   };
 
+  const saveTranscriptAsNote = async () => {
+    if (!user || messages.length === 0) return;
+    const transcript = messages.map(m => `**${m.role === 'user' ? 'You' : 'AI Tutor'}:** ${m.content}`).join('\n\n---\n\n');
+    const { error } = await supabase.from('notes').insert({
+      user_id: user.id,
+      title: `Voice Session Transcript - ${new Date().toLocaleDateString()}`,
+      content: transcript,
+      source_type: 'ai_generated',
+      course_id: selectedCourseId !== 'none' ? selectedCourseId : null,
+    });
+    if (error) {
+      toast({ title: 'Error saving', variant: 'destructive' });
+    } else {
+      toast({ title: 'Transcript saved as note!' });
+    }
+  };
+
+  const exportSummary = () => {
+    if (!summaryContent) return;
+    printMarkdownContent(summaryContent, `Voice Tutor Summary - ${new Date().toLocaleDateString()}`);
+    toast({ title: 'Exported!' });
+  };
+
+  const exportTranscript = () => {
+    if (messages.length === 0) return;
+    const md = messages.map(m => `**${m.role === 'user' ? 'You' : 'AI Tutor'}:** ${m.content}`).join('\n\n---\n\n');
+    printMarkdownContent(md, `Voice Session Transcript - ${new Date().toLocaleDateString()}`);
+    toast({ title: 'Transcript exported!' });
+  };
+
+  const handleShare = async () => {
+    const text = summaryContent || messages.map(m => `${m.role === 'user' ? 'You' : 'AI Tutor'}: ${m.content}`).join('\n\n');
+    const ok = await shareContent('Voice Tutor Session', text);
+    if (ok) toast({ title: 'Shared!' });
+  };
+
   const contextLabel = selectedCourseId !== 'none'
     ? courses.find(c => c.id === selectedCourseId)?.name
     : selectedNoteId !== 'none'
@@ -341,9 +378,17 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
         </div>
         <div className="flex gap-1">
           {messages.length >= 2 && (
-            <Button size="icon" variant="ghost" className="w-8 h-8" onClick={summarizeConversation} title="Summarize conversation" disabled={isSummarizing}>
-              <FileText className="w-4 h-4" />
-            </Button>
+            <>
+              <Button size="icon" variant="ghost" className="w-8 h-8" onClick={summarizeConversation} title="Summarize session" disabled={isSummarizing}>
+                <FileText className="w-4 h-4" />
+              </Button>
+              <Button size="icon" variant="ghost" className="w-8 h-8" onClick={saveTranscriptAsNote} title="Save transcript as note">
+                <Save className="w-4 h-4" />
+              </Button>
+              <Button size="icon" variant="ghost" className="w-8 h-8" onClick={exportTranscript} title="Export transcript">
+                <FileDown className="w-4 h-4" />
+              </Button>
+            </>
           )}
           <Button size="icon" variant={showSettings ? 'default' : 'ghost'} className="w-8 h-8" onClick={() => setShowSettings(!showSettings)}>
             <Settings className="w-4 h-4" />
@@ -541,12 +586,20 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
             )}
           </ScrollArea>
           {summaryContent && !isSummarizing && (
-            <div className="flex gap-2 pt-3 border-t border-border">
-              <Button variant="outline" size="sm" onClick={copySummary} className="flex-1 gap-1">
-                <Copy className="w-3 h-3" /> Copy
-              </Button>
-              <Button size="sm" onClick={saveAsNote} className="flex-1 gap-1 gradient-primary text-primary-foreground">
-                <Download className="w-3 h-3" /> Save as Note
+            <div className="space-y-2 pt-3 border-t border-border">
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={copySummary} className="flex-1 gap-1">
+                  <Copy className="w-3 h-3" /> Copy
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportSummary} className="flex-1 gap-1">
+                  <FileDown className="w-3 h-3" /> Export
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleShare} className="flex-1 gap-1">
+                  <Share2 className="w-3 h-3" /> Share
+                </Button>
+              </div>
+              <Button size="sm" onClick={saveAsNote} className="w-full gap-1 gradient-primary text-primary-foreground">
+                <Save className="w-3 h-3" /> Save as Note
               </Button>
             </div>
           )}
