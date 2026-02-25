@@ -1,127 +1,182 @@
 
 
-# ExamCrusher Major Upgrade: Bug Fixes, Admin Enhancements, and Student Features
+# ExamCrusher Readiness Assessment and Per-Subject AI Prompt + Admin Super-Upgrade Plan
 
-## 1. Bug Fix: Questions Section Blank White Screen
+## Current Readiness: ~55/100
 
-**Root Cause**: When navigating to the "Questions" section in the admin Exams tab, `fetchQuestions()` is never called automatically. The `useEffect` hooks only trigger `fetchSubjects` and `fetchTopics` on cascading selection changes, but there is no corresponding effect to load questions when `section === 'questions'` and a subject is selected. The "Load" button must be clicked manually, and before that, the section appears completely blank (no loading spinner, no empty state -- just white).
+**What works well (built):**
+- 9 practice modes (Quick, Topic, Year, PDF, Bookmarks, Mock, CBT, Performance, Weakness)
+- Adaptive difficulty via edge function
+- AI question generation fallback
+- Bookmarking, session review, study plan
+- Admin: exam types/subjects/topics/questions CRUD, PDF import, basic analytics
+- Trend charts with Recharts
+- Subscription gating (free blocked, Plus/Pro tiers)
 
-**Fix**: Add a `useEffect` that calls `fetchQuestions()` when `section` changes to `'questions'` and `selectedSubject` is set. Also wrap all async calls in the ExamsTab with try/catch to prevent unhandled errors from causing white screens.
-
----
-
-## 2. Admin Panel Enhancements
-
-### 2a. Exam Analytics Dashboard (New)
-Add an "Exam Analytics" sub-section to the Exams tab showing:
-- Total questions per exam type and subject (question bank health)
-- Total student attempts, average accuracy per exam type
-- Most-answered and least-answered questions
-- Questions with lowest accuracy (candidates for review/rewriting)
-- PDF import stats (total PDFs, total questions generated)
-
-### 2b. Question Bank Stats Header
-At the top of the Questions section, show a stats bar:
-- Total questions count for selected filters
-- Breakdown by difficulty (easy/medium/hard)
-- Breakdown by source (admin/past_question/AI/PDF)
-- Questions without explanations (flagged for admin attention)
-
-### 2c. Question Preview & Bulk Actions
-- Add a preview mode for individual questions (how students will see it)
-- Bulk activate/deactivate questions
-- Bulk delete selected questions
-- Duplicate question button
-- Search/filter questions by text content
-
-### 2d. Question Quality Indicators
-- Flag questions missing explanations with a warning icon
-- Show attempt count and accuracy per question (from exam_attempts)
-- Sort questions by "needs attention" (low accuracy or missing explanation)
+**What is missing for "academy-level" quality:**
+- No per-subject AI prompt customization (all subjects use the same generic prompt)
+- No subject-specific teaching context (syllabus, key concepts, common mistakes)
+- No guided learning path (students just pick random modes)
+- No "Explain this topic" or AI tutoring within exam prep
+- Admin panel lacks: revenue charts, engagement graphs, user activity timelines, content audit tools, system health indicators, notification management
+- No spaced repetition for weak questions
+- No timed practice (only mock has timer)
+- No question reporting by students
+- No difficulty progression within a session
 
 ---
 
-## 3. Student-Facing Exam Prep Enhancements
+## Plan
 
-### 3a. Adaptive Difficulty
-After each answer, adjust the next question's difficulty based on recent performance. If user gets 3 in a row correct, serve harder questions. If they miss 2+, serve easier ones. This uses the existing `difficulty` column on `exam_questions`.
+### 1. Per-Subject AI Prompt System (Database + Admin + Edge Function)
 
-### 3b. Bookmark/Save Questions
-Let students bookmark questions they want to review later. New database table `exam_bookmarks` (user_id, question_id, created_at). Add a "Bookmarked Questions" practice mode in SubjectSelector.
+**Core idea:** When admin creates a subject, they can provide a custom AI system prompt. This prompt is stored in the database and injected into ALL AI interactions for that subject (question generation, study plans, explanations). Each subject becomes a "specialized teacher."
 
-### 3c. Detailed Post-Session Review
-After completing a practice session, show a full review screen with:
-- All questions listed with correct/incorrect indicators
-- Expandable explanations for each question
-- "Practice Similar" button to retry questions on the same topic
-- Share score card
+**Database change:** Add `ai_prompt` text column to `exam_subjects` table.
 
-### 3d. Study Streak Integration
-Award XP for exam practice sessions. Track exam practice in the study streak system. Show "Exam Prep Streak" on the performance page.
+**Admin change (`AdminResources.tsx`):** Add a textarea field "AI Teaching Prompt" to the subject creation/edit form. Include placeholder text like: "You are an expert Chemistry teacher specializing in WAEC preparation. Focus on practical applications, use Nigerian examples, emphasize common student mistakes in organic chemistry..."
 
-### 3e. AI Study Plan
-After a weakness report, offer an AI-generated personalized study plan that prioritizes weak topics and suggests which modes to use (already partially exists in the edge function but not wired to UI).
+**Edge function change (`exam-practice/index.ts`):** When generating questions or study plans, fetch the subject's `ai_prompt` from the database and prepend it to the system prompt. If no custom prompt exists, fall back to the current generic prompt.
+
+### 2. Guided Learning Mode (New Student Feature)
+
+Add a "Guided Learning" mode in SubjectSelector that works like a lesson:
+1. AI presents a topic explanation first (2-3 paragraphs)
+2. Then asks 3-5 practice questions on that topic
+3. After answering, AI provides personalized feedback
+4. Suggests the next topic based on performance
+
+**New file:** `src/components/exam-prep/GuidedLearning.tsx`
+
+This uses the per-subject AI prompt to feel like a dedicated teacher for each subject.
+
+### 3. Topic Explainer (AI "Teach Me" Button)
+
+Within any practice mode, add a "Teach me this topic" button that calls the AI with the subject's custom prompt to generate a lesson-style explanation before the student attempts questions.
+
+**Change in:** `PracticeSession.tsx` -- add a "Learn First" button that shows an AI-generated mini-lesson for the current question's topic.
+
+### 4. Admin Panel Major Upgrade
+
+**4a. Enhanced Analytics Dashboard (replace current simple stats)**
+
+Replace the current 6-stat card grid with a full dashboard:
+- **Revenue section:** Active subscriptions breakdown, monthly revenue estimate, churn indicators
+- **Engagement charts:** Daily active users over 30 days (line chart), study minutes per day (bar chart), feature usage breakdown (pie chart)
+- **Exam health:** Questions per subject bar chart, accuracy distribution, topics needing more questions
+- **User growth:** New signups over time, conversion rates (free to Plus/Pro)
+
+**4b. Content Audit Tool**
+
+New admin section "Content Health" showing:
+- Subjects with fewer than 20 questions (flagged red)
+- Questions with zero attempts (never served)
+- Questions with less than 20% accuracy (too hard or poorly written)
+- Topics with no questions at all
+- Subjects missing AI prompts
+
+**4c. User Activity Timeline**
+
+In the Users tab, when viewing a user, show their recent activity: last login, recent exam attempts, subscription changes, AI usage.
+
+**4d. Notification/Push Management**
+
+Add ability for admin to schedule and send push-like announcements to specific tiers or all users (extends current announcements with targeting).
+
+### 5. Question Reporting by Students
+
+Add a "Report" button on each question in PracticeSession. Students can flag questions as incorrect, confusing, or duplicate. Admin sees reported questions in a new "Reports" sub-section.
+
+**Database change:** New `question_reports` table (user_id, question_id, reason, created_at).
+
+### 6. Timed Practice Mode
+
+Add optional timer to Quick Practice. Students can choose "Timed (2 min/question)" or "Untimed" before starting. Shows countdown per question and auto-advances.
 
 ---
 
-## 4. Technical Details
+## Technical Details
 
-### Database Migration
+### Database Migrations
+
 ```text
--- Bookmarks table
-CREATE TABLE exam_bookmarks (
+-- 1. Per-subject AI prompt
+ALTER TABLE exam_subjects ADD COLUMN IF NOT EXISTS ai_prompt text;
+
+-- 2. Question reports
+CREATE TABLE public.question_reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
   question_id uuid NOT NULL,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(user_id, question_id)
+  reason text NOT NULL DEFAULT 'incorrect',
+  details text,
+  status text NOT NULL DEFAULT 'pending',
+  created_at timestamptz DEFAULT now()
 );
-ALTER TABLE exam_bookmarks ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage own bookmarks" ON exam_bookmarks
-  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+ALTER TABLE public.question_reports ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can insert own reports" ON public.question_reports
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can view own reports" ON public.question_reports
+  FOR SELECT USING (auth.uid() = user_id);
 ```
+
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `src/components/exam-prep/GuidedLearning.tsx` | Guided lesson + practice flow with AI-generated topic explanations followed by targeted questions |
 
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/AdminResources.tsx` | Fix questions auto-fetch bug; add exam analytics sub-section; add question stats header; add search, bulk actions, quality indicators; wrap async calls in try/catch |
-| `src/components/exam-prep/SubjectSelector.tsx` | Add "Bookmarked Questions" mode; add "AI Study Plan" mode |
-| `src/components/exam-prep/PracticeSession.tsx` | Add bookmark button per question; add adaptive difficulty logic; improve post-session review with full question list and expandable explanations |
-| `src/pages/ExamPrep.tsx` | Wire new modes (bookmarks, study-plan); add bookmarks view |
-| `src/hooks/useSubscription.ts` | No change needed (bookmarks are free) |
-| `supabase/functions/admin-resources/index.ts` | Add `exam-analytics` action returning question counts, attempt stats, accuracy data per exam type/subject; add `question-stats` action |
+| `src/pages/AdminResources.tsx` | Add `ai_prompt` textarea to subject form; add Content Health section; enhance Analytics with Recharts charts (line chart for DAU, bar chart for questions per subject); add Question Reports viewer; add user activity detail view |
+| `src/components/exam-prep/SubjectSelector.tsx` | Add "Guided Learning" and "Timed Practice" modes |
+| `src/components/exam-prep/PracticeSession.tsx` | Add question report button; add "Learn First" button; add optional per-question timer; use subject AI prompt for explanations |
+| `src/pages/ExamPrep.tsx` | Wire guided-learning view and timed-practice variants |
+| `supabase/functions/exam-practice/index.ts` | Fetch `ai_prompt` from `exam_subjects` and inject into all AI system prompts (question generation, study plan, explanations) |
+| `supabase/functions/admin-resources/index.ts` | Add `content-health` action (returns subjects with low question counts, unreported questions, missing prompts); add `question-reports` action; add `user-activity` action; enhance `analytics` with time-series data; include `ai_prompt` in subject CRUD |
 
-### New Files
+### How Per-Subject AI Prompt Works
 
-| File | Purpose |
-|------|---------|
-| `src/components/exam-prep/BookmarkedQuestions.tsx` | Practice mode for bookmarked questions |
-| `src/components/exam-prep/StudyPlanView.tsx` | AI-generated study plan display with actionable recommendations |
-| `src/components/exam-prep/SessionReview.tsx` | Full post-session review with all questions, answers, and explanations |
+```text
+Admin creates subject "Chemistry" with AI prompt:
+  "You are Prof. Adeyemi, a WAEC Chemistry expert with 20 years experience.
+   Always relate concepts to everyday Nigerian life. Emphasize safety in
+   practicals. Common weak areas: organic naming, electrochemistry calculations."
 
-### Admin Edge Function Additions
+When student practices Chemistry:
+  1. Edge function fetches subject row including ai_prompt
+  2. System prompt becomes: [subject ai_prompt] + [question generation instructions]
+  3. AI generates questions with Nigerian context, practical emphasis
+  4. Study plans reference the same persona
+  5. "Learn First" explanations use the same teacher voice
+```
 
-The `admin-resources` edge function will get a new `exam-analytics` action:
-- Counts questions per exam type and subject
-- Joins with `exam_attempts` to compute per-question accuracy
-- Identifies questions missing explanations
-- Returns PDF import summary stats
+### Enhanced Admin Analytics Data Flow
+
+The `admin-resources` edge function `analytics` action will be enhanced to return:
+- 30-day daily active users (from `study_sessions` grouped by date)
+- 30-day daily exam attempts (from `exam_attempts` grouped by date)
+- Subscription tier distribution
+- Per-subject question counts with health indicators
+- Questions with lowest accuracy (join `exam_attempts` with `exam_questions`)
+
+Frontend renders these using Recharts LineChart and BarChart components already available in the project.
 
 ---
 
-## 5. Implementation Order
+## Implementation Order
 
 | Step | Task |
 |------|------|
-| 1 | Fix questions section blank screen bug (add useEffect + try/catch) |
-| 2 | Database migration for exam_bookmarks |
-| 3 | Add exam analytics sub-section to admin Exams tab |
-| 4 | Add question stats header, search, and quality indicators in admin |
-| 5 | Add bulk actions (activate/deactivate/delete) in admin questions |
-| 6 | Add bookmark button in PracticeSession and BookmarkedQuestions mode |
-| 7 | Improve post-session review with full question list |
-| 8 | Add adaptive difficulty to PracticeSession |
-| 9 | Add AI Study Plan view wired to existing edge function |
-| 10 | Add exam analytics action to admin-resources edge function |
+| 1 | Database migration: add `ai_prompt` to `exam_subjects`, create `question_reports` table |
+| 2 | Update `admin-resources` edge function: include `ai_prompt` in subject CRUD, add content-health action, add question-reports action, enhance analytics |
+| 3 | Update `exam-practice` edge function: fetch and inject per-subject `ai_prompt` into all AI calls |
+| 4 | Update `AdminResources.tsx`: add AI prompt field to subjects, add Content Health section, enhance Analytics with charts, add Reports viewer |
+| 5 | Create `GuidedLearning.tsx`: AI topic explanation + targeted practice flow |
+| 6 | Update `SubjectSelector.tsx`: add Guided Learning and Timed Practice modes |
+| 7 | Update `PracticeSession.tsx`: add report button, "Learn First" button, optional timer |
+| 8 | Update `ExamPrep.tsx`: wire new views |
+| 9 | Deploy edge functions and test end-to-end |
 
