@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, ChevronRight, Bookmark, BookmarkCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import SessionReview from './SessionReview';
+import { toast } from '@/hooks/use-toast';
 
 interface Question {
   id: string;
@@ -28,9 +30,10 @@ interface PracticeSessionProps {
   source?: string;
   questionCount?: number;
   onBack: () => void;
+  onRetryTopic?: (topicId: string) => void;
 }
 
-const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, source, questionCount = 10, onBack }: PracticeSessionProps) => {
+const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, source, questionCount = 10, onBack, onRetryTopic }: PracticeSessionProps) => {
   const { user } = useAuth();
   const { gateFeature, incrementUsage } = useSubscription();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -40,13 +43,28 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [showReview, setShowReview] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
   const [gateOpen, setGateOpen] = useState(false);
   const [gateInfo, setGateInfo] = useState({ currentUsage: 0, limit: 0 });
+  const [answers, setAnswers] = useState<{ selectedAnswer: number; isCorrect: boolean }[]>([]);
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  
+  // Adaptive difficulty tracking
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
+  const [consecutiveWrong, setConsecutiveWrong] = useState(0);
+
+  // Load bookmarks
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('exam_bookmarks').select('question_id').eq('user_id', user.id)
+      .then(({ data }) => {
+        if (data) setBookmarkedIds(new Set(data.map(b => b.question_id)));
+      });
+  }, [user]);
 
   useEffect(() => {
     const fetchQuestions = async () => {
-      // Check gate before loading
       const gate = gateFeature('examQuestion');
       if (!gate.allowed) {
         setGateInfo({ currentUsage: gate.currentUsage, limit: gate.limit });
@@ -56,7 +74,6 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
       }
 
       try {
-        // If filtering by year or source, go direct to DB
         if (year || source) {
           let query = supabase
             .from('exam_questions')
@@ -69,15 +86,11 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
           if (source) query = query.eq('source', source);
           const { data } = await query.limit(questionCount);
           const mapped = (data || []).map(q => ({
-            id: q.id,
-            question: q.question,
+            id: q.id, question: q.question,
             options: Array.isArray(q.options) ? (q.options as string[]) : [],
-            correct_index: q.correct_index,
-            explanation: q.explanation,
-            difficulty: q.difficulty,
-            topic_id: q.topic_id,
+            correct_index: q.correct_index, explanation: q.explanation,
+            difficulty: q.difficulty, topic_id: q.topic_id,
           }));
-          // Shuffle
           for (let i = mapped.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [mapped[i], mapped[j]] = [mapped[j], mapped[i]];
@@ -87,7 +100,6 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
           return;
         }
 
-        // Use exam-practice edge function for AI-powered question generation
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token;
         
@@ -107,38 +119,25 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
         });
 
         const result = await resp.json();
-        
-        if (result.questions && result.questions.length > 0) {
-          const mapped = result.questions.map((q: any) => ({
-            id: q.id || crypto.randomUUID(),
-            question: q.question,
+        if (result.questions?.length > 0) {
+          setQuestions(result.questions.map((q: any) => ({
+            id: q.id || crypto.randomUUID(), question: q.question,
             options: Array.isArray(q.options) ? q.options : [],
-            correct_index: q.correct_index,
-            explanation: q.explanation,
-            difficulty: q.difficulty || 'medium',
-            topic_id: q.topic_id || null,
-          }));
-          setQuestions(mapped);
+            correct_index: q.correct_index, explanation: q.explanation,
+            difficulty: q.difficulty || 'medium', topic_id: q.topic_id || null,
+          })));
         }
       } catch (error) {
         console.error('Error fetching questions:', error);
-        // Fallback: direct DB query
-        let query = supabase
-          .from('exam_questions')
-          .select('*')
-          .eq('exam_type_id', examTypeId)
-          .eq('subject_id', subjectId)
-          .eq('is_active', true);
+        let query = supabase.from('exam_questions').select('*')
+          .eq('exam_type_id', examTypeId).eq('subject_id', subjectId).eq('is_active', true);
         if (topicId) query = query.eq('topic_id', topicId);
         const { data } = await query.limit(questionCount);
         const mapped = (data || []).map(q => ({
-          id: q.id,
-          question: q.question,
+          id: q.id, question: q.question,
           options: Array.isArray(q.options) ? (q.options as string[]) : [],
-          correct_index: q.correct_index,
-          explanation: q.explanation,
-          difficulty: q.difficulty,
-          topic_id: q.topic_id,
+          correct_index: q.correct_index, explanation: q.explanation,
+          difficulty: q.difficulty, topic_id: q.topic_id,
         }));
         for (let i = mapped.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -151,6 +150,19 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
     fetchQuestions();
   }, [examTypeId, subjectId, topicId, year, source, questionCount]);
 
+  const toggleBookmark = async (questionId: string) => {
+    if (!user) return;
+    if (bookmarkedIds.has(questionId)) {
+      await supabase.from('exam_bookmarks').delete().eq('user_id', user.id).eq('question_id', questionId);
+      setBookmarkedIds(prev => { const n = new Set(prev); n.delete(questionId); return n; });
+      toast({ title: 'Bookmark removed' });
+    } else {
+      await supabase.from('exam_bookmarks').insert({ user_id: user.id, question_id: questionId });
+      setBookmarkedIds(prev => new Set(prev).add(questionId));
+      toast({ title: 'Question bookmarked' });
+    }
+  };
+
   const handleSelect = async (index: number) => {
     if (showResult) return;
     setSelectedAnswer(index);
@@ -158,20 +170,23 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
 
     const q = questions[currentIndex];
     const correct = index === q.correct_index;
-    if (correct) setScore(s => s + 1);
+    if (correct) {
+      setScore(s => s + 1);
+      setConsecutiveCorrect(c => c + 1);
+      setConsecutiveWrong(0);
+    } else {
+      setConsecutiveWrong(c => c + 1);
+      setConsecutiveCorrect(0);
+    }
 
+    setAnswers(prev => [...prev, { selectedAnswer: index, isCorrect: correct }]);
     await incrementUsage('examQuestion');
 
     if (user) {
       await supabase.from('exam_attempts').insert({
-        user_id: user.id,
-        exam_type_id: examTypeId,
-        subject_id: subjectId,
-        topic_id: q.topic_id,
-        question_id: q.id,
-        selected_index: index,
-        is_correct: correct,
-        session_id: sessionId,
+        user_id: user.id, exam_type_id: examTypeId, subject_id: subjectId,
+        topic_id: q.topic_id, question_id: q.id, selected_index: index,
+        is_correct: correct, session_id: sessionId,
       });
     }
   };
@@ -208,23 +223,45 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
         <p className="text-4xl mb-3">📭</p>
         <h3 className="font-semibold text-foreground">No questions available</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          {source ? 'No study material questions found for this subject.' : year ? `No questions found for year ${year}.` : "Questions for this subject haven't been added yet."}
+          {source ? 'No study material questions found.' : year ? `No questions for year ${year}.` : "Questions haven't been added yet."}
         </p>
         <Button variant="outline" className="mt-4" onClick={onBack}>Go Back</Button>
       </div>
     );
   }
 
+  // Show detailed review
+  if (showReview) {
+    const reviewQuestions = questions.map((q, i) => ({
+      ...q,
+      selectedAnswer: answers[i]?.selectedAnswer ?? -1,
+      isCorrect: answers[i]?.isCorrect ?? false,
+    }));
+    return (
+      <SessionReview
+        questions={reviewQuestions}
+        score={score}
+        subjectName={subjectName}
+        onBack={onBack}
+        onRetryWeak={onRetryTopic}
+      />
+    );
+  }
+
   if (finished || (questions.length === 0 && gateOpen)) {
-    const pct = questions.length > 0 ? Math.round((score / Math.min(questions.length, currentIndex + 1)) * 100) : 0;
+    const answered = Math.min(questions.length, currentIndex + 1);
+    const pct = answered > 0 ? Math.round((score / answered) * 100) : 0;
     return (
       <>
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-12 space-y-4">
           <p className="text-5xl">{pct >= 70 ? '🎉' : pct >= 50 ? '👍' : '💪'}</p>
           <h2 className="text-2xl font-display font-bold text-foreground">{pct}% Score</h2>
-          <p className="text-muted-foreground">{score} / {Math.min(questions.length, currentIndex + 1)} correct — {subjectName}</p>
+          <p className="text-muted-foreground">{score} / {answered} correct — {subjectName}</p>
           <Progress value={pct} className="w-48 mx-auto" />
-          <Button onClick={onBack} className="mt-4">Back to Subjects</Button>
+          <div className="flex gap-2 justify-center mt-4">
+            <Button variant="outline" onClick={() => setShowReview(true)}>Review Answers</Button>
+            <Button onClick={onBack}>Back to Subjects</Button>
+          </div>
         </motion.div>
         <FeatureGateDialog open={gateOpen} onOpenChange={setGateOpen} feature="Exam Questions" currentUsage={gateInfo.currentUsage} limit={gateInfo.limit} requiredTier="plus" />
       </>
@@ -232,6 +269,10 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
   }
 
   const q = questions[currentIndex];
+  const isBookmarked = bookmarkedIds.has(q.id);
+
+  // Adaptive difficulty indicator
+  const adaptiveHint = consecutiveCorrect >= 3 ? '🔥 On fire!' : consecutiveWrong >= 2 ? '💪 Keep trying!' : null;
 
   return (
     <>
@@ -240,9 +281,15 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
           <button onClick={onBack} className="flex items-center gap-1 text-sm text-primary font-medium">
             <ArrowLeft size={16} /> Back
           </button>
-          <span className="text-xs text-muted-foreground font-medium">
-            {currentIndex + 1} / {questions.length}
-          </span>
+          <div className="flex items-center gap-2">
+            {adaptiveHint && <span className="text-xs">{adaptiveHint}</span>}
+            <button onClick={() => toggleBookmark(q.id)} className="p-1">
+              {isBookmarked ? <BookmarkCheck size={18} className="text-primary" /> : <Bookmark size={18} className="text-muted-foreground" />}
+            </button>
+            <span className="text-xs text-muted-foreground font-medium">
+              {currentIndex + 1} / {questions.length}
+            </span>
+          </div>
         </div>
 
         <Progress value={((currentIndex + 1) / questions.length) * 100} />
@@ -294,10 +341,7 @@ const PracticeSession = ({ examTypeId, subjectId, subjectName, topicId, year, so
                 ) : (
                   <div className="text-center py-2">
                     <p className="text-xs font-semibold text-muted-foreground mb-1">🔒 Explanation Locked</p>
-                    <p className="text-xs text-muted-foreground">Upgrade to Plus or Pro to see detailed explanations</p>
-                    <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={() => window.location.href = '/upgrade'}>
-                      Upgrade Now
-                    </Button>
+                    <p className="text-xs text-muted-foreground">Upgrade to see detailed explanations</p>
                   </div>
                 )}
               </motion.div>

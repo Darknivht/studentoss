@@ -262,6 +262,38 @@ serve(async (req) => {
         return json({ data });
       }
 
+      // ─── Exam Analytics ───
+      case 'exam-analytics': {
+        const [qCountRes, aCountRes, pdfCountRes, typesRes] = await Promise.all([
+          supabase.from('exam_questions').select('*', { count: 'exact', head: true }),
+          supabase.from('exam_attempts').select('*', { count: 'exact', head: true }),
+          supabase.from('exam_pdfs').select('*', { count: 'exact', head: true }),
+          supabase.from('exam_types').select('id, name'),
+        ]);
+
+        // Get accuracy
+        const { data: attemptsData } = await supabase.from('exam_attempts').select('is_correct').limit(1000);
+        const totalAttempts = attemptsData?.length || 0;
+        const correctAttempts = attemptsData?.filter(a => a.is_correct).length || 0;
+        const avgAccuracy = totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : 0;
+
+        // Per exam type stats
+        const byExamType = [];
+        for (const et of (typesRes.data || [])) {
+          const { count: qc } = await supabase.from('exam_questions').select('*', { count: 'exact', head: true }).eq('exam_type_id', et.id);
+          const { count: ac } = await supabase.from('exam_attempts').select('*', { count: 'exact', head: true }).eq('exam_type_id', et.id);
+          byExamType.push({ name: et.name, question_count: qc || 0, attempt_count: ac || 0 });
+        }
+
+        return json({
+          total_questions: qCountRes.count || 0,
+          total_attempts: aCountRes.count || 0,
+          total_pdfs: pdfCountRes.count || 0,
+          avg_accuracy: avgAccuracy,
+          by_exam_type: byExamType,
+        });
+      }
+
       default:
         return json({ error: 'Invalid action' }, 400);
     }

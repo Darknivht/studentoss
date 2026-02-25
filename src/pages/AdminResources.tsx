@@ -565,7 +565,11 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
 
 // ─── Exams Tab ───
 const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
-  const [section, setSection] = useState<'types' | 'subjects' | 'topics' | 'questions' | 'pdf-import'>('types');
+  const [section, setSection] = useState<'types' | 'subjects' | 'topics' | 'questions' | 'pdf-import' | 'analytics'>('types');
+  const [examAnalytics, setExamAnalytics] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(new Set());
+  const [questionSearch, setQuestionSearch] = useState("");
   const [examTypes, setExamTypes] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
@@ -642,6 +646,8 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
   useEffect(() => { fetchExamTypes(); }, []);
   useEffect(() => { if (selectedExamType) { fetchSubjects(selectedExamType); setSelectedSubject(""); setSelectedTopic(""); } }, [selectedExamType]);
   useEffect(() => { if (selectedSubject) { fetchTopics(selectedSubject); setSelectedTopic(""); } }, [selectedSubject]);
+  // Auto-fetch questions when switching to questions section with a subject selected
+  useEffect(() => { if (section === 'questions' && selectedSubject) { fetchQuestions(); } }, [section, selectedSubject, selectedTopic, qFilter.difficulty, qFilter.source]);
 
   // ─── Exam Types CRUD ───
   const handleTypeSubmit = async () => {
@@ -813,6 +819,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
           { key: 'topics' as const, label: 'Topics', icon: '📋' },
           { key: 'questions' as const, label: 'Questions', icon: '❓' },
           { key: 'pdf-import' as const, label: 'PDF Import', icon: '📄' },
+          { key: 'analytics' as const, label: 'Analytics', icon: '📊' },
         ].map(s => (
           <Button key={s.key} size="sm" variant={section === s.key ? "default" : "outline"} onClick={() => { setSection(s.key); setEditingId(null); }}>
             {s.icon} {s.label}
@@ -1128,17 +1135,66 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
                 </CardContent>
               </Card>
 
+              {/* Question Stats Header */}
+              {questions.length > 0 && (
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="flex flex-wrap gap-3 text-xs">
+                      <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground">Total: {questions.length}</span>
+                      <span className="px-2 py-1 rounded-full bg-green-500/10 text-green-600">Easy: {questions.filter(q => q.difficulty === 'easy').length}</span>
+                      <span className="px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-600">Medium: {questions.filter(q => q.difficulty === 'medium').length}</span>
+                      <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-600">Hard: {questions.filter(q => q.difficulty === 'hard').length}</span>
+                      {questions.filter(q => !q.explanation).length > 0 && (
+                        <span className="px-2 py-1 rounded-full bg-destructive/10 text-destructive">⚠️ No explanation: {questions.filter(q => !q.explanation).length}</span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Search & Bulk Actions */}
+              {questions.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input placeholder="Search questions..." value={questionSearch} onChange={(e) => setQuestionSearch(e.target.value)} className="w-48 h-8 text-xs" />
+                  {selectedQuestionIds.size > 0 && (
+                    <>
+                      <span className="text-xs text-muted-foreground">{selectedQuestionIds.size} selected</span>
+                      <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={async () => {
+                        if (!confirm(`Delete ${selectedQuestionIds.size} questions?`)) return;
+                        for (const id of selectedQuestionIds) {
+                          await invoke('delete-exam-question', { questionId: id }).catch(() => {});
+                        }
+                        setSelectedQuestionIds(new Set());
+                        toast({ title: 'Deleted' });
+                        fetchQuestions();
+                      }}>Delete Selected</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelectedQuestionIds(new Set())}>Clear</Button>
+                    </>
+                  )}
+                </div>
+              )}
+
               <Card>
                 <CardHeader><CardTitle className="text-lg">Questions ({questions.length})</CardTitle></CardHeader>
                 <CardContent>
                   {loading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
                     <div className="space-y-3">
-                      {questions.map(q => {
+                      {questions
+                        .filter(q => !questionSearch || q.question.toLowerCase().includes(questionSearch.toLowerCase()))
+                        .map(q => {
                         const opts = Array.isArray(q.options) ? q.options : [];
+                        const isSelected = selectedQuestionIds.has(q.id);
                         return (
-                          <div key={q.id} className="p-3 rounded-lg border space-y-2">
+                          <div key={q.id} className={`p-3 rounded-lg border space-y-2 ${isSelected ? 'border-primary bg-primary/5' : ''}`}>
                             <div className="flex items-start justify-between">
-                              <p className="font-medium text-sm flex-1">{q.question}</p>
+                              <div className="flex items-start gap-2 flex-1">
+                                <input type="checkbox" checked={isSelected} onChange={(e) => {
+                                  const newSet = new Set(selectedQuestionIds);
+                                  if (e.target.checked) newSet.add(q.id); else newSet.delete(q.id);
+                                  setSelectedQuestionIds(newSet);
+                                }} className="mt-1 accent-primary" />
+                                <p className="font-medium text-sm flex-1">{q.question}</p>
+                              </div>
                               <div className="flex gap-1 ml-2">
                                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleQuestionEdit(q)}><Edit className="w-3 h-3" /></Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleQuestionDelete(q.id)}><Trash2 className="w-3 h-3" /></Button>
@@ -1155,6 +1211,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
                               <Badge variant="outline" className="text-xs capitalize">{q.difficulty}</Badge>
                               <Badge variant="outline" className="text-xs">{q.source}</Badge>
                               {q.year && <Badge variant="outline" className="text-xs">{q.year}</Badge>}
+                              {!q.explanation && <Badge variant="destructive" className="text-[10px]">⚠️ No explanation</Badge>}
                             </div>
                           </div>
                         );
@@ -1172,6 +1229,62 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
       {/* ─── PDF Import Section ─── */}
       {section === 'pdf-import' && (
         <PdfImportSection adminPassword={adminPassword} examTypes={examTypes} subjects={subjects} selectedExamType={selectedExamType} selectedSubject={selectedSubject} />
+      )}
+
+      {/* ─── Exam Analytics Section ─── */}
+      {section === 'analytics' && (
+        <Card>
+          <CardHeader><CardTitle className="text-lg">📊 Exam Analytics</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {!examAnalytics && !analyticsLoading && (
+              <Button onClick={async () => {
+                setAnalyticsLoading(true);
+                try {
+                  const res = await invoke('exam-analytics');
+                  setExamAnalytics(res);
+                } catch { }
+                setAnalyticsLoading(false);
+              }}>Load Analytics</Button>
+            )}
+            {analyticsLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>}
+            {examAnalytics && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Total Questions', value: examAnalytics.total_questions, icon: '❓' },
+                    { label: 'Total Attempts', value: examAnalytics.total_attempts, icon: '📝' },
+                    { label: 'Avg Accuracy', value: `${examAnalytics.avg_accuracy || 0}%`, icon: '🎯' },
+                    { label: 'PDFs Imported', value: examAnalytics.total_pdfs, icon: '📄' },
+                  ].map(s => (
+                    <Card key={s.label}><CardContent className="pt-4 text-center">
+                      <p className="text-2xl">{s.icon}</p>
+                      <p className="text-xl font-bold">{s.value}</p>
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
+                    </CardContent></Card>
+                  ))}
+                </div>
+                {examAnalytics.by_exam_type?.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">By Exam Type</h4>
+                    <div className="space-y-1">
+                      {examAnalytics.by_exam_type.map((et: any) => (
+                        <div key={et.name} className="flex items-center justify-between p-2 rounded border text-sm">
+                          <span>{et.name}</span>
+                          <span className="text-muted-foreground">{et.question_count} Qs · {et.attempt_count} attempts</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <Button variant="outline" size="sm" onClick={async () => {
+                  setAnalyticsLoading(true);
+                  try { const res = await invoke('exam-analytics'); setExamAnalytics(res); } catch { }
+                  setAnalyticsLoading(false);
+                }}>Refresh</Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );
