@@ -1,171 +1,174 @@
 
 
-# ExamCrusher Launch Readiness Plan
+# ExamCrusher Enhancement Plan: Multi-Mode Exams, PDF Question Import, and Admin Controls
 
-## What's Already Done
-- Database schema (6 tables with RLS)
-- Admin panel for managing exams, subjects, topics, questions
-- Student-facing Exam Prep page with 5 practice modes
-- AI question generation + caching via `exam-practice` edge function
-- Subscription gating (Free: 5/day, Plus: 30/day, Pro: unlimited)
-- Dashboard and Study page integration
-- Paystack payment flow
+## Overview
 
-## What's Missing for Launch (Prioritized)
+This plan upgrades the ExamCrusher module to support two distinct exam modes (per-subject and multi-subject CBT), PDF-based question extraction by admin, and richer international exam support (TOEFL, IELTS, SAT, GRE). It also improves explanation quality and admin workflows.
 
 ---
 
-### 1. Seed the Question Bank (Critical -- No Questions = No Product)
+## What Changes
 
-Right now the question bank is empty. AI generation works, but having pre-loaded verified questions is essential for speed and accuracy.
+### 1. Exam Type Configuration -- Admin-Controlled Exam Modes
 
-**Action:**
-- Create a database seed migration with 100+ verified JAMB questions across 5 core subjects (Mathematics, English, Physics, Chemistry, Biology)
-- Pre-populate `exam_types` with JAMB UTME, WAEC SSCE, NECO
-- Pre-populate `exam_subjects` for each exam type with proper icons
-- Pre-populate `exam_topics` with official syllabus topics per subject
-- Add 20+ seed questions per subject with past-question source tags
+Add a new column `exam_mode` to the `exam_types` table so the admin can configure whether an exam type uses:
+- **per_subject** -- Student picks one subject at a time (e.g., WAEC, NECO, TOEFL, IELTS)
+- **multi_subject** -- Student picks multiple subjects and takes them all at once in a timed CBT session (e.g., JAMB UTME)
 
-**Files:** New SQL migration
+Also add `subjects_required` (integer, default 1) and `time_limit_minutes` (integer, default 60) columns so the admin can set how many subjects to combine and total time.
 
----
+### 2. PDF Upload for Question Extraction (Admin)
 
-### 2. Difficulty Adaptation (PRD P0)
+Add a new feature in the Admin Exams tab:
+- Admin uploads a PDF file to a subject
+- The system extracts text from the PDF using the existing `extract-pdf-text` edge function
+- The extracted text is sent to AI (via the exam-practice edge function) to generate structured questions with detailed explanations
+- Generated questions are saved to `exam_questions` with source = `pdf_extracted`
+- Admin can review, edit, or delete generated questions before activating them
 
-The PRD requires questions that get harder as students improve and easier when they struggle. Currently questions are randomly selected.
+A new `exam_pdfs` table will store uploaded PDF references:
+- `id`, `exam_type_id`, `subject_id`, `file_url`, `filename`, `uploaded_by`, `questions_generated` (count), `created_at`
 
-**Action:**
-- Update `exam-practice` edge function's `generateQuestions` to analyze the user's recent accuracy for the subject
-- If accuracy > 75%, bias toward "hard" questions; if < 40%, bias toward "easy"
-- Pass difficulty preference to AI prompt when generating new questions
+Storage: Use the existing `store-resources` bucket or create a new `exam-pdfs` bucket.
 
-**Files:** `supabase/functions/exam-practice/index.ts`
+### 3. Multi-Subject CBT Mode (Student-Facing)
 
----
+A new component `MultiSubjectCBT` for exams configured as `multi_subject`:
+- Student selects N subjects (as configured by admin, e.g., 4 for JAMB)
+- System loads questions per subject (e.g., 45 per subject for JAMB = 180 total)
+- Timed session with per-subject navigation tabs
+- Auto-submit on timeout
+- Results breakdown per subject with scores, percentages, and weak areas
+- The existing `SubjectSelector` will detect `exam_mode` and show a "Start Full CBT" button instead of per-subject mode selection for multi-subject exams
 
-### 3. Realistic JAMB CBT Simulation (PRD P0)
+### 4. Enhanced Explanations
 
-The PRD specifies JAMB-standard mock exams: 180 questions across 4 subjects, 120 minutes. Currently MockExamMode only supports single-subject sessions.
+- All AI-generated and PDF-extracted questions will include rich, step-by-step explanations
+- The AI prompt will be updated to require explanations that: explain WHY the correct answer is right, WHY each distractor is wrong, and reference relevant concepts/formulas
+- Explanations will render with Markdown support (formulas, bold, lists)
 
-**Action:**
-- Add a "Full JAMB CBT" option in SubjectSelector or as a separate entry from ExamSelector
-- Multi-subject mock: user picks 4 subjects, system generates 45 questions each (180 total)
-- 120-minute countdown timer with auto-submit
-- Results broken down by subject with per-topic analysis
+### 5. International Exam Seeding
 
-**Files:** `src/components/exam-prep/MockExamMode.tsx`, `src/pages/ExamPrep.tsx`
+Seed TOEFL, IELTS, SAT, and GRE exam types with appropriate subjects:
+- **TOEFL**: Reading, Listening, Speaking, Writing
+- **IELTS**: Reading, Listening, Writing, Speaking
+- **SAT**: Reading & Writing, Math
+- **GRE**: Verbal Reasoning, Quantitative Reasoning, Analytical Writing
 
----
+### 6. Admin Improvements
 
-### 4. Hide Explanations for Free Tier (PRD Spec)
-
-The PRD states Free tier gets "no explanations." Currently all users see explanations.
-
-**Action:**
-- In `PracticeSession.tsx`, check subscription tier before showing the explanation section
-- Free users see "Upgrade to see detailed explanations" with an upgrade prompt
-- Plus and Pro users see full explanations
-
-**Files:** `src/components/exam-prep/PracticeSession.tsx`
-
----
-
-### 5. Wrong Answer Review Mode (PRD P0)
-
-After completing a mock exam, students should be able to review only the questions they got wrong with full explanations.
-
-**Action:**
-- Add a "Review Wrong Answers" button on the MockExamMode results screen
-- Filter and display only incorrectly answered questions with the correct answer highlighted and explanation shown
-
-**Files:** `src/components/exam-prep/MockExamMode.tsx`
-
----
-
-### 6. Performance Trend Tracking (PRD P1)
-
-Currently ExamPerformance shows a static snapshot. The PRD wants improvement trends over time.
-
-**Action:**
-- Query `exam_attempts` grouped by week/date to calculate accuracy over time
-- Add a simple line chart (using existing Recharts dependency) showing accuracy trend per subject
-- Show "improving", "stable", or "declining" indicators per topic
-
-**Files:** `src/components/exam-prep/ExamPerformance.tsx`
-
----
-
-### 7. Referral System (PRD Feature)
-
-The PRD includes a referral program: "Refer 3 paying friends, get 1 month free."
-
-**Action:**
-- Add `referral_code` column to profiles (or use existing `invitation_code` from study groups pattern)
-- Create `referrals` table tracking who referred whom
-- Add referral code display on Profile page with share button
-- Apply referral logic in `verify-payment` edge function
-
-**Files:** New migration, `src/pages/Profile.tsx`, `supabase/functions/verify-payment/index.ts`
-
----
-
-### 8. Daily Question Push Notification (PRD P1)
-
-Morning question to maintain engagement.
-
-**Action:**
-- Use existing `useNotifications` hook and Capacitor Local Notifications
-- Schedule a daily notification at 7 AM with a teaser question
-- Tapping the notification opens `/exams` directly
-
-**Files:** `src/hooks/useNotifications.ts`, notification scheduling logic
+- Add a "PDF Import" section to the Exams tab for uploading PDFs per subject
+- Show PDF upload history with question count generated
+- Add `exam_mode` selector to the Exam Types form (per_subject / multi_subject)
+- Add `subjects_required` and `time_limit_minutes` fields for multi-subject exams
 
 ---
 
 ## Technical Details
 
-### Migration SQL (Seed Data)
-```text
-INSERT INTO exam_types (name, slug, description, icon, country)
-VALUES
-  ('JAMB UTME', 'jamb-utme', 'Joint Admissions and Matriculation Board', '🎓', 'Nigeria'),
-  ('WAEC SSCE', 'waec-ssce', 'West African Examinations Council', '📝', 'Nigeria'),
-  ('NECO', 'neco', 'National Examinations Council', '📋', 'Nigeria');
+### Database Migration
 
--- Then subjects per exam type, topics per subject, and seed questions
+```text
+-- New columns on exam_types
+ALTER TABLE exam_types ADD COLUMN exam_mode text NOT NULL DEFAULT 'per_subject';
+ALTER TABLE exam_types ADD COLUMN subjects_required integer NOT NULL DEFAULT 1;
+ALTER TABLE exam_types ADD COLUMN time_limit_minutes integer NOT NULL DEFAULT 60;
+ALTER TABLE exam_types ADD COLUMN questions_per_subject integer NOT NULL DEFAULT 40;
+
+-- New table for PDF uploads
+CREATE TABLE exam_pdfs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  exam_type_id uuid NOT NULL,
+  subject_id uuid NOT NULL,
+  file_url text NOT NULL,
+  filename text NOT NULL,
+  uploaded_by text,
+  questions_generated integer DEFAULT 0,
+  status text DEFAULT 'processing',
+  created_at timestamptz DEFAULT now()
+);
+
+-- RLS: admin-only via edge function (service role), read for authenticated
+ALTER TABLE exam_pdfs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users can view exam pdfs"
+  ON exam_pdfs FOR SELECT USING (auth.uid() IS NOT NULL);
+
+-- Storage bucket for exam PDFs
+INSERT INTO storage.buckets (id, name, public) VALUES ('exam-pdfs', 'exam-pdfs', false);
+CREATE POLICY "Admin upload exam pdfs" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'exam-pdfs');
+CREATE POLICY "Authenticated read exam pdfs" ON storage.objects
+  FOR SELECT USING (bucket_id = 'exam-pdfs' AND auth.uid() IS NOT NULL);
 ```
 
-### Difficulty Adaptation Logic
+### Files to Create
+
+1. **`src/components/exam-prep/MultiSubjectCBT.tsx`** -- New multi-subject CBT component
+   - Subject selection screen (checkboxes, must select N subjects)
+   - Timed exam interface with subject tabs
+   - Question navigation grid per subject
+   - Auto-submit on timeout
+   - Per-subject results breakdown
+
+2. **`src/components/admin/PdfQuestionImport.tsx`** -- Admin PDF upload and question extraction component
+
+### Files to Modify
+
+1. **`src/pages/ExamPrep.tsx`** -- Add `multi-cbt` view, detect exam mode from exam_types
+2. **`src/components/exam-prep/ExamSelector.tsx`** -- Pass exam_mode info to parent
+3. **`src/components/exam-prep/SubjectSelector.tsx`** -- Show "Start Full CBT" for multi-subject exams; keep per-subject modes for per_subject exams
+4. **`src/components/exam-prep/PracticeSession.tsx`** -- Use MarkdownRenderer for explanations
+5. **`src/components/exam-prep/MockExamMode.tsx`** -- Use MarkdownRenderer for explanations
+6. **`src/pages/AdminResources.tsx`** -- Add exam_mode/subjects_required/time_limit fields to type form; add PDF import section
+7. **`supabase/functions/exam-practice/index.ts`** -- Add `extract-pdf-questions` action that takes PDF text and generates questions with rich explanations; update AI prompts for better explanations
+8. **`supabase/functions/admin-resources/index.ts`** -- Add CRUD for exam_pdfs, handle PDF upload flow
+
+### Student Flow for Multi-Subject Exams (e.g., JAMB)
+
 ```text
-1. Query last 20 attempts for user + subject
-2. Calculate accuracy %
-3. Map to difficulty bias:
-   - accuracy > 75% -> prefer "hard"
-   - accuracy 40-75% -> prefer "medium"  
-   - accuracy < 40% -> prefer "easy"
-4. Filter exam_questions by difficulty, or pass to AI prompt
+ExamSelector --> detect exam_mode = "multi_subject"
+  --> MultiSubjectCBT (select 4 subjects)
+    --> Load 45 questions per subject (180 total)
+    --> 120-minute countdown timer
+    --> Subject tabs for navigation
+    --> Submit / Auto-submit
+    --> Per-subject results + overall score
 ```
 
-### Full JAMB CBT Flow
+### Student Flow for Per-Subject Exams (e.g., WAEC, IELTS)
+
 ```text
-ExamSelector -> "Start Full JAMB CBT" button
-  -> Pick 4 subjects from available list
-  -> Generate 45 questions per subject (180 total)
-  -> 120-minute timer, navigate between subjects via tabs
-  -> Auto-submit on timeout
-  -> Results: overall score + per-subject breakdown
+ExamSelector --> detect exam_mode = "per_subject"
+  --> SubjectSelector (pick one subject)
+    --> Choose mode: Quick Practice / Topic / Mock / Performance / Weakness
+    --> (unchanged from current flow)
 ```
 
-## Recommended Implementation Order
+### Admin PDF Import Flow
 
-| Priority | Task | Impact |
-|----------|------|--------|
-| 1 | Seed question bank | Without data, nothing works |
-| 2 | Difficulty adaptation | Core PRD requirement |
-| 3 | Hide explanations for free tier | Monetization driver |
-| 4 | Wrong answer review | Key learning feature |
-| 5 | Full JAMB CBT simulation | Major differentiator |
-| 6 | Performance trends chart | User retention |
-| 7 | Referral system | Growth engine |
-| 8 | Daily push notifications | Engagement driver |
+```text
+Admin selects Exam Type + Subject
+  --> Uploads PDF file
+  --> PDF text extracted via edge function
+  --> AI generates questions with rich explanations
+  --> Questions saved as "pdf_extracted" source
+  --> Admin reviews in question list, can edit/delete
+```
+
+---
+
+## Implementation Order
+
+| Step | Task | Priority |
+|------|------|----------|
+| 1 | Database migration (new columns + exam_pdfs table + bucket) | High |
+| 2 | Seed TOEFL, IELTS, SAT, GRE exam types with subjects | High |
+| 3 | Update Admin Exam Types form with mode/subjects/time fields | High |
+| 4 | Update JAMB to exam_mode = multi_subject, subjects_required = 4, time = 120 | High |
+| 5 | Build MultiSubjectCBT component | High |
+| 6 | Update ExamPrep + SubjectSelector to route based on exam_mode | High |
+| 7 | Add PDF import to admin panel + edge function action | Medium |
+| 8 | Enhance AI prompts for richer explanations + Markdown rendering | Medium |
+| 9 | Test end-to-end: JAMB multi-subject CBT + WAEC per-subject + PDF import | High |
 
