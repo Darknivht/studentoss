@@ -35,6 +35,7 @@ import Privacy from "./pages/Privacy";
 import Store from "./pages/Store";
 import AdminResources from "./pages/AdminResources";
 import ExamPrep from "./pages/ExamPrep";
+import Install from "./pages/Install";
 
 const queryClient = new QueryClient();
 
@@ -91,6 +92,7 @@ const App = () => (
               <Route path="/store" element={<AppLayout><Store /></AppLayout>} />
               <Route path="/exams" element={<AppLayout><ExamPrep /></AppLayout>} />
               <Route path="/admin-resources" element={<AdminResources />} />
+              <Route path="/install" element={<Install />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />
