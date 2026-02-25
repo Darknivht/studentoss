@@ -69,9 +69,30 @@ async function callAI(systemPrompt: string, userPrompt: string): Promise<string>
 }
 
 function extractJsonFromAI(raw: string): unknown {
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const toParse = fenceMatch ? fenceMatch[1].trim() : raw.trim();
-  return JSON.parse(toParse);
+  let cleaned = raw
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  const jsonStart = cleaned.search(/[\{\[]/);
+  const jsonEnd = cleaned.lastIndexOf(jsonStart !== -1 && cleaned[jsonStart] === '[' ? ']' : '}');
+
+  if (jsonStart === -1 || jsonEnd === -1) {
+    throw new Error("No JSON object found in response");
+  }
+
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (_e) {
+    // Fix trailing commas and control characters
+    cleaned = cleaned
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]")
+      .replace(/[\x00-\x1F\x7F]/g, "");
+    return JSON.parse(cleaned);
+  }
 }
 
 // ─── Difficulty adaptation helper ────────────────────────────────────
