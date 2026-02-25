@@ -1,140 +1,127 @@
 
-# ExamCrusher Major Enhancement Plan
 
-## Overview
+# ExamCrusher Major Upgrade: Bug Fixes, Admin Enhancements, and Student Features
 
-This plan addresses multiple improvements: giving JAMB both per-subject AND multi-subject modes, adding year-based question filtering, stronger monetization (block free users from exam prep entirely), performance trend charts, back button on exam prep page, admin logo image upload for exam types, and study-material-based practice.
+## 1. Bug Fix: Questions Section Blank White Screen
 
----
+**Root Cause**: When navigating to the "Questions" section in the admin Exams tab, `fetchQuestions()` is never called automatically. The `useEffect` hooks only trigger `fetchSubjects` and `fetchTopics` on cascading selection changes, but there is no corresponding effect to load questions when `section === 'questions'` and a subject is selected. The "Load" button must be clicked manually, and before that, the section appears completely blank (no loading spinner, no empty state -- just white).
 
-## Changes
-
-### 1. JAMB Gets Both Modes (Per-Subject + Full CBT)
-
-Currently, selecting JAMB immediately jumps to the MultiSubjectCBT component. Instead, when a user selects any exam (including JAMB), they should always go to the SubjectSelector first, which will show all practice modes (Quick Practice, Topic Practice, Mock, Performance, Weak Topics). For `multi_subject` exams, an additional "Full CBT" mode card will appear.
-
-**Files changed:** `ExamPrep.tsx`, `SubjectSelector.tsx`
-
-- Remove the automatic routing to `multi-cbt` on exam select -- always go to `subjects` view
-- Add a "Full CBT" mode button in SubjectSelector when `exam_mode === 'multi_subject'`, which triggers navigation back up to the `multi-cbt` view
-- Pass `exam_mode` to SubjectSelector so it can conditionally show the Full CBT option
-
-### 2. Year-Based Question Filtering
-
-Add a "Practice by Year" mode and a year filter to existing practice. The `exam_questions` table already has a `year` column.
-
-**New View:** `year-select` in ExamPrep that shows available years for the selected subject, letting users pick a specific year or "All Years."
-
-**Files changed:** `ExamPrep.tsx` (add `year-select` view and `year` state), `SubjectSelector.tsx` (add "Past Questions by Year" mode), create `src/components/exam-prep/YearSelector.tsx`, modify `PracticeSession.tsx` (accept optional `year` prop and filter questions by it)
-
-### 3. Practice from Study Materials (PDF-based)
-
-Add a "Study Material Practice" mode where users practice questions extracted from admin-uploaded PDFs for that subject. Uses the `exam_pdfs` table + questions with `source = 'pdf_extracted'`.
-
-**Files changed:** `SubjectSelector.tsx` (add "Study Material" mode), `PracticeSession.tsx` (accept optional `source` filter prop)
-
-### 4. Block Free Users from Exam Prep Entirely
-
-Currently free users get 5 questions/day. Change: free users see a gate dialog immediately upon entering Exam Prep, requiring Plus or Pro.
-
-**Files changed:** `ExamPrep.tsx` -- check subscription tier at mount. If `free`, show `FeatureGateDialog` blocking access. Update `useSubscription.ts` to set `examQuestionsLimit: 0` for free tier.
-
-### 5. Back Button on Exam Prep Page
-
-When the user is on the top-level exam list (`view === 'exams'`), add a back button that navigates to the previous page or dashboard.
-
-**Files changed:** `ExamPrep.tsx` -- add back navigation using `navigate(-1)` or `navigate('/dashboard')` when on the exams view.
-
-### 6. Admin Logo Image Upload for Exam Types
-
-Allow admins to upload an image (logo) for each exam type, falling back to emoji if none provided. Store the image URL in a new `logo_url` column on `exam_types`.
-
-**Database migration:** Add `logo_url text` column to `exam_types`.
-
-**Files changed:** `AdminResources.tsx` (add image upload field in type form), `ExamSelector.tsx` (render `<img>` if `logo_url` exists, else show emoji icon), `supabase/functions/admin-resources/index.ts` (include `logo_url` in CRUD).
-
-Storage: Use the existing `exam-pdfs` bucket or add a policy for storing logos in it.
-
-### 7. Performance Trend Charts
-
-Add Recharts line charts to `ExamPerformance.tsx` showing accuracy over time, with improving/stable/declining indicators per topic.
-
-**Files changed:** `ExamPerformance.tsx` -- fetch attempts with timestamps, group by date/session, compute rolling accuracy, render `LineChart` from Recharts with topic-level breakdowns.
-
-### 8. Exam Attempts Table Enhancement
-
-The `exam_attempts` table already stores `created_at` and `session_id`, which is sufficient for time-series charts. No schema change needed for this.
+**Fix**: Add a `useEffect` that calls `fetchQuestions()` when `section` changes to `'questions'` and `selectedSubject` is set. Also wrap all async calls in the ExamsTab with try/catch to prevent unhandled errors from causing white screens.
 
 ---
 
-## Technical Details
+## 2. Admin Panel Enhancements
+
+### 2a. Exam Analytics Dashboard (New)
+Add an "Exam Analytics" sub-section to the Exams tab showing:
+- Total questions per exam type and subject (question bank health)
+- Total student attempts, average accuracy per exam type
+- Most-answered and least-answered questions
+- Questions with lowest accuracy (candidates for review/rewriting)
+- PDF import stats (total PDFs, total questions generated)
+
+### 2b. Question Bank Stats Header
+At the top of the Questions section, show a stats bar:
+- Total questions count for selected filters
+- Breakdown by difficulty (easy/medium/hard)
+- Breakdown by source (admin/past_question/AI/PDF)
+- Questions without explanations (flagged for admin attention)
+
+### 2c. Question Preview & Bulk Actions
+- Add a preview mode for individual questions (how students will see it)
+- Bulk activate/deactivate questions
+- Bulk delete selected questions
+- Duplicate question button
+- Search/filter questions by text content
+
+### 2d. Question Quality Indicators
+- Flag questions missing explanations with a warning icon
+- Show attempt count and accuracy per question (from exam_attempts)
+- Sort questions by "needs attention" (low accuracy or missing explanation)
+
+---
+
+## 3. Student-Facing Exam Prep Enhancements
+
+### 3a. Adaptive Difficulty
+After each answer, adjust the next question's difficulty based on recent performance. If user gets 3 in a row correct, serve harder questions. If they miss 2+, serve easier ones. This uses the existing `difficulty` column on `exam_questions`.
+
+### 3b. Bookmark/Save Questions
+Let students bookmark questions they want to review later. New database table `exam_bookmarks` (user_id, question_id, created_at). Add a "Bookmarked Questions" practice mode in SubjectSelector.
+
+### 3c. Detailed Post-Session Review
+After completing a practice session, show a full review screen with:
+- All questions listed with correct/incorrect indicators
+- Expandable explanations for each question
+- "Practice Similar" button to retry questions on the same topic
+- Share score card
+
+### 3d. Study Streak Integration
+Award XP for exam practice sessions. Track exam practice in the study streak system. Show "Exam Prep Streak" on the performance page.
+
+### 3e. AI Study Plan
+After a weakness report, offer an AI-generated personalized study plan that prioritizes weak topics and suggests which modes to use (already partially exists in the edge function but not wired to UI).
+
+---
+
+## 4. Technical Details
 
 ### Database Migration
-
 ```text
-ALTER TABLE exam_types ADD COLUMN IF NOT EXISTS logo_url text;
+-- Bookmarks table
+CREATE TABLE exam_bookmarks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  question_id uuid NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(user_id, question_id)
+);
+ALTER TABLE exam_bookmarks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage own bookmarks" ON exam_bookmarks
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 ```
 
-### New Files
-
-1. **`src/components/exam-prep/YearSelector.tsx`** -- Fetches distinct years from `exam_questions` for a given subject, displays them as selectable cards, plus an "All Years" option.
-
-### Modified Files
+### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/ExamPrep.tsx` | Add `year-select` view, `year` state, back button on exams view, free-user gate check, always route to `subjects` first, add "Full CBT" callback from SubjectSelector |
-| `src/components/exam-prep/SubjectSelector.tsx` | Add modes: "Past Questions by Year", "Study Materials", "Full CBT" (for multi_subject exams). Accept `examMode` prop |
-| `src/components/exam-prep/PracticeSession.tsx` | Accept optional `year` and `source` props, filter DB queries accordingly |
-| `src/components/exam-prep/ExamSelector.tsx` | Render `logo_url` as `<img>` when available, fallback to emoji |
-| `src/components/exam-prep/ExamPerformance.tsx` | Add Recharts LineChart for accuracy over time, group attempts by date, show per-topic trend lines with color coding |
-| `src/pages/AdminResources.tsx` | Add logo image upload field to exam type form, store URL in `logo_url` |
-| `src/hooks/useSubscription.ts` | Set `examQuestionsLimit: 0` for free tier |
-| `supabase/functions/admin-resources/index.ts` | Include `logo_url` in exam type CRUD |
+| `src/pages/AdminResources.tsx` | Fix questions auto-fetch bug; add exam analytics sub-section; add question stats header; add search, bulk actions, quality indicators; wrap async calls in try/catch |
+| `src/components/exam-prep/SubjectSelector.tsx` | Add "Bookmarked Questions" mode; add "AI Study Plan" mode |
+| `src/components/exam-prep/PracticeSession.tsx` | Add bookmark button per question; add adaptive difficulty logic; improve post-session review with full question list and expandable explanations |
+| `src/pages/ExamPrep.tsx` | Wire new modes (bookmarks, study-plan); add bookmarks view |
+| `src/hooks/useSubscription.ts` | No change needed (bookmarks are free) |
+| `supabase/functions/admin-resources/index.ts` | Add `exam-analytics` action returning question counts, attempt stats, accuracy data per exam type/subject; add `question-stats` action |
 
-### Student Flow (Updated)
+### New Files
 
-```text
-ExamPrep (back button always visible)
-  --> Free user? Show gate dialog, block access
-  --> ExamSelector (shows logo images or emoji)
-    --> Always go to SubjectSelector
-      --> Modes shown:
-          - Quick Practice
-          - Topic Practice
-          - Past Questions by Year (NEW)
-          - Study Material Practice (NEW)
-          - Mock Exam (Plus+)
-          - Full CBT (only for multi_subject exams like JAMB) (Plus+)
-          - My Performance (with trend charts)
-          - Weak Topics
-      --> Year mode: YearSelector --> PracticeSession (filtered by year)
-      --> Study Material mode: PracticeSession (filtered by source='pdf_extracted')
-      --> Full CBT: MultiSubjectCBT component
-```
+| File | Purpose |
+|------|---------|
+| `src/components/exam-prep/BookmarkedQuestions.tsx` | Practice mode for bookmarked questions |
+| `src/components/exam-prep/StudyPlanView.tsx` | AI-generated study plan display with actionable recommendations |
+| `src/components/exam-prep/SessionReview.tsx` | Full post-session review with all questions, answers, and explanations |
 
-### Performance Chart Design
+### Admin Edge Function Additions
 
-- X-axis: Date (grouped by session date from `created_at`)
-- Y-axis: Accuracy percentage (0-100%)
-- One line per topic, plus an "Overall" line
-- Color-coded: green for improving trend, yellow for stable, red for declining
-- Trend determined by comparing last 3 sessions vs previous 3 sessions
+The `admin-resources` edge function will get a new `exam-analytics` action:
+- Counts questions per exam type and subject
+- Joins with `exam_attempts` to compute per-question accuracy
+- Identifies questions missing explanations
+- Returns PDF import summary stats
 
 ---
 
-## Implementation Order
+## 5. Implementation Order
 
 | Step | Task |
 |------|------|
-| 1 | Database migration: add `logo_url` to `exam_types` |
-| 2 | Update `useSubscription.ts`: free tier `examQuestionsLimit: 0` |
-| 3 | Update `ExamPrep.tsx`: back button, free-user gate, always route to subjects, year-select view |
-| 4 | Update `SubjectSelector.tsx`: add new modes, accept `examMode` prop |
-| 5 | Create `YearSelector.tsx` |
-| 6 | Update `PracticeSession.tsx`: accept `year` and `source` filter props |
-| 7 | Update `ExamPerformance.tsx`: add Recharts trend charts |
-| 8 | Update `ExamSelector.tsx`: render logo images |
-| 9 | Update `AdminResources.tsx`: add logo upload field |
-| 10 | Update `admin-resources` edge function: include `logo_url` |
-| 11 | Deploy and test end-to-end |
+| 1 | Fix questions section blank screen bug (add useEffect + try/catch) |
+| 2 | Database migration for exam_bookmarks |
+| 3 | Add exam analytics sub-section to admin Exams tab |
+| 4 | Add question stats header, search, and quality indicators in admin |
+| 5 | Add bulk actions (activate/deactivate/delete) in admin questions |
+| 6 | Add bookmark button in PracticeSession and BookmarkedQuestions mode |
+| 7 | Improve post-session review with full question list |
+| 8 | Add adaptive difficulty to PracticeSession |
+| 9 | Add AI Study Plan view wired to existing edge function |
+| 10 | Add exam analytics action to admin-resources edge function |
+
