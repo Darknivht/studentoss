@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Zap, Target, GraduationCap, BarChart3, AlertTriangle, Lock, Calendar, FileText, Layers } from 'lucide-react';
+import { Loader2, Zap, Target, GraduationCap, BarChart3, AlertTriangle, Lock, Calendar, FileText, Layers, Bookmark, Lightbulb } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,7 @@ interface ExamSubject {
   topics_count: number;
 }
 
-type Mode = 'quick' | 'topic' | 'mock' | 'performance' | 'weakness' | 'year' | 'study-material';
+type Mode = 'quick' | 'topic' | 'mock' | 'performance' | 'weakness' | 'year' | 'study-material' | 'bookmarks' | 'study-plan';
 
 interface SubjectSelectorProps {
   examTypeId: string;
@@ -49,9 +49,11 @@ const SubjectSelector = ({ examTypeId, examName, examMode, onSelectMode, onStart
     { id: 'topic', icon: Target, label: 'Topic Practice', desc: 'Pick a topic, 10-20 Qs', color: '#10b981' },
     { id: 'year', icon: Calendar, label: 'Past Questions by Year', desc: 'Filter by exam year', color: '#6366f1' },
     { id: 'study-material', icon: FileText, label: 'Study Material Practice', desc: 'From admin-uploaded PDFs', color: '#ec4899' },
+    { id: 'bookmarks', icon: Bookmark, label: 'Bookmarked Questions', desc: 'Review saved questions', color: '#0ea5e9' },
     { id: 'mock', icon: GraduationCap, label: 'Mock Exam', desc: 'Full timed simulation', color: '#ef4444', requiresPlus: true },
     { id: 'performance', icon: BarChart3, label: 'My Performance', desc: 'Analytics & trend charts', color: '#3b82f6' },
     { id: 'weakness', icon: AlertTriangle, label: 'Weak Topics', desc: 'AI-identified gaps', color: '#8b5cf6' },
+    { id: 'study-plan', icon: Lightbulb, label: 'AI Study Plan', desc: 'Personalized recommendations', color: '#14b8a6' },
   ];
 
   if (loading) {
@@ -108,7 +110,6 @@ const SubjectSelector = ({ examTypeId, examName, examMode, onSelectMode, onStart
             );
           })}
 
-          {/* Full CBT button for multi_subject exams */}
           {examMode === 'multi_subject' && onStartCBT && (
             <motion.button
               initial={{ opacity: 0, x: 20 }}

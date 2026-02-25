@@ -11,6 +11,8 @@ import WeaknessReport from '@/components/exam-prep/WeaknessReport';
 import TopicSelector from '@/components/exam-prep/TopicSelector';
 import MultiSubjectCBT from '@/components/exam-prep/MultiSubjectCBT';
 import YearSelector from '@/components/exam-prep/YearSelector';
+import BookmarkedQuestions from '@/components/exam-prep/BookmarkedQuestions';
+import StudyPlanView from '@/components/exam-prep/StudyPlanView';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 import { useSubscription } from '@/hooks/useSubscription';
 
@@ -28,7 +30,7 @@ interface SelectedSubject {
   name: string;
 }
 
-type View = 'exams' | 'subjects' | 'topic-select' | 'year-select' | 'practice' | 'mock' | 'performance' | 'weakness' | 'multi-cbt';
+type View = 'exams' | 'subjects' | 'topic-select' | 'year-select' | 'practice' | 'mock' | 'performance' | 'weakness' | 'multi-cbt' | 'bookmarks' | 'study-plan';
 
 const ExamPrep = () => {
   const navigate = useNavigate();
@@ -41,7 +43,6 @@ const ExamPrep = () => {
   const [source, setSource] = useState<string | undefined>();
   const [gateOpen, setGateOpen] = useState(false);
 
-  // Block free users from Exam Prep entirely
   useEffect(() => {
     if (!subLoading && subscription.tier === 'free') {
       setGateOpen(true);
@@ -95,7 +96,6 @@ const ExamPrep = () => {
             questions_per_subject: e.questions_per_subject || 40,
           };
           setExam(selectedExam);
-          // Always go to subjects first
           setView('subjects');
         }} />
       )}
@@ -124,6 +124,8 @@ const ExamPrep = () => {
             else if (mode === 'performance') setView('performance');
             else if (mode === 'weakness') setView('weakness');
             else if (mode === 'year') setView('year-select');
+            else if (mode === 'bookmarks') setView('bookmarks');
+            else if (mode === 'study-plan') setView('study-plan');
             else if (mode === 'study-material') {
               setSource('pdf_extracted');
               setView('practice');
@@ -165,6 +167,7 @@ const ExamPrep = () => {
           source={source}
           questionCount={10}
           onBack={resetToSubjects}
+          onRetryTopic={(tId) => { setTopicId(tId); setSource(undefined); setYear(undefined); }}
         />
       )}
 
@@ -193,6 +196,24 @@ const ExamPrep = () => {
           subjectName={subject.name}
           onBack={resetToSubjects}
           onPracticeTopic={(tId) => { setTopicId(tId); setView('practice'); }}
+        />
+      )}
+
+      {view === 'bookmarks' && exam && subject && (
+        <BookmarkedQuestions
+          examTypeId={exam.id}
+          subjectId={subject.id}
+          subjectName={subject.name}
+          onBack={resetToSubjects}
+        />
+      )}
+
+      {view === 'study-plan' && exam && subject && (
+        <StudyPlanView
+          examTypeId={exam.id}
+          subjectId={subject.id}
+          subjectName={subject.name}
+          onBack={resetToSubjects}
         />
       )}
 
