@@ -15,9 +15,13 @@ import { toast } from "@/hooks/use-toast";
 
 const AdminResources = () => {
   const [password, setPassword] = useState("");
-  const [authenticated, setAuthenticated] = useState(false);
+  const [authenticated, setAuthenticated] = useState(() => {
+    return sessionStorage.getItem('admin_authenticated') === 'true';
+  });
   const [verifying, setVerifying] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
+  const [adminPassword, setAdminPassword] = useState(() => {
+    return sessionStorage.getItem('admin_password') || "";
+  });
 
   const verify = async () => {
     setVerifying(true);
@@ -27,6 +31,8 @@ const AdminResources = () => {
       if (data?.valid) {
         setAuthenticated(true);
         setAdminPassword(password);
+        sessionStorage.setItem('admin_authenticated', 'true');
+        sessionStorage.setItem('admin_password', password);
       } else {
         toast({ title: "Invalid password", variant: "destructive" });
       }
@@ -35,6 +41,13 @@ const AdminResources = () => {
     } finally {
       setVerifying(false);
     }
+  };
+
+  const handleLogout = () => {
+    setAuthenticated(false);
+    setAdminPassword("");
+    sessionStorage.removeItem('admin_authenticated');
+    sessionStorage.removeItem('admin_password');
   };
 
   if (!authenticated) {
@@ -57,32 +70,34 @@ const AdminResources = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 max-w-6xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <Button variant="ghost" size="sm" onClick={() => { setAuthenticated(false); setAdminPassword(""); }}>
+    <div className="min-h-screen bg-background p-2 sm:p-4 max-w-6xl mx-auto space-y-4">
+      <div className="flex items-center justify-between px-1">
+        <h1 className="text-lg sm:text-2xl font-bold">Admin Dashboard</h1>
+        <Button variant="ghost" size="sm" onClick={handleLogout}>
           <LogOut className="w-4 h-4 mr-1" /> Logout
         </Button>
       </div>
 
       <Tabs defaultValue="analytics" className="space-y-4">
-        <TabsList className="grid grid-cols-7 w-full">
-          <TabsTrigger value="analytics" className="text-xs"><BarChart3 className="w-3 h-3 mr-1" />Analytics</TabsTrigger>
-          <TabsTrigger value="resources" className="text-xs"><Plus className="w-3 h-3 mr-1" />Resources</TabsTrigger>
-          <TabsTrigger value="announcements" className="text-xs"><Megaphone className="w-3 h-3 mr-1" />Announce</TabsTrigger>
-          <TabsTrigger value="achievements" className="text-xs"><Trophy className="w-3 h-3 mr-1" />Achieve</TabsTrigger>
-          <TabsTrigger value="users" className="text-xs"><Users className="w-3 h-3 mr-1" />Users</TabsTrigger>
-          <TabsTrigger value="payments" className="text-xs"><CreditCard className="w-3 h-3 mr-1" />Payments</TabsTrigger>
-          <TabsTrigger value="exams" className="text-xs"><BookOpen className="w-3 h-3 mr-1" />Exams</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-2 px-2 pb-1">
+          <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-7 gap-0.5">
+            <TabsTrigger value="analytics" className="text-xs whitespace-nowrap px-2 sm:px-3"><BarChart3 className="w-3 h-3 mr-1 hidden sm:inline" />Analytics</TabsTrigger>
+            <TabsTrigger value="resources" className="text-xs whitespace-nowrap px-2 sm:px-3"><Plus className="w-3 h-3 mr-1 hidden sm:inline" />Resources</TabsTrigger>
+            <TabsTrigger value="announcements" className="text-xs whitespace-nowrap px-2 sm:px-3"><Megaphone className="w-3 h-3 mr-1 hidden sm:inline" />Announce</TabsTrigger>
+            <TabsTrigger value="achievements" className="text-xs whitespace-nowrap px-2 sm:px-3"><Trophy className="w-3 h-3 mr-1 hidden sm:inline" />Achieve</TabsTrigger>
+            <TabsTrigger value="users" className="text-xs whitespace-nowrap px-2 sm:px-3"><Users className="w-3 h-3 mr-1 hidden sm:inline" />Users</TabsTrigger>
+            <TabsTrigger value="payments" className="text-xs whitespace-nowrap px-2 sm:px-3"><CreditCard className="w-3 h-3 mr-1 hidden sm:inline" />Payments</TabsTrigger>
+            <TabsTrigger value="exams" className="text-xs whitespace-nowrap px-2 sm:px-3"><BookOpen className="w-3 h-3 mr-1 hidden sm:inline" />Exams</TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="analytics"><AnalyticsTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="resources"><ResourcesTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="announcements"><AnnouncementsTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="achievements"><AchievementsTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="users"><UsersTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="payments"><PaymentsTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="exams"><ExamsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="analytics" forceMount className="data-[state=inactive]:hidden"><AnalyticsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="resources" forceMount className="data-[state=inactive]:hidden"><ResourcesTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="announcements" forceMount className="data-[state=inactive]:hidden"><AnnouncementsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="achievements" forceMount className="data-[state=inactive]:hidden"><AchievementsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="users" forceMount className="data-[state=inactive]:hidden"><UsersTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="payments" forceMount className="data-[state=inactive]:hidden"><PaymentsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="exams" forceMount className="data-[state=inactive]:hidden"><ExamsTab adminPassword={adminPassword} /></TabsContent>
       </Tabs>
     </div>
   );
@@ -100,7 +115,7 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
     setLoading(false);
   };
 
-  if (!stats && !loading) fetch();
+  useEffect(() => { fetch(); }, []);
 
   const items = stats ? [
     { label: "Total Users", value: stats.total_users, icon: "👥" },
@@ -149,7 +164,7 @@ const ResourcesTab = ({ adminPassword }: { adminPassword: string }) => {
     setLoading(false);
   };
 
-  if (loading && resources.length === 0) fetchResources();
+  useEffect(() => { fetchResources(); }, []);
 
   const uploadFile = async (): Promise<string | null> => {
     if (!file) return null;
@@ -270,7 +285,7 @@ const AnnouncementsTab = ({ adminPassword }: { adminPassword: string }) => {
     setLoading(false);
   };
 
-  if (loading && items.length === 0) fetchAll();
+  useEffect(() => { fetchAll(); }, []);
 
   const handleSubmit = async () => {
     if (!form.title || !form.content) { toast({ title: "Title and content required", variant: "destructive" }); return; }
@@ -366,7 +381,7 @@ const AchievementsTab = ({ adminPassword }: { adminPassword: string }) => {
     setLoading(false);
   };
 
-  if (loading && items.length === 0) fetchAll();
+  useEffect(() => { fetchAll(); }, []);
 
   const handleSubmit = async () => {
     if (!form.id || !form.name) { toast({ title: "ID and name required", variant: "destructive" }); return; }
@@ -462,7 +477,7 @@ const UsersTab = ({ adminPassword }: { adminPassword: string }) => {
     setLoading(false);
   };
 
-  if (!loading && users.length === 0) fetchUsers();
+  useEffect(() => { fetchUsers(); }, []);
 
   return (
     <div className="space-y-4">
