@@ -68,7 +68,7 @@ const ExamPrep = () => {
     <div className="p-6 space-y-5 pb-24">
       <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
         {view === 'exams' ? (
-          <button onClick={() => navigate('/dashboard')} className="text-primary">
+          <button onClick={() => navigate('/')} className="text-primary">
             <ArrowLeft size={20} />
           </button>
         ) : (
@@ -200,7 +200,7 @@ const ExamPrep = () => {
         open={gateOpen}
         onOpenChange={(open) => {
           setGateOpen(open);
-          if (!open && subscription.tier === 'free') navigate('/dashboard');
+          if (!open && subscription.tier === 'free') navigate('/');
         }}
         feature="Exam Prep access"
         currentUsage={0}
