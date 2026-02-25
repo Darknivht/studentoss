@@ -582,7 +582,8 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Forms
-  const [typeForm, setTypeForm] = useState({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40 });
+  const [typeForm, setTypeForm] = useState({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40, logo_url: "" });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [subjectForm, setSubjectForm] = useState({ name: "", icon: "📘", is_active: true });
   const [topicForm, setTopicForm] = useState({ name: "", description: "", difficulty: "medium", is_active: true });
   const [questionForm, setQuestionForm] = useState({ question: "", options: ["", "", "", ""], correct_index: 0, explanation: "", difficulty: "medium", year: "", source: "admin_added" });
@@ -647,10 +648,20 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
     if (!typeForm.name || !typeForm.slug) { toast({ title: "Name and slug required", variant: "destructive" }); return; }
     setSubmitting(true);
     try {
-      await invoke(editingId ? 'update-exam-type' : 'create-exam-type', { examType: typeForm, examTypeId: editingId });
+      let logoUrl = typeForm.logo_url;
+      if (logoFile) {
+        const filePath = `exam-logos/${Date.now()}-${logoFile.name}`;
+        const { error: uploadErr } = await supabase.storage.from('exam-pdfs').upload(filePath, logoFile);
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from('exam-pdfs').getPublicUrl(filePath);
+        logoUrl = urlData.publicUrl;
+      }
+      const submitData = { ...typeForm, logo_url: logoUrl || null };
+      await invoke(editingId ? 'update-exam-type' : 'create-exam-type', { examType: submitData, examTypeId: editingId });
       toast({ title: editingId ? "Updated" : "Created" });
       setEditingId(null);
-      setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40 });
+      setLogoFile(null);
+      setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40, logo_url: "" });
       fetchExamTypes();
     } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
     finally { setSubmitting(false); }
@@ -667,7 +678,8 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
 
   const handleTypeEdit = (t: any) => {
     setEditingId(t.id);
-    setTypeForm({ name: t.name, slug: t.slug, description: t.description || "", icon: t.icon || "📝", country: t.country || "Nigeria", is_active: t.is_active, exam_mode: t.exam_mode || "per_subject", subjects_required: t.subjects_required || 1, time_limit_minutes: t.time_limit_minutes || 60, questions_per_subject: t.questions_per_subject || 40 });
+    setLogoFile(null);
+    setTypeForm({ name: t.name, slug: t.slug, description: t.description || "", icon: t.icon || "📝", country: t.country || "Nigeria", is_active: t.is_active, exam_mode: t.exam_mode || "per_subject", subjects_required: t.subjects_required || 1, time_limit_minutes: t.time_limit_minutes || 60, questions_per_subject: t.questions_per_subject || 40, logo_url: t.logo_url || "" });
   };
 
   // ─── Subjects CRUD ───
@@ -859,8 +871,17 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><Label>Name *</Label><Input value={typeForm.name} onChange={(e) => setTypeForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. JAMB UTME" /></div>
                 <div><Label>Slug *</Label><Input value={typeForm.slug} onChange={(e) => setTypeForm(f => ({ ...f, slug: e.target.value }))} placeholder="e.g. jamb" /></div>
-                <div><Label>Icon (emoji)</Label><Input value={typeForm.icon} onChange={(e) => setTypeForm(f => ({ ...f, icon: e.target.value }))} /></div>
+                <div><Label>Icon (emoji fallback)</Label><Input value={typeForm.icon} onChange={(e) => setTypeForm(f => ({ ...f, icon: e.target.value }))} /></div>
                 <div><Label>Country</Label><Input value={typeForm.country} onChange={(e) => setTypeForm(f => ({ ...f, country: e.target.value }))} /></div>
+                <div className="sm:col-span-2">
+                  <Label>Logo Image (optional, overrides emoji)</Label>
+                  <div className="flex items-center gap-3 mt-1">
+                    {(typeForm.logo_url || logoFile) && (
+                      <img src={logoFile ? URL.createObjectURL(logoFile) : typeForm.logo_url} alt="Logo preview" className="w-10 h-10 rounded-lg object-contain border" />
+                    )}
+                    <Input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
+                  </div>
+                </div>
               </div>
               <div><Label>Description</Label><Textarea value={typeForm.description} onChange={(e) => setTypeForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -884,7 +905,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
               <div className="flex items-center gap-2"><Switch checked={typeForm.is_active} onCheckedChange={(v) => setTypeForm(f => ({ ...f, is_active: v }))} /><Label>Active</Label></div>
               <div className="flex gap-2">
                 <Button onClick={handleTypeSubmit} disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{editingId ? "Update" : "Add"}</Button>
-                {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40 }); }}>Cancel</Button>}
+                {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setLogoFile(null); setTypeForm({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40, logo_url: "" }); }}>Cancel</Button>}
               </div>
             </CardContent>
           </Card>

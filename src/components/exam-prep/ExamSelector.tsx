@@ -14,6 +14,7 @@ interface ExamType {
   subjects_required: number;
   time_limit_minutes: number;
   questions_per_subject: number;
+  logo_url?: string | null;
 }
 
 interface ExamSelectorProps {
@@ -37,6 +38,7 @@ const ExamSelector = ({ onSelect }: ExamSelectorProps) => {
         subjects_required: d.subjects_required || 1,
         time_limit_minutes: d.time_limit_minutes || 60,
         questions_per_subject: d.questions_per_subject || 40,
+        logo_url: d.logo_url || null,
       })));
       setLoading(false);
     };
@@ -75,7 +77,11 @@ const ExamSelector = ({ onSelect }: ExamSelectorProps) => {
             onClick={() => onSelect(exam)}
             className="flex items-center gap-4 p-4 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all text-left"
           >
-            <span className="text-3xl">{exam.icon || '📝'}</span>
+            {exam.logo_url ? (
+              <img src={exam.logo_url} alt={exam.name} className="w-10 h-10 rounded-xl object-contain" />
+            ) : (
+              <span className="text-3xl">{exam.icon || '📝'}</span>
+            )}
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-foreground">{exam.name}</h3>
               {exam.description && (
