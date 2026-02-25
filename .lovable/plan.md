@@ -1,182 +1,135 @@
 
 
-# ExamCrusher Readiness Assessment and Per-Subject AI Prompt + Admin Super-Upgrade Plan
+# Mind Maps, Voice Mode, Audio Notes Upgrade + Cleanup Plan
 
-## Current Readiness: ~55/100
+## Current Website Readiness: ~62/100
 
-**What works well (built):**
-- 9 practice modes (Quick, Topic, Year, PDF, Bookmarks, Mock, CBT, Performance, Weakness)
-- Adaptive difficulty via edge function
-- AI question generation fallback
-- Bookmarking, session review, study plan
-- Admin: exam types/subjects/topics/questions CRUD, PDF import, basic analytics
-- Trend charts with Recharts
-- Subscription gating (free blocked, Plus/Pro tiers)
-
-**What is missing for "academy-level" quality:**
-- No per-subject AI prompt customization (all subjects use the same generic prompt)
-- No subject-specific teaching context (syllabus, key concepts, common mistakes)
-- No guided learning path (students just pick random modes)
-- No "Explain this topic" or AI tutoring within exam prep
-- Admin panel lacks: revenue charts, engagement graphs, user activity timelines, content audit tools, system health indicators, notification management
-- No spaced repetition for weak questions
-- No timed practice (only mock has timer)
-- No question reporting by students
-- No difficulty progression within a session
+**Exam Prep:** ~70/100 (strong after recent upgrades)
+**Study Tools:** ~55/100 (many tools functional but shallow)
+**Admin:** ~60/100 (recently enhanced)
+**Focus/App Blocker:** ~40/100 (native-only features shown on web, confusing UX)
 
 ---
 
-## Plan
+## Part 1: Interactive Mind Maps with Canvas (Major Rewrite)
 
-### 1. Per-Subject AI Prompt System (Database + Admin + Edge Function)
+The current ConceptLinking component is a basic 400px box with fixed-position nodes on an SVG -- no pan, no zoom, no expanding concepts, no real interaction.
 
-**Core idea:** When admin creates a subject, they can provide a custom AI system prompt. This prompt is stored in the database and injected into ALL AI interactions for that subject (question generation, study plans, explanations). Each subject becomes a "specialized teacher."
+**Rewrite `ConceptLinking.tsx` completely:**
 
-**Database change:** Add `ai_prompt` text column to `exam_subjects` table.
+- Replace fixed SVG+absolute-div layout with a proper pannable/zoomable canvas using CSS transforms and pointer events (no external library needed)
+- Canvas state: `scale` (zoom), `offset` (pan position), managed via wheel events (zoom) and pointer drag on background (pan)
+- Nodes become expandable: each node has `expanded` state. Clicking a node toggles its detail panel showing a short AI-generated explanation
+- Hierarchical layout: center node = main topic, second ring = key concepts, third ring = sub-concepts. Use force-directed-like positioning with concentric circles
+- Connection lines drawn as curved SVG paths (quadratic bezier) between nodes
+- Node sizing: center node is largest, outer nodes smaller
+- Touch support: pinch-to-zoom, drag to pan on mobile
+- "Expand concept" on click: calls AI to generate 2-3 sub-concepts for that node, which appear as new connected nodes
+- Color coding: different colors for different depth levels
 
-**Admin change (`AdminResources.tsx`):** Add a textarea field "AI Teaching Prompt" to the subject creation/edit form. Include placeholder text like: "You are an expert Chemistry teacher specializing in WAEC preparation. Focus on practical applications, use Nigerian examples, emphasize common student mistakes in organic chemistry..."
+**Technical approach:**
+- Manage canvas transform with `useState<{x: number, y: number, scale: number}>`
+- onWheel handler for zoom (clamped 0.3 to 3.0)
+- onPointerDown/Move/Up on canvas background for panning
+- Nodes rendered as absolutely positioned divs inside a transform container
+- SVG overlay for connection lines (same transform)
+- Node click: if not expanded, fetch AI explanation and add child nodes
 
-**Edge function change (`exam-practice/index.ts`):** When generating questions or study plans, fetch the subject's `ai_prompt` from the database and prepend it to the system prompt. If no custom prompt exists, fall back to the current generic prompt.
+---
 
-### 2. Guided Learning Mode (New Student Feature)
+## Part 2: Voice Mode Improvements
 
-Add a "Guided Learning" mode in SubjectSelector that works like a lesson:
-1. AI presents a topic explanation first (2-3 paragraphs)
-2. Then asks 3-5 practice questions on that topic
-3. After answering, AI provides personalized feedback
-4. Suggests the next topic based on performance
+Current issues: basic Web Speech API, no conversation memory, no context awareness, robotic browser TTS.
 
-**New file:** `src/components/exam-prep/GuidedLearning.tsx`
+**Enhancements to `VoiceMode.tsx`:**
 
-This uses the per-subject AI prompt to feel like a dedicated teacher for each subject.
+- Add conversation context: let users optionally select a note or course before starting, so AI responses are contextual
+- Add "conversation starters" when empty: suggested prompts like "Explain photosynthesis", "Quiz me on history", "Help me understand calculus"
+- Add message actions: copy text, regenerate response
+- Improve speech output: add voice selection (reuse AudioNotes voice picker pattern), speed control
+- Add visual audio waveform animation while listening (CSS-based pulsing circles)
+- Persist recent conversations to localStorage so users can resume
+- Better error handling with retry buttons
 
-### 3. Topic Explainer (AI "Teach Me" Button)
+---
 
-Within any practice mode, add a "Teach me this topic" button that calls the AI with the subject's custom prompt to generate a lesson-style explanation before the student attempts questions.
+## Part 3: Audio Notes Improvements
 
-**Change in:** `PracticeSession.tsx` -- add a "Learn First" button that shows an AI-generated mini-lesson for the current question's topic.
+Current: generates summary then reads it. Basic but functional.
 
-### 4. Admin Panel Major Upgrade
+**Enhancements to `AudioNotes.tsx`:**
 
-**4a. Enhanced Analytics Dashboard (replace current simple stats)**
+- Add "Read Full Note" option (not just summary) for users who want the complete content read
+- Add progress indicator showing how far through the text the reader is
+- Add "Read All Notes" playlist mode: queue multiple notes to play sequentially
+- Add highlight/follow-along: show the current text being read (split text into sentences, highlight current one)
+- Save audio preferences per session (voice + speed already exist but reset on page reload -- persist to localStorage)
 
-Replace the current 6-stat card grid with a full dashboard:
-- **Revenue section:** Active subscriptions breakdown, monthly revenue estimate, churn indicators
-- **Engagement charts:** Daily active users over 30 days (line chart), study minutes per day (bar chart), feature usage breakdown (pie chart)
-- **Exam health:** Questions per subject bar chart, accuracy distribution, topics needing more questions
-- **User growth:** New signups over time, conversion rates (free to Plus/Pro)
+---
 
-**4b. Content Audit Tool**
+## Part 4: Remove/Hide Incomplete Features
 
-New admin section "Content Health" showing:
-- Subjects with fewer than 20 questions (flagged red)
-- Questions with zero attempts (never served)
-- Questions with less than 20% accuracy (too hard or poorly written)
-- Topics with no questions at all
-- Subjects missing AI prompts
+Several features only work on native Android and show confusing "Beta" or "Native App Required" warnings on web. Since most users are on web, these hurt the experience.
 
-**4c. User Activity Timeline**
+**Changes:**
 
-In the Users tab, when viewing a user, show their recent activity: last login, recent exam attempts, subscription changes, AI usage.
+1. **Focus Session page (`FocusSession.tsx`)**: The "App Blocking" and "Permissions Setup" sections only work on Android native. On web, hide the app selector and permissions sections entirely. Show only the timer functionality (duration picker + start button). Remove the "BETA" badge from the Focus Session card on the Focus page.
 
-**4d. Notification/Push Management**
+2. **App Blocker Settings (`AppBlockerSettings.tsx`)**: On web, simplify to just show the study goal tracker and Pomodoro link. Hide all app blocking UI (blocked apps list, custom app input, popular apps chips) since they do nothing on web.
 
-Add ability for admin to schedule and send push-like announcements to specific tiers or all users (extends current announcements with targeting).
+3. **Focus Mode Overlay (`FocusModeOverlay.tsx`)** and **Blocking Overlay (`BlockingOverlay.tsx`)**: These are fine -- they work on web as soft overlays. Keep them.
 
-### 5. Question Reporting by Students
+4. **Lecture Recorder (`LectureRecorder.tsx`)**: Uses Web Speech API which has spotty browser support. Add a clearer "not supported" state rather than failing silently. Already partially handled but can be improved.
 
-Add a "Report" button on each question in PracticeSession. Students can flag questions as incorrect, confusing, or duplicate. Admin sees reported questions in a new "Reports" sub-section.
+---
 
-**Database change:** New `question_reports` table (user_id, question_id, reason, created_at).
+## Part 5: UI Polish Across the Platform
 
-### 6. Timed Practice Mode
-
-Add optional timer to Quick Practice. Students can choose "Timed (2 min/question)" or "Untimed" before starting. Shows countdown per question and auto-advances.
+- **Study page grid**: The 2-column grid on Study.tsx is functional. Add subtle hover effects and better visual hierarchy between sections
+- **Bottom navigation**: Ensure active state is clearly visible
+- **Empty states**: Many features show basic "No notes yet" text. Add illustrations or icons with clear CTAs
 
 ---
 
 ## Technical Details
 
-### Database Migrations
-
-```text
--- 1. Per-subject AI prompt
-ALTER TABLE exam_subjects ADD COLUMN IF NOT EXISTS ai_prompt text;
-
--- 2. Question reports
-CREATE TABLE public.question_reports (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  question_id uuid NOT NULL,
-  reason text NOT NULL DEFAULT 'incorrect',
-  details text,
-  status text NOT NULL DEFAULT 'pending',
-  created_at timestamptz DEFAULT now()
-);
-ALTER TABLE public.question_reports ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can insert own reports" ON public.question_reports
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can view own reports" ON public.question_reports
-  FOR SELECT USING (auth.uid() = user_id);
-```
-
-### Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/components/exam-prep/GuidedLearning.tsx` | Guided lesson + practice flow with AI-generated topic explanations followed by targeted questions |
-
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/AdminResources.tsx` | Add `ai_prompt` textarea to subject form; add Content Health section; enhance Analytics with Recharts charts (line chart for DAU, bar chart for questions per subject); add Question Reports viewer; add user activity detail view |
-| `src/components/exam-prep/SubjectSelector.tsx` | Add "Guided Learning" and "Timed Practice" modes |
-| `src/components/exam-prep/PracticeSession.tsx` | Add question report button; add "Learn First" button; add optional per-question timer; use subject AI prompt for explanations |
-| `src/pages/ExamPrep.tsx` | Wire guided-learning view and timed-practice variants |
-| `supabase/functions/exam-practice/index.ts` | Fetch `ai_prompt` from `exam_subjects` and inject into all AI system prompts (question generation, study plan, explanations) |
-| `supabase/functions/admin-resources/index.ts` | Add `content-health` action (returns subjects with low question counts, unreported questions, missing prompts); add `question-reports` action; add `user-activity` action; enhance `analytics` with time-series data; include `ai_prompt` in subject CRUD |
+| `src/components/study/ConceptLinking.tsx` | Full rewrite: pannable/zoomable canvas, expandable nodes with AI details, hierarchical layout, curved connections, touch support |
+| `src/components/study/VoiceMode.tsx` | Add note/course context selector, conversation starters, message actions, voice settings, conversation persistence |
+| `src/components/study/AudioNotes.tsx` | Add full-note reading, progress indicator, playlist mode, text follow-along, persist voice preferences |
+| `src/pages/FocusSession.tsx` | Hide app blocking UI on web platform, show timer-only experience |
+| `src/pages/Focus.tsx` | Remove "BETA" badge from Focus Session card |
+| `src/components/settings/AppBlockerSettings.tsx` | On web, hide app blocking sections, show only study goal + timer link |
 
-### How Per-Subject AI Prompt Works
+### No new files needed -- all improvements are to existing components.
+
+### No database changes needed.
+
+### Mind Map Canvas Architecture
 
 ```text
-Admin creates subject "Chemistry" with AI prompt:
-  "You are Prof. Adeyemi, a WAEC Chemistry expert with 20 years experience.
-   Always relate concepts to everyday Nigerian life. Emphasize safety in
-   practicals. Common weak areas: organic naming, electrochemistry calculations."
-
-When student practices Chemistry:
-  1. Edge function fetches subject row including ai_prompt
-  2. System prompt becomes: [subject ai_prompt] + [question generation instructions]
-  3. AI generates questions with Nigerian context, practical emphasis
-  4. Study plans reference the same persona
-  5. "Learn First" explanations use the same teacher voice
+ConceptLinking
+  |-- Canvas Container (overflow: hidden, touch-action: none)
+      |-- Transform Wrapper (CSS transform: translate + scale)
+          |-- SVG Layer (bezier connection lines)
+          |-- Node Layer (absolutely positioned divs)
+              |-- Each node:
+                  - Click to select/expand
+                  - Shows label + depth-based color
+                  - When expanded: shows description panel
+                  - "Expand" button: AI generates sub-nodes
 ```
 
-### Enhanced Admin Analytics Data Flow
-
-The `admin-resources` edge function `analytics` action will be enhanced to return:
-- 30-day daily active users (from `study_sessions` grouped by date)
-- 30-day daily exam attempts (from `exam_attempts` grouped by date)
-- Subscription tier distribution
-- Per-subject question counts with health indicators
-- Questions with lowest accuracy (join `exam_attempts` with `exam_questions`)
-
-Frontend renders these using Recharts LineChart and BarChart components already available in the project.
-
----
-
-## Implementation Order
+### Implementation Order
 
 | Step | Task |
 |------|------|
-| 1 | Database migration: add `ai_prompt` to `exam_subjects`, create `question_reports` table |
-| 2 | Update `admin-resources` edge function: include `ai_prompt` in subject CRUD, add content-health action, add question-reports action, enhance analytics |
-| 3 | Update `exam-practice` edge function: fetch and inject per-subject `ai_prompt` into all AI calls |
-| 4 | Update `AdminResources.tsx`: add AI prompt field to subjects, add Content Health section, enhance Analytics with charts, add Reports viewer |
-| 5 | Create `GuidedLearning.tsx`: AI topic explanation + targeted practice flow |
-| 6 | Update `SubjectSelector.tsx`: add Guided Learning and Timed Practice modes |
-| 7 | Update `PracticeSession.tsx`: add report button, "Learn First" button, optional timer |
-| 8 | Update `ExamPrep.tsx`: wire new views |
-| 9 | Deploy edge functions and test end-to-end |
+| 1 | Rewrite ConceptLinking.tsx with interactive canvas |
+| 2 | Improve VoiceMode.tsx with context and conversation features |
+| 3 | Enhance AudioNotes.tsx with playlist and follow-along |
+| 4 | Clean up FocusSession.tsx and AppBlockerSettings.tsx for web |
+| 5 | Remove BETA badge from Focus page |
 
