@@ -13,6 +13,7 @@ import MultiSubjectCBT from '@/components/exam-prep/MultiSubjectCBT';
 import YearSelector from '@/components/exam-prep/YearSelector';
 import BookmarkedQuestions from '@/components/exam-prep/BookmarkedQuestions';
 import StudyPlanView from '@/components/exam-prep/StudyPlanView';
+import GuidedLearning from '@/components/exam-prep/GuidedLearning';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 import { useSubscription } from '@/hooks/useSubscription';
 
@@ -30,7 +31,7 @@ interface SelectedSubject {
   name: string;
 }
 
-type View = 'exams' | 'subjects' | 'topic-select' | 'year-select' | 'practice' | 'mock' | 'performance' | 'weakness' | 'multi-cbt' | 'bookmarks' | 'study-plan';
+type View = 'exams' | 'subjects' | 'topic-select' | 'year-select' | 'practice' | 'mock' | 'performance' | 'weakness' | 'multi-cbt' | 'bookmarks' | 'study-plan' | 'guided-learning';
 
 const ExamPrep = () => {
   const navigate = useNavigate();
@@ -126,6 +127,7 @@ const ExamPrep = () => {
             else if (mode === 'year') setView('year-select');
             else if (mode === 'bookmarks') setView('bookmarks');
             else if (mode === 'study-plan') setView('study-plan');
+            else if (mode === 'guided-learning') setView('guided-learning');
             else if (mode === 'study-material') {
               setSource('pdf_extracted');
               setView('practice');
@@ -213,6 +215,16 @@ const ExamPrep = () => {
           examTypeId={exam.id}
           subjectId={subject.id}
           subjectName={subject.name}
+          onBack={resetToSubjects}
+        />
+      )}
+
+      {view === 'guided-learning' && exam && subject && (
+        <GuidedLearning
+          examTypeId={exam.id}
+          subjectId={subject.id}
+          subjectName={subject.name}
+          topicId={topicId}
           onBack={resetToSubjects}
         />
       )}

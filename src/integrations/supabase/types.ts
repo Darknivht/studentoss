@@ -432,6 +432,7 @@ export type Database = {
       }
       exam_subjects: {
         Row: {
+          ai_prompt: string | null
           created_at: string
           exam_type_id: string
           icon: string | null
@@ -441,6 +442,7 @@ export type Database = {
           topics_count: number
         }
         Insert: {
+          ai_prompt?: string | null
           created_at?: string
           exam_type_id: string
           icon?: string | null
@@ -450,6 +452,7 @@ export type Database = {
           topics_count?: number
         }
         Update: {
+          ai_prompt?: string | null
           created_at?: string
           exam_type_id?: string
           icon?: string | null
@@ -1052,6 +1055,44 @@ export type Database = {
           username?: string | null
         }
         Relationships: []
+      }
+      question_reports: {
+        Row: {
+          created_at: string | null
+          details: string | null
+          id: string
+          question_id: string
+          reason: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: string | null
+          id?: string
+          question_id: string
+          reason?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: string | null
+          id?: string
+          question_id?: string
+          reason?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_reports_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "exam_questions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quiz_attempts: {
         Row: {

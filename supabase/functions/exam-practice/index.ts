@@ -86,13 +86,25 @@ function extractJsonFromAI(raw: string): unknown {
   try {
     return JSON.parse(cleaned);
   } catch (_e) {
-    // Fix trailing commas and control characters
     cleaned = cleaned
       .replace(/,\s*}/g, "}")
       .replace(/,\s*]/g, "]")
       .replace(/[\x00-\x1F\x7F]/g, "");
     return JSON.parse(cleaned);
   }
+}
+
+// ─── Fetch subject AI prompt ─────────────────────────────────────────
+async function getSubjectAIPrompt(
+  supabase: ReturnType<typeof serviceClient>,
+  subjectId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("exam_subjects")
+    .select("ai_prompt")
+    .eq("id", subjectId)
+    .single();
+  return data?.ai_prompt || null;
 }
 
 // ─── Difficulty adaptation helper ────────────────────────────────────
@@ -146,7 +158,6 @@ async function generateQuestions(
   const { data: existing } = await query.limit(200);
   let pool = existing ?? [];
 
-  // Bias selection toward the preferred difficulty
   if (pool.length > (count as number)) {
     const preferred = pool.filter((q) => q.difficulty === difficultyBias);
     const others = pool.filter((q) => q.difficulty !== difficultyBias);
@@ -171,7 +182,7 @@ async function generateQuestions(
   const needed = (count as number) - shuffled.length;
 
   const { data: examType } = await supabase.from("exam_types").select("name, description").eq("id", exam_type_id).single();
-  const { data: subject } = await supabase.from("exam_subjects").select("name").eq("id", subject_id).single();
+  const { data: subject } = await supabase.from("exam_subjects").select("name, ai_prompt").eq("id", subject_id).single();
 
   let topicName = "";
   if (topic_id) {
@@ -185,7 +196,12 @@ async function generateQuestions(
     ? "Focus on easier questions: ~60% easy, ~30% medium, ~10% hard. The student needs confidence building."
     : "Mix difficulties: ~30% easy, ~50% medium, ~20% hard.";
 
-  const systemPrompt = `You are an expert exam question generator for ${examType?.name ?? "exams"}.
+  // Inject per-subject AI prompt if available
+  const subjectAIContext = subject?.ai_prompt
+    ? `\n\nSPECIALIZED TEACHING CONTEXT:\n${subject.ai_prompt}\n`
+    : "";
+
+  const systemPrompt = `You are an expert exam question generator for ${examType?.name ?? "exams"}.${subjectAIContext}
 Generate exactly ${needed} multiple-choice questions for the subject "${subject?.name ?? ""}".
 ${topicName ? `Focus on the topic: "${topicName}".` : "Cover a variety of topics."}
 ${examType?.description ? `Exam context: ${examType.description}` : ""}
@@ -233,35 +249,18 @@ async function submitAnswer(
   body: Record<string, unknown>,
 ) {
   const {
-    exam_type_id,
-    subject_id,
-    topic_id,
-    question_id,
-    selected_index,
-    is_correct,
-    time_spent_seconds,
-    session_id,
+    exam_type_id, subject_id, topic_id, question_id,
+    selected_index, is_correct, time_spent_seconds, session_id,
   } = body as {
-    exam_type_id: string;
-    subject_id: string;
-    topic_id?: string;
-    question_id?: string;
-    selected_index: number;
-    is_correct: boolean;
-    time_spent_seconds?: number;
-    session_id: string;
+    exam_type_id: string; subject_id: string; topic_id?: string;
+    question_id?: string; selected_index: number; is_correct: boolean;
+    time_spent_seconds?: number; session_id: string;
   };
 
   const { data, error } = await supabase.from("exam_attempts").insert({
-    user_id: userId,
-    exam_type_id,
-    subject_id,
-    topic_id: topic_id || null,
-    question_id: question_id || null,
-    selected_index,
-    is_correct,
-    time_spent_seconds: time_spent_seconds ?? 0,
-    session_id,
+    user_id: userId, exam_type_id, subject_id,
+    topic_id: topic_id || null, question_id: question_id || null,
+    selected_index, is_correct, time_spent_seconds: time_spent_seconds ?? 0, session_id,
   }).select().single();
 
   if (error) throw error;
@@ -281,10 +280,7 @@ async function getWeaknesses(
   userId: string,
   body: Record<string, unknown>,
 ) {
-  const { exam_type_id, subject_id } = body as {
-    exam_type_id: string;
-    subject_id: string;
-  };
+  const { exam_type_id, subject_id } = body as { exam_type_id: string; subject_id: string; };
 
   const { data: attempts } = await supabase
     .from("exam_attempts")
@@ -310,13 +306,8 @@ async function getWeaknesses(
   const topicIds = Object.keys(topicStats).filter((id) => id !== "__general__");
   let topicNames: Record<string, string> = {};
   if (topicIds.length > 0) {
-    const { data: topics } = await supabase
-      .from("exam_topics")
-      .select("id, name")
-      .in("id", topicIds);
-    if (topics) {
-      topicNames = Object.fromEntries(topics.map((t) => [t.id, t.name]));
-    }
+    const { data: topics } = await supabase.from("exam_topics").select("id, name").in("id", topicIds);
+    if (topics) topicNames = Object.fromEntries(topics.map((t) => [t.id, t.name]));
   }
 
   const weaknesses = Object.entries(topicStats)
@@ -324,16 +315,13 @@ async function getWeaknesses(
       topic_id: tid === "__general__" ? null : tid,
       topic_name: tid === "__general__" ? "General / Unclassified" : (topicNames[tid] ?? "Unknown"),
       accuracy: Math.round((stats.correct / stats.total) * 100),
-      total_attempts: stats.total,
-      correct: stats.correct,
+      total_attempts: stats.total, correct: stats.correct,
       confidence: Math.min(1, stats.total / 10),
     }))
     .filter((w) => w.total_attempts >= 3)
     .sort((a, b) => a.accuracy - b.accuracy);
 
-  const weak = weaknesses.filter((w) => w.accuracy < 60);
-
-  return { weaknesses, weak_topics: weak };
+  return { weaknesses, weak_topics: weaknesses.filter((w) => w.accuracy < 60) };
 }
 
 // ─── Action: generate-study-plan ─────────────────────────────────────
@@ -343,23 +331,24 @@ async function generateStudyPlan(
   body: Record<string, unknown>,
 ) {
   const { exam_type_id, subject_id, exam_date, daily_hours = 2 } = body as {
-    exam_type_id: string;
-    subject_id: string;
-    exam_date?: string;
-    daily_hours?: number;
+    exam_type_id: string; subject_id: string; exam_date?: string; daily_hours?: number;
   };
 
   const weakData = await getWeaknesses(supabase, userId, { exam_type_id, subject_id });
-
   const { data: examType } = await supabase.from("exam_types").select("name").eq("id", exam_type_id).single();
-  const { data: subject } = await supabase.from("exam_subjects").select("name").eq("id", subject_id).single();
+  const { data: subject } = await supabase.from("exam_subjects").select("name, ai_prompt").eq("id", subject_id).single();
 
   const daysLeft = exam_date
     ? Math.max(1, Math.ceil((new Date(exam_date).getTime() - Date.now()) / 86400000))
     : null;
 
-  const systemPrompt = `You are an expert exam preparation coach. Create a focused study plan.
+  const subjectAIContext = subject?.ai_prompt
+    ? `\n\nSPECIALIZED TEACHING CONTEXT:\n${subject.ai_prompt}\n`
+    : "";
 
+  const systemPrompt = `You are an expert exam preparation coach.${subjectAIContext}
+
+Create a focused study plan.
 Exam: ${examType?.name ?? "Unknown"}
 Subject: ${subject?.name ?? "Unknown"}
 ${daysLeft ? `Days until exam: ${daysLeft}` : "No specific exam date set."}
@@ -378,8 +367,90 @@ Prioritise weak topics. Include revision of strong topics periodically.
 Format as clean Markdown. Be specific and actionable.`;
 
   const plan = await callAI(systemPrompt, "Generate the study plan now.");
-
   return { plan, weaknesses: weakData.weaknesses };
+}
+
+// ─── Action: explain-topic ───────────────────────────────────────────
+async function explainTopic(
+  supabase: ReturnType<typeof serviceClient>,
+  body: Record<string, unknown>,
+) {
+  const { subject_id, topic_name, exam_type_id } = body as {
+    subject_id: string; topic_name: string; exam_type_id: string;
+  };
+
+  const { data: examType } = await supabase.from("exam_types").select("name").eq("id", exam_type_id).single();
+  const { data: subject } = await supabase.from("exam_subjects").select("name, ai_prompt").eq("id", subject_id).single();
+
+  const subjectAIContext = subject?.ai_prompt
+    ? `\n\nSPECIALIZED TEACHING CONTEXT:\n${subject.ai_prompt}\n`
+    : "";
+
+  const systemPrompt = `You are an expert teacher for ${examType?.name ?? "exams"}, specializing in ${subject?.name ?? "this subject"}.${subjectAIContext}
+
+Explain the topic "${topic_name}" in a clear, student-friendly way. Include:
+1. A concise introduction (what is this topic and why it matters)
+2. Key concepts and definitions
+3. Step-by-step explanation of the most important ideas
+4. Common mistakes students make
+5. Quick tips for remembering key points
+6. 2-3 example problems with solutions (if applicable)
+
+Format as clean Markdown. Use bold for key terms. Keep it engaging and practical.`;
+
+  const explanation = await callAI(systemPrompt, `Teach me about "${topic_name}" for ${examType?.name ?? "exam"} preparation.`);
+  return { explanation };
+}
+
+// ─── Action: guided-learning ─────────────────────────────────────────
+async function guidedLearning(
+  supabase: ReturnType<typeof serviceClient>,
+  body: Record<string, unknown>,
+) {
+  const { subject_id, topic_id, exam_type_id } = body as {
+    subject_id: string; topic_id?: string; exam_type_id: string;
+  };
+
+  const { data: examType } = await supabase.from("exam_types").select("name").eq("id", exam_type_id).single();
+  const { data: subject } = await supabase.from("exam_subjects").select("name, ai_prompt").eq("id", subject_id).single();
+
+  let topicName = "";
+  if (topic_id) {
+    const { data: topic } = await supabase.from("exam_topics").select("name").eq("id", topic_id).single();
+    topicName = topic?.name ?? "";
+  }
+
+  const subjectAIContext = subject?.ai_prompt
+    ? `\n\nSPECIALIZED TEACHING CONTEXT:\n${subject.ai_prompt}\n`
+    : "";
+
+  const systemPrompt = `You are an expert teacher for ${examType?.name ?? "exams"}, specializing in ${subject?.name ?? "this subject"}.${subjectAIContext}
+
+Create a guided learning lesson${topicName ? ` on "${topicName}"` : " on a key topic for this subject"}.
+
+The lesson must include EXACTLY these sections in this order:
+1. **LESSON** - A clear, engaging explanation (3-4 paragraphs) covering the key concepts
+2. **PRACTICE** - Exactly 5 multiple-choice practice questions to test understanding
+
+Return as JSON with this exact structure:
+{
+  "topic": "Topic Name",
+  "lesson": "Full markdown lesson text...",
+  "questions": [
+    {
+      "question": "Question text",
+      "options": ["A", "B", "C", "D"],
+      "correct_index": 0,
+      "explanation": "Why this is correct"
+    }
+  ]
+}
+
+Return ONLY valid JSON, no other text.`;
+
+  const raw = await callAI(systemPrompt, `Create a guided lesson now.`);
+  const parsed = extractJsonFromAI(raw) as Record<string, unknown>;
+  return parsed;
 }
 
 // ─── Main handler ────────────────────────────────────────────────────
@@ -401,41 +472,46 @@ serve(async (req) => {
         const result = await generateQuestions(supabase, body, user.id);
         return res(result);
       }
-
       case "submit-answer": {
         const result = await submitAnswer(supabase, user.id, body);
         return res(result);
       }
-
       case "get-weaknesses": {
         const result = await getWeaknesses(supabase, user.id, body);
         return res(result);
       }
-
       case "generate-study-plan": {
         const result = await generateStudyPlan(supabase, user.id, body);
         return res(result);
       }
-
+      case "explain-topic": {
+        const result = await explainTopic(supabase, body);
+        return res(result);
+      }
+      case "guided-learning": {
+        const result = await guidedLearning(supabase, body);
+        return res(result);
+      }
       case "extract-pdf-questions": {
         const { exam_type_id, subject_id, pdf_text, filename, file_url } = body as {
           exam_type_id: string; subject_id: string; pdf_text: string; filename: string; file_url: string;
         };
 
         const { data: examType } = await supabase.from("exam_types").select("name").eq("id", exam_type_id).single();
-        const { data: subject } = await supabase.from("exam_subjects").select("name").eq("id", subject_id).single();
+        const { data: subject } = await supabase.from("exam_subjects").select("name, ai_prompt").eq("id", subject_id).single();
+
+        const subjectAIContext = subject?.ai_prompt
+          ? `\nSPECIALIZED CONTEXT: ${subject.ai_prompt}\n`
+          : "";
 
         const systemPrompt = `You are an expert exam question extractor. Extract multiple-choice questions from the provided text.
-The text is from a PDF related to ${examType?.name ?? "exams"}, subject: ${subject?.name ?? "unknown"}.
+The text is from a PDF related to ${examType?.name ?? "exams"}, subject: ${subject?.name ?? "unknown"}.${subjectAIContext}
 
 For each question found or derivable from the content, create a structured MCQ with:
 - "question": the question text
 - "options": array of exactly 4 answer choices
 - "correct_index": integer 0-3 for the correct answer
-- "explanation": a detailed step-by-step explanation that:
-  1. Explains WHY the correct answer is right
-  2. Explains WHY each wrong option is incorrect
-  3. References relevant concepts, formulas, or rules
+- "explanation": a detailed step-by-step explanation
 - "difficulty": "easy" | "medium" | "hard"
 
 Return ONLY a valid JSON array. Generate as many questions as possible (up to 30).`;
@@ -445,10 +521,8 @@ Return ONLY a valid JSON array. Generate as many questions as possible (up to 30
         const generated = extractJsonFromAI(raw) as Array<Record<string, unknown>>;
 
         const toInsert = generated.map((q) => ({
-          exam_type_id,
-          subject_id,
-          question: q.question as string,
-          options: q.options,
+          exam_type_id, subject_id,
+          question: q.question as string, options: q.options,
           correct_index: (q.correct_index as number) || 0,
           explanation: (q.explanation as string) || null,
           difficulty: (q.difficulty as string) || "medium",
@@ -458,7 +532,6 @@ Return ONLY a valid JSON array. Generate as many questions as possible (up to 30
         const { data: inserted } = await supabase.from("exam_questions").insert(toInsert).select();
         const count = inserted?.length ?? 0;
 
-        // Record the PDF upload
         await supabase.from("exam_pdfs").insert({
           exam_type_id, subject_id, file_url, filename,
           uploaded_by: user.id, questions_generated: count, status: "completed",

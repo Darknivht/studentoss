@@ -588,7 +588,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
   // Forms
   const [typeForm, setTypeForm] = useState({ name: "", slug: "", description: "", icon: "📝", country: "Nigeria", is_active: true, exam_mode: "per_subject", subjects_required: 1, time_limit_minutes: 60, questions_per_subject: 40, logo_url: "" });
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [subjectForm, setSubjectForm] = useState({ name: "", icon: "📘", is_active: true });
+  const [subjectForm, setSubjectForm] = useState({ name: "", icon: "📘", is_active: true, ai_prompt: "" });
   const [topicForm, setTopicForm] = useState({ name: "", description: "", difficulty: "medium", is_active: true });
   const [questionForm, setQuestionForm] = useState({ question: "", options: ["", "", "", ""], correct_index: 0, explanation: "", difficulty: "medium", year: "", source: "admin_added" });
 
@@ -697,7 +697,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
       await invoke(editingId ? 'update-exam-subject' : 'create-exam-subject', { subject, subjectId: editingId });
       toast({ title: editingId ? "Updated" : "Created" });
       setEditingId(null);
-      setSubjectForm({ name: "", icon: "📘", is_active: true });
+      setSubjectForm({ name: "", icon: "📘", is_active: true, ai_prompt: "" });
       fetchSubjects(selectedExamType);
     } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
     finally { setSubmitting(false); }
@@ -713,7 +713,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
 
   const handleSubjectEdit = (s: any) => {
     setEditingId(s.id);
-    setSubjectForm({ name: s.name, icon: s.icon || "📘", is_active: s.is_active });
+    setSubjectForm({ name: s.name, icon: s.icon || "📘", is_active: s.is_active, ai_prompt: s.ai_prompt || "" });
   };
 
   // ─── Topics CRUD ───
@@ -959,10 +959,12 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
                     <div><Label>Name *</Label><Input value={subjectForm.name} onChange={(e) => setSubjectForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mathematics" /></div>
                     <div><Label>Icon (emoji)</Label><Input value={subjectForm.icon} onChange={(e) => setSubjectForm(f => ({ ...f, icon: e.target.value }))} /></div>
                   </div>
-                  <div className="flex items-center gap-2"><Switch checked={subjectForm.is_active} onCheckedChange={(v) => setSubjectForm(f => ({ ...f, is_active: v }))} /><Label>Active</Label></div>
+                   <div className="flex items-center gap-2"><Switch checked={subjectForm.is_active} onCheckedChange={(v) => setSubjectForm(f => ({ ...f, is_active: v }))} /><Label>Active</Label></div>
+                   <div><Label>AI Teaching Prompt (optional)</Label><Textarea value={subjectForm.ai_prompt} onChange={(e) => setSubjectForm(f => ({ ...f, ai_prompt: e.target.value }))} rows={3} placeholder="e.g. You are Prof. Adeyemi, a WAEC Chemistry expert. Focus on practical applications, use Nigerian examples..." /></div>
+                   <p className="text-xs text-muted-foreground">This prompt customizes how AI generates questions, explanations, and study plans for this subject. Leave empty for default behavior.</p>
                   <div className="flex gap-2">
-                    <Button onClick={handleSubjectSubmit} disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{editingId ? "Update" : "Add"}</Button>
-                    {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setSubjectForm({ name: "", icon: "📘", is_active: true }); }}>Cancel</Button>}
+                     <Button onClick={handleSubjectSubmit} disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{editingId ? "Update" : "Add"}</Button>
+                     {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setSubjectForm({ name: "", icon: "📘", is_active: true, ai_prompt: "" }); }}>Cancel</Button>}
                   </div>
                 </CardContent>
               </Card>

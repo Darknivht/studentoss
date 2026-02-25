@@ -34,7 +34,7 @@ serve(async (req) => {
       });
 
     switch (action) {
-      // ─── Resources CRUD (existing) ───
+      // ─── Resources CRUD ───
       case 'create': {
         const { data, error } = await supabase.from('store_resources').insert(body.resource).select().single();
         if (error) throw error;
@@ -135,6 +135,25 @@ serve(async (req) => {
           supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('subscription_tier', 'plus'),
           supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('subscription_tier', 'pro'),
         ]);
+
+        // 30-day daily active users
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+        const { data: dailySessions } = await supabase
+          .from('study_sessions')
+          .select('session_date, user_id')
+          .gte('session_date', thirtyDaysAgo)
+          .order('session_date');
+
+        // Group by date for DAU
+        const dauMap: Record<string, Set<string>> = {};
+        for (const s of (dailySessions || [])) {
+          if (!dauMap[s.session_date]) dauMap[s.session_date] = new Set();
+          dauMap[s.session_date].add(s.user_id);
+        }
+        const daily_active_users = Object.entries(dauMap).map(([date, users]) => ({
+          date, count: users.size,
+        })).sort((a, b) => a.date.localeCompare(b.date));
+
         return json({
           total_users: usersRes.count || 0,
           active_today: activeRes.count || 0,
@@ -142,6 +161,7 @@ serve(async (req) => {
           total_quizzes: quizzesRes.count || 0,
           plus_subscribers: plusRes.count || 0,
           pro_subscribers: proRes.count || 0,
+          daily_active_users,
         });
       }
 
@@ -167,7 +187,7 @@ serve(async (req) => {
         return json({ success: true });
       }
 
-      // ─── Exam Subjects CRUD ───
+      // ─── Exam Subjects CRUD (now includes ai_prompt) ───
       case 'list-exam-subjects': {
         let query = supabase.from('exam_subjects').select('*').order('name');
         if (body.examTypeId) query = query.eq('exam_type_id', body.examTypeId);
@@ -271,13 +291,11 @@ serve(async (req) => {
           supabase.from('exam_types').select('id, name'),
         ]);
 
-        // Get accuracy
         const { data: attemptsData } = await supabase.from('exam_attempts').select('is_correct').limit(1000);
         const totalAttempts = attemptsData?.length || 0;
         const correctAttempts = attemptsData?.filter(a => a.is_correct).length || 0;
         const avgAccuracy = totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : 0;
 
-        // Per exam type stats
         const byExamType = [];
         for (const et of (typesRes.data || [])) {
           const { count: qc } = await supabase.from('exam_questions').select('*', { count: 'exact', head: true }).eq('exam_type_id', et.id);
@@ -292,6 +310,46 @@ serve(async (req) => {
           avg_accuracy: avgAccuracy,
           by_exam_type: byExamType,
         });
+      }
+
+      // ─── Content Health ───
+      case 'content-health': {
+        const { data: allSubjects } = await supabase.from('exam_subjects').select('id, name, exam_type_id, ai_prompt');
+        const healthItems = [];
+        for (const sub of (allSubjects || [])) {
+          const { count: qCount } = await supabase.from('exam_questions').select('*', { count: 'exact', head: true }).eq('subject_id', sub.id);
+          const { count: noExpl } = await supabase.from('exam_questions').select('*', { count: 'exact', head: true }).eq('subject_id', sub.id).is('explanation', null);
+          healthItems.push({
+            id: sub.id,
+            name: sub.name,
+            question_count: qCount || 0,
+            no_explanation: noExpl || 0,
+            has_ai_prompt: !!sub.ai_prompt,
+            status: (qCount || 0) < 20 ? 'low' : (noExpl || 0) > 5 ? 'warning' : 'good',
+          });
+        }
+        return json({ items: healthItems });
+      }
+
+      // ─── Question Reports ───
+      case 'list-question-reports': {
+        const { data, error } = await supabase
+          .from('question_reports')
+          .select('*, exam_questions(question)')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        return json({ data });
+      }
+      case 'update-report-status': {
+        const { data, error } = await supabase
+          .from('question_reports')
+          .update({ status: body.status })
+          .eq('id', body.reportId)
+          .select()
+          .single();
+        if (error) throw error;
+        return json({ data });
       }
 
       default:
