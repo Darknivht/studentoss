@@ -49,17 +49,52 @@ export default defineConfig(({ mode }) => ({
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         navigateFallbackDenylist: [/^\/~oauth/],
+        skipWaiting: false, // Let users control when to update
+        clientsClaim: true,
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/.*/i,
+            urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/rest\/v1\/.*/i,
             handler: "NetworkFirst",
             options: {
-              cacheName: "supabase-cache",
+              cacheName: "supabase-api-cache",
               expiration: {
-                maxEntries: 50,
+                maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24, // 24 hours
               },
+              networkTimeoutSeconds: 5,
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/auth\/.*/i,
+            handler: "NetworkOnly",
+          },
+          {
+            urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/functions\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "supabase-functions-cache",
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60, // 1 hour
+              },
               networkTimeoutSeconds: 10,
+            },
+          },
+          {
+            urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/storage\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "supabase-storage-cache",
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
             },
           },
           {
@@ -70,6 +105,17 @@ export default defineConfig(({ mode }) => ({
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "cdn-cache",
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
             },
           },
