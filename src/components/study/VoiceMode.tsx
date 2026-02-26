@@ -470,13 +470,22 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
               </div>
               {/* Speech Language */}
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground flex items-center gap-1">🌍 Speech Language</label>
-                <Select value={speechLang} onValueChange={setSpeechLang}>
+                <label className="text-xs text-muted-foreground flex items-center gap-1">🌍 Speech & Recognition Language</label>
+                <Select value={speechLang} onValueChange={(lang) => {
+                  setSpeechLang(lang);
+                  // Auto-select a matching voice for TTS
+                  const langPrefix = lang.split('-')[0];
+                  const matchIdx = voices.findIndex(v => v.lang.startsWith(langPrefix));
+                  if (matchIdx >= 0) setSelectedVoiceIndex(matchIdx);
+                }}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {SPEECH_LANGUAGES.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  Sets both speech recognition input and text-to-speech output language. Hausa, Yoruba & Igbo recognition depends on your device/browser support (Chrome on Android works best).
+                </p>
               </div>
               {/* Voice */}
               <div className="space-y-1">
@@ -489,13 +498,16 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
                         <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground sticky top-0 bg-popover">{group}</div>
                         {items.map(({ voice, index }) => (
                           <SelectItem key={index} value={index.toString()} className="text-xs">
-                            {voice.name.replace(/Microsoft |Google |Apple /, '')}
+                            {voice.name.replace(/Microsoft |Google |Apple /, '')} ({voice.lang})
                           </SelectItem>
                         ))}
                       </div>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  Available voices depend on your device. Android/Chrome has the most voices including African languages.
+                </p>
               </div>
               {/* Speed */}
               <div className="space-y-1">
