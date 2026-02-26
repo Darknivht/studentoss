@@ -113,32 +113,69 @@ export const downloadAsText = (content: string, filename: string) => {
 };
 
 /**
- * Download markdown content as a formatted HTML file (renders tables properly)
+ * Download markdown content as a PDF via the browser's print-to-PDF.
+ * Uses a hidden iframe to trigger window.print() which on mobile/desktop
+ * gives a "Save as PDF" option — producing a real PDF file.
  */
-export const downloadAsHTML = (markdownContent: string, title: string, filename: string) => {
+export const downloadAsHTML = (markdownContent: string, title: string, _filename?: string) => {
   const htmlContent = markdownToHtml(markdownContent);
   const fullHtml = buildHtmlDoc(title, htmlContent);
 
+  // Use a hidden iframe to trigger print (Save as PDF)
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = 'none';
+  iframe.style.opacity = '0';
+  document.body.appendChild(iframe);
 
-  const blob = new Blob([fullHtml], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!iframeDoc) {
+    // Fallback: download as HTML file
+    const blob = new Blob([fullHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (_filename || 'document') + '.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    document.body.removeChild(iframe);
+    return;
+  }
+
+  iframeDoc.open();
+  iframeDoc.write(fullHtml);
+  iframeDoc.close();
+
+  // Wait for content to render then trigger print
+  setTimeout(() => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      // Fallback: open in new tab
+      const blob = new Blob([fullHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+    // Clean up after a delay
+    setTimeout(() => {
+      try { document.body.removeChild(iframe); } catch {}
+    }, 2000);
+  }, 500);
 };
 
 /**
- * Auto-download content as a styled HTML file (acts as PDF replacement).
- * Uses the title as the filename automatically.
+ * One-click PDF download. Triggers browser print-to-PDF with a properly titled document.
  */
 export const printMarkdownContent = (markdownContent: string, title: string) => {
-  const sanitizedTitle = title.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim() || 'document';
-  const filename = `${sanitizedTitle.replace(/\s+/g, '-').toLowerCase()}.html`;
-  downloadAsHTML(markdownContent, title, filename);
+  downloadAsHTML(markdownContent, title);
 };
 
 export const shareContent = async (title: string, text: string): Promise<boolean> => {

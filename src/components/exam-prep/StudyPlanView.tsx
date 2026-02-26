@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, BookOpen, Target, Clock, Lightbulb } from 'lucide-react';
+import { Loader2, BookOpen, Target, Clock, Lightbulb, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import { printMarkdownContent } from '@/components/export/ExportUtils';
 
 interface StudyPlanViewProps {
   examTypeId: string;
@@ -93,6 +94,11 @@ const StudyPlanView = ({ examTypeId, subjectId, subjectName, onBack }: StudyPlan
       {generated && (
         <div className="flex gap-2">
           <Button variant="outline" onClick={generatePlan} disabled={loading}>Regenerate</Button>
+          {plan && (
+            <Button variant="outline" onClick={() => printMarkdownContent(plan, `Study Plan - ${subjectName}`)}>
+              <Download className="w-4 h-4 mr-1" /> Download PDF
+            </Button>
+          )}
           <Button variant="outline" onClick={onBack}>Back to Modes</Button>
         </div>
       )}
