@@ -127,6 +127,41 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
     }
   }, [selectedCourseId, user]);
 
+  // Language for speech recognition
+  const [speechLang, setSpeechLang] = useState('en-US');
+
+  const SPEECH_LANGUAGES = [
+    { value: 'en-US', label: '🇺🇸 English (US)' },
+    { value: 'en-GB', label: '🇬🇧 English (UK)' },
+    { value: 'en-NG', label: '🇳🇬 English (Nigeria)' },
+    { value: 'ha-NG', label: '🇳🇬 Hausa' },
+    { value: 'yo-NG', label: '🇳🇬 Yoruba' },
+    { value: 'ig-NG', label: '🇳🇬 Igbo' },
+    { value: 'fr-FR', label: '🇫🇷 French' },
+    { value: 'es-ES', label: '🇪🇸 Spanish' },
+    { value: 'pt-BR', label: '🇧🇷 Portuguese' },
+    { value: 'ar-SA', label: '🇸🇦 Arabic' },
+    { value: 'hi-IN', label: '🇮🇳 Hindi' },
+    { value: 'zh-CN', label: '🇨🇳 Chinese' },
+    { value: 'de-DE', label: '🇩🇪 German' },
+    { value: 'sw-KE', label: '🇰🇪 Swahili' },
+  ];
+
+  // Group voices by language for easier selection
+  const groupedVoices = voices.reduce<Record<string, { voice: SpeechSynthesisVoice; index: number }[]>>((acc, voice, index) => {
+    const lang = voice.lang.split('-')[0];
+    const labels: Record<string, string> = {
+      en: '🇬🇧 English', fr: '🇫🇷 French', es: '🇪🇸 Spanish', de: '🇩🇪 German',
+      pt: '🇧🇷 Portuguese', ar: '🇸🇦 Arabic', hi: '🇮🇳 Hindi', zh: '🇨🇳 Chinese',
+      ha: '🇳🇬 Hausa', yo: '🇳🇬 Yoruba', ig: '🇳🇬 Igbo', sw: '🇰🇪 Swahili',
+      ja: '🇯🇵 Japanese', ko: '🇰🇷 Korean', ru: '🇷🇺 Russian', it: '🇮🇹 Italian',
+    };
+    const key = labels[lang] || `🌐 ${lang.toUpperCase()}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push({ voice, index });
+    return acc;
+  }, {});
+
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
     const loadVoices = () => {
@@ -143,7 +178,7 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = speechLang;
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const result = event.results[event.resultIndex];
       setTranscript(result[0].transcript);
@@ -159,7 +194,7 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
     };
     recognitionRef.current = recognition;
     return () => { recognitionRef.current?.abort(); synthRef.current?.cancel(); };
-  }, []);
+  }, [speechLang]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -433,12 +468,33 @@ const VoiceMode = ({ onBack }: VoiceModeProps) => {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Speech Language */}
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground flex items-center gap-1">🌍 Speech Language</label>
+                <Select value={speechLang} onValueChange={setSpeechLang}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SPEECH_LANGUAGES.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               {/* Voice */}
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Voice</label>
+                <label className="text-xs text-muted-foreground">Voice ({voices.length} available)</label>
                 <Select value={selectedVoiceIndex.toString()} onValueChange={v => setSelectedVoiceIndex(parseInt(v))}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>{voices.map((v, i) => <SelectItem key={i} value={i.toString()}>{v.name}</SelectItem>)}</SelectContent>
+                  <SelectContent className="max-h-60">
+                    {Object.entries(groupedVoices).map(([group, items]) => (
+                      <div key={group}>
+                        <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground sticky top-0 bg-popover">{group}</div>
+                        {items.map(({ voice, index }) => (
+                          <SelectItem key={index} value={index.toString()} className="text-xs">
+                            {voice.name.replace(/Microsoft |Google |Apple /, '')}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
               {/* Speed */}
