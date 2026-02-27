@@ -1,135 +1,149 @@
 
+Goal: fix four user-facing regressions in one pass: CBT sessions resetting, mobile PDF downloads producing screen-like output, Admin Exams > PDF Import missing controls, and Admin Exams > Questions blank screen; plus hardware back behavior on mobile.
 
-# Mind Maps, Voice Mode, Audio Notes Upgrade + Cleanup Plan
+1) Findings from code inspection (root causes)
 
-## Current Website Readiness: ~62/100
+A. CBT session loss/reset
+- `MultiSubjectCBT.tsx` and `MockExamMode.tsx` keep all exam state only in component memory.
+- If users navigate away, trigger back behavior, or app reloads, exam state is lost and they start over.
+- No session-recovery flow exists.
+- No hardware back interception exists for active exam sessions.
 
-**Exam Prep:** ~70/100 (strong after recent upgrades)
-**Study Tools:** ~55/100 (many tools functional but shallow)
-**Admin:** ~60/100 (recently enhanced)
-**Focus/App Blocker:** ~40/100 (native-only features shown on web, confusing UX)
+B. Mobile back button exits app / unexpected navigation
+- There is currently no global native mobile back handler.
+- The app does not currently define route-aware back behavior for native Android back presses.
 
----
+C. PDF download issue on mobile
+- Export utility (`ExportUtils.tsx`) currently uses hidden iframe + `window.print()`.
+- On some mobile/browser combinations this yields viewport-like output behavior instead of a clean generated-content PDF flow.
+- Many callers still pass `.html` filenames and at least one UI still tells users to open HTML then print.
 
-## Part 1: Interactive Mind Maps with Canvas (Major Rewrite)
+D. Admin Exams regressions
+- Missing subject selector in PDF Import:
+  - Subject selector is rendered only for `topics` and `questions`, not `pdf-import`.
+- Questions tab blank:
+  - `AdminResources.tsx` uses multiple `<SelectItem value="">...` entries; Radix Select does not support empty item values, which can crash that section.
 
-The current ConceptLinking component is a basic 400px box with fixed-position nodes on an SVG -- no pan, no zoom, no expanding concepts, no real interaction.
+2) Implementation approach
 
-**Rewrite `ConceptLinking.tsx` completely:**
+A. Stabilize CBT sessions (no forced restart)
+Files:
+- `src/components/exam-prep/MultiSubjectCBT.tsx`
+- `src/components/exam-prep/MockExamMode.tsx`
 
-- Replace fixed SVG+absolute-div layout with a proper pannable/zoomable canvas using CSS transforms and pointer events (no external library needed)
-- Canvas state: `scale` (zoom), `offset` (pan position), managed via wheel events (zoom) and pointer drag on background (pan)
-- Nodes become expandable: each node has `expanded` state. Clicking a node toggles its detail panel showing a short AI-generated explanation
-- Hierarchical layout: center node = main topic, second ring = key concepts, third ring = sub-concepts. Use force-directed-like positioning with concentric circles
-- Connection lines drawn as curved SVG paths (quadratic bezier) between nodes
-- Node sizing: center node is largest, outer nodes smaller
-- Touch support: pinch-to-zoom, drag to pan on mobile
-- "Expand concept" on click: calls AI to generate 2-3 sub-concepts for that node, which appear as new connected nodes
-- Color coding: different colors for different depth levels
+Plan:
+- Add persistent draft state (local storage) keyed by exam mode + exam type + subject(s) + user.
+- Autosave on:
+  - answer changes
+  - index/tab changes
+  - timer ticks (throttled)
+- Restore prompt on mount:
+  - if unfinished draft exists, show “Resume previous exam” vs “Start new”.
+- Clear draft on successful submit and on confirmed manual exit.
+- Add guarded exit:
+  - if exam is in progress, show confirmation before leaving.
+  - prevent accidental loss from single taps/back actions.
 
-**Technical approach:**
-- Manage canvas transform with `useState<{x: number, y: number, scale: number}>`
-- onWheel handler for zoom (clamped 0.3 to 3.0)
-- onPointerDown/Move/Up on canvas background for panning
-- Nodes rendered as absolutely positioned divs inside a transform container
-- SVG overlay for connection lines (same transform)
-- Node click: if not expanded, fetch AI explanation and add child nodes
+B. Mobile hardware back behavior
+Files:
+- new hook: `src/hooks/useMobileBackNavigation.ts` (or similar)
+- `src/App.tsx` to register globally
+- optional exam-specific override in CBT components
 
----
+Plan:
+- Add native back listener for mobile app runtime:
+  - default behavior: navigate to previous route if possible
+  - do not immediately exit app from in-app pages
+- Exam-aware behavior:
+  - when an exam is active, intercept back and require confirmation first.
+- Keep behavior route-safe so normal browsing still feels expected.
 
-## Part 2: Voice Mode Improvements
+C. Fix one-click PDF generation on mobile (content PDF, not screen-like output)
+Files:
+- `src/components/export/ExportUtils.tsx`
+- call sites with user-facing text/filenames, at minimum:
+  - `src/components/study/CheatSheetCreator.tsx`
+  - `src/components/ai-tools/AIToolLayout.tsx`
+  - (and any export buttons currently passing `.html` names)
 
-Current issues: basic Web Speech API, no conversation memory, no context awareness, robotic browser TTS.
+Plan:
+- Replace print/iframe-first export path with direct PDF file generation for markdown content.
+- Keep API compatibility so existing callers still work:
+  - `downloadAsHTML(...)` will internally generate PDF for backward compatibility.
+  - `printMarkdownContent(...)` will use same PDF generation path.
+- Ensure filename/title handling:
+  - sanitize title
+  - strip `.html` suffix if passed
+  - always output `.pdf`
+  - preserve generated-content titles (e.g., study plan subject title, AI output title, cheat sheet title).
+- Update UI copy where needed (remove “open HTML and print to PDF” messaging).
 
-**Enhancements to `VoiceMode.tsx`:**
+D. Fix Admin Exams: PDF Import controls + Questions blank tab
+File:
+- `src/pages/AdminResources.tsx`
 
-- Add conversation context: let users optionally select a note or course before starting, so AI responses are contextual
-- Add "conversation starters" when empty: suggested prompts like "Explain photosynthesis", "Quiz me on history", "Help me understand calculus"
-- Add message actions: copy text, regenerate response
-- Improve speech output: add voice selection (reuse AudioNotes voice picker pattern), speed control
-- Add visual audio waveform animation while listening (CSS-based pulsing circles)
-- Persist recent conversations to localStorage so users can resume
-- Better error handling with retry buttons
+Plan:
+- Show Subject selector for `pdf-import` section too.
+- Fix Select values:
+  - replace empty-string item values with sentinel values (`all_topics`, `all_difficulty`, `all_source`).
+  - translate sentinel values to empty filters before sending requests.
+- Add defensive guards in question rendering/filtering to avoid runtime crashes from malformed records.
+- Keep current tab persistence behavior intact (`forceMount` remains).
 
----
+3) Sequencing and dependencies
 
-## Part 3: Audio Notes Improvements
+Step 1: Admin crash + missing controls (fastest unblock for admins)
+- Fix selector rendering and empty SelectItem values first.
+- This immediately restores Questions and PDF Import usability.
 
-Current: generates summary then reads it. Basic but functional.
+Step 2: CBT persistence and guarded exits
+- Add draft autosave/restore for both mock and multi-subject CBT.
+- Add exam exit confirmation logic.
 
-**Enhancements to `AudioNotes.tsx`:**
+Step 3: Global mobile back handling
+- Add app-wide native back behavior and ensure exam-specific override still takes priority.
 
-- Add "Read Full Note" option (not just summary) for users who want the complete content read
-- Add progress indicator showing how far through the text the reader is
-- Add "Read All Notes" playlist mode: queue multiple notes to play sequentially
-- Add highlight/follow-along: show the current text being read (split text into sentences, highlight current one)
-- Save audio preferences per session (voice + speed already exist but reset on page reload -- persist to localStorage)
+Step 4: PDF export engine hardening
+- Switch export implementation to deterministic file PDF generation.
+- Keep compatibility wrappers so existing features continue to work without large refactors.
 
----
+4) Validation checklist (end-to-end)
 
-## Part 4: Remove/Hide Incomplete Features
+Admin flow:
+- Open Admin > Exams > Questions:
+  - no blank screen
+  - filters work
+  - load/edit/delete still works.
+- Open Admin > Exams > PDF Import:
+  - both exam type and subject are selectable
+  - upload button appears once file selected
+  - import submission path still functions.
 
-Several features only work on native Android and show confusing "Beta" or "Native App Required" warnings on web. Since most users are on web, these hurt the experience.
+CBT flow:
+- Start mock exam, answer some questions, leave route, return:
+  - resume prompt appears
+  - resume restores timer, answers, index.
+- Start multi-subject CBT and switch tabs/questions:
+  - autosave works
+  - back press requires confirmation.
+- Submit exam:
+  - draft is cleared
+  - results still save correctly.
 
-**Changes:**
+Mobile back flow:
+- On native mobile, press hardware back from multiple screens:
+  - navigates to previous page instead of sudden exit.
+- During active exam:
+  - back press prompts before exit.
 
-1. **Focus Session page (`FocusSession.tsx`)**: The "App Blocking" and "Permissions Setup" sections only work on Android native. On web, hide the app selector and permissions sections entirely. Show only the timer functionality (duration picker + start button). Remove the "BETA" badge from the Focus Session card on the Focus page.
+PDF flow:
+- Export from Study Plan, Cheat Sheet, AI tools:
+  - one tap downloads `.pdf`
+  - file title matches generated content
+  - output contains generated content (not screen-like capture behavior).
 
-2. **App Blocker Settings (`AppBlockerSettings.tsx`)**: On web, simplify to just show the study goal tracker and Pomodoro link. Hide all app blocking UI (blocked apps list, custom app input, popular apps chips) since they do nothing on web.
+5) Notes on scope and data model
 
-3. **Focus Mode Overlay (`FocusModeOverlay.tsx`)** and **Blocking Overlay (`BlockingOverlay.tsx`)**: These are fine -- they work on web as soft overlays. Keep them.
-
-4. **Lecture Recorder (`LectureRecorder.tsx`)**: Uses Web Speech API which has spotty browser support. Add a clearer "not supported" state rather than failing silently. Already partially handled but can be improved.
-
----
-
-## Part 5: UI Polish Across the Platform
-
-- **Study page grid**: The 2-column grid on Study.tsx is functional. Add subtle hover effects and better visual hierarchy between sections
-- **Bottom navigation**: Ensure active state is clearly visible
-- **Empty states**: Many features show basic "No notes yet" text. Add illustrations or icons with clear CTAs
-
----
-
-## Technical Details
-
-### Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/components/study/ConceptLinking.tsx` | Full rewrite: pannable/zoomable canvas, expandable nodes with AI details, hierarchical layout, curved connections, touch support |
-| `src/components/study/VoiceMode.tsx` | Add note/course context selector, conversation starters, message actions, voice settings, conversation persistence |
-| `src/components/study/AudioNotes.tsx` | Add full-note reading, progress indicator, playlist mode, text follow-along, persist voice preferences |
-| `src/pages/FocusSession.tsx` | Hide app blocking UI on web platform, show timer-only experience |
-| `src/pages/Focus.tsx` | Remove "BETA" badge from Focus Session card |
-| `src/components/settings/AppBlockerSettings.tsx` | On web, hide app blocking sections, show only study goal + timer link |
-
-### No new files needed -- all improvements are to existing components.
-
-### No database changes needed.
-
-### Mind Map Canvas Architecture
-
-```text
-ConceptLinking
-  |-- Canvas Container (overflow: hidden, touch-action: none)
-      |-- Transform Wrapper (CSS transform: translate + scale)
-          |-- SVG Layer (bezier connection lines)
-          |-- Node Layer (absolutely positioned divs)
-              |-- Each node:
-                  - Click to select/expand
-                  - Shows label + depth-based color
-                  - When expanded: shows description panel
-                  - "Expand" button: AI generates sub-nodes
-```
-
-### Implementation Order
-
-| Step | Task |
-|------|------|
-| 1 | Rewrite ConceptLinking.tsx with interactive canvas |
-| 2 | Improve VoiceMode.tsx with context and conversation features |
-| 3 | Enhance AudioNotes.tsx with playlist and follow-along |
-| 4 | Clean up FocusSession.tsx and AppBlockerSettings.tsx for web |
-| 5 | Remove BETA badge from Focus page |
-
+- No backend schema change is required for this fix set.
+- CBT resume persistence will be local-device/session based initially (fast, low risk).
+- If needed later, we can extend to cross-device recovery via backend draft storage.
