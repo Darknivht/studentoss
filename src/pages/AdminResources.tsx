@@ -856,7 +856,7 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
                   </SelectContent>
                 </Select>
               </div>
-              {(section === 'topics' || section === 'questions') && (
+              {(section === 'topics' || section === 'questions' || section === 'pdf-import') && (
                 <div>
                   <Label>Subject</Label>
                   <Select value={selectedSubject} onValueChange={setSelectedSubject} disabled={!selectedExamType}>
@@ -870,10 +870,10 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
               {section === 'questions' && (
                 <div>
                   <Label>Topic (optional)</Label>
-                  <Select value={selectedTopic} onValueChange={setSelectedTopic} disabled={!selectedSubject}>
+                  <Select value={selectedTopic || "__all__"} onValueChange={(v) => setSelectedTopic(v === "__all__" ? "" : v)} disabled={!selectedSubject}>
                     <SelectTrigger><SelectValue placeholder="All topics" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All topics</SelectItem>
+                      <SelectItem value="__all__">All topics</SelectItem>
                       {topics.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1135,16 +1135,16 @@ const ExamsTab = ({ adminPassword }: { adminPassword: string }) => {
                     </div>
                     <div>
                       <Label>Filter Difficulty</Label>
-                      <Select value={qFilter.difficulty} onValueChange={(v) => setQFilter(f => ({ ...f, difficulty: v }))}>
+                      <Select value={qFilter.difficulty || "__all__"} onValueChange={(v) => setQFilter(f => ({ ...f, difficulty: v === "__all__" ? "" : v }))}>
                         <SelectTrigger className="w-32"><SelectValue placeholder="All" /></SelectTrigger>
-                        <SelectContent><SelectItem value="">All</SelectItem><SelectItem value="easy">Easy</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="hard">Hard</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="__all__">All</SelectItem><SelectItem value="easy">Easy</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="hard">Hard</SelectItem></SelectContent>
                       </Select>
                     </div>
                     <div>
                       <Label>Filter Source</Label>
-                      <Select value={qFilter.source} onValueChange={(v) => setQFilter(f => ({ ...f, source: v }))}>
+                      <Select value={qFilter.source || "__all__"} onValueChange={(v) => setQFilter(f => ({ ...f, source: v === "__all__" ? "" : v }))}>
                         <SelectTrigger className="w-36"><SelectValue placeholder="All" /></SelectTrigger>
-                        <SelectContent><SelectItem value="">All</SelectItem><SelectItem value="admin_added">Admin</SelectItem><SelectItem value="past_question">Past Q</SelectItem><SelectItem value="ai_generated">AI</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="__all__">All</SelectItem><SelectItem value="admin_added">Admin</SelectItem><SelectItem value="past_question">Past Q</SelectItem><SelectItem value="ai_generated">AI</SelectItem></SelectContent>
                       </Select>
                     </div>
                     <Button onClick={fetchQuestions} size="sm"><Search className="w-3 h-3 mr-1" />Load</Button>

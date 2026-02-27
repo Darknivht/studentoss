@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Clock, Loader2, CheckCircle2, XCircle, Eye } from 'lucide-react';
+import { ArrowLeft, Clock, Loader2, CheckCircle2, XCircle, Eye, RotateCcw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -26,6 +26,16 @@ interface MockExamModeProps {
   onBack: () => void;
 }
 
+interface DraftState {
+  questions: Question[];
+  answers: Record<number, number>;
+  currentIndex: number;
+  timeLeft: number;
+  sessionId: string;
+}
+
+const DRAFT_KEY_PREFIX = 'mock_exam_draft_';
+
 const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, timeLimitMinutes = 60, onBack }: MockExamModeProps) => {
   const { user } = useAuth();
   const { incrementUsage } = useSubscription();
@@ -35,77 +45,145 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(timeLimitMinutes * 60);
   const [finished, setFinished] = useState(false);
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
   const [reviewWrong, setReviewWrong] = useState(false);
+  const [showResume, setShowResume] = useState(false);
+  const saveThrottleRef = useRef<NodeJS.Timeout | null>(null);
 
+  const draftKey = `${DRAFT_KEY_PREFIX}${examTypeId}_${subjectId}`;
+
+  // Check for existing draft on mount
   useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-        // Use exam-practice edge function for AI-powered question generation
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        
-        const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exam-practice`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            action: 'generate-questions',
-            exam_type_id: examTypeId,
-            subject_id: subjectId,
-            count: questionCount,
-          }),
-        });
-
-        const result = await resp.json();
-        
-        if (result.questions && result.questions.length > 0) {
-          const mapped = result.questions.map((q: any) => ({
-            id: q.id || crypto.randomUUID(),
-            question: q.question,
-            options: Array.isArray(q.options) ? q.options : [],
-            correct_index: q.correct_index,
-            explanation: q.explanation,
-            topic_id: q.topic_id || null,
-          }));
-          setQuestions(mapped);
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) {
+        const draft: DraftState = JSON.parse(saved);
+        if (draft.questions?.length > 0 && draft.timeLeft > 0) {
+          setShowResume(true);
+          return;
+        } else {
+          localStorage.removeItem(draftKey);
         }
-      } catch (error) {
-        console.error('Error fetching questions:', error);
-        // Fallback: direct DB query
-        const { data } = await supabase
-          .from('exam_questions')
-          .select('*')
-          .eq('exam_type_id', examTypeId)
-          .eq('subject_id', subjectId)
-          .eq('is_active', true)
-          .limit(questionCount);
+      }
+    } catch {
+      localStorage.removeItem(draftKey);
+    }
+    fetchQuestions();
+  }, []);
 
-        const mapped = (data || []).map(q => ({
-          id: q.id,
+  const resumeDraft = () => {
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) {
+        const draft: DraftState = JSON.parse(saved);
+        setQuestions(draft.questions);
+        setAnswers(draft.answers);
+        setCurrentIndex(draft.currentIndex);
+        setTimeLeft(draft.timeLeft);
+        setSessionId(draft.sessionId);
+        setShowResume(false);
+        setLoading(false);
+        sessionStorage.setItem('exam_in_progress', 'true');
+      }
+    } catch {
+      localStorage.removeItem(draftKey);
+      setShowResume(false);
+      fetchQuestions();
+    }
+  };
+
+  const startFresh = () => {
+    localStorage.removeItem(draftKey);
+    setShowResume(false);
+    fetchQuestions();
+  };
+
+  // Save draft (throttled)
+  const saveDraft = useCallback(() => {
+    if (saveThrottleRef.current) clearTimeout(saveThrottleRef.current);
+    saveThrottleRef.current = setTimeout(() => {
+      if (finished || questions.length === 0) return;
+      const draft: DraftState = { questions, answers, currentIndex, timeLeft, sessionId };
+      try { localStorage.setItem(draftKey, JSON.stringify(draft)); } catch {}
+    }, 1000);
+  }, [questions, answers, currentIndex, timeLeft, sessionId, finished, draftKey]);
+
+  // Autosave on state changes
+  useEffect(() => {
+    if (!finished && questions.length > 0 && !showResume) saveDraft();
+  }, [answers, currentIndex, timeLeft, saveDraft, finished, showResume]);
+
+  const clearDraft = () => {
+    localStorage.removeItem(draftKey);
+    sessionStorage.removeItem('exam_in_progress');
+  };
+
+  const fetchQuestions = async () => {
+    setLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exam-practice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          action: 'generate-questions',
+          exam_type_id: examTypeId,
+          subject_id: subjectId,
+          count: questionCount,
+        }),
+      });
+
+      const result = await resp.json();
+      
+      if (result.questions && result.questions.length > 0) {
+        const mapped = result.questions.map((q: any) => ({
+          id: q.id || crypto.randomUUID(),
           question: q.question,
-          options: Array.isArray(q.options) ? (q.options as string[]) : [],
+          options: Array.isArray(q.options) ? q.options : [],
           correct_index: q.correct_index,
           explanation: q.explanation,
-          topic_id: q.topic_id,
+          topic_id: q.topic_id || null,
         }));
-
-        for (let i = mapped.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [mapped[i], mapped[j]] = [mapped[j], mapped[i]];
-        }
-
         setQuestions(mapped);
+        sessionStorage.setItem('exam_in_progress', 'true');
       }
-      setLoading(false);
-    };
-    fetchQuestions();
-  }, [examTypeId, subjectId, questionCount]);
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+      const { data } = await supabase
+        .from('exam_questions')
+        .select('*')
+        .eq('exam_type_id', examTypeId)
+        .eq('subject_id', subjectId)
+        .eq('is_active', true)
+        .limit(questionCount);
+
+      const mapped = (data || []).map(q => ({
+        id: q.id,
+        question: q.question,
+        options: Array.isArray(q.options) ? (q.options as string[]) : [],
+        correct_index: q.correct_index,
+        explanation: q.explanation,
+        topic_id: q.topic_id,
+      }));
+
+      for (let i = mapped.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [mapped[i], mapped[j]] = [mapped[j], mapped[i]];
+      }
+
+      setQuestions(mapped);
+      if (mapped.length > 0) sessionStorage.setItem('exam_in_progress', 'true');
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    if (finished || loading) return;
+    if (finished || loading || showResume) return;
     const interval = setInterval(() => {
       setTimeLeft(t => {
         if (t <= 1) {
@@ -117,10 +195,11 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [finished, loading]);
+  }, [finished, loading, showResume]);
 
   const handleSubmit = useCallback(async () => {
     setFinished(true);
+    clearDraft();
     if (!user) return;
 
     const inserts = questions.map((q, i) => ({
@@ -136,13 +215,42 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
 
     await supabase.from('exam_attempts').insert(inserts);
 
-    // Increment usage for each question answered
     for (let i = 0; i < questions.length; i++) {
       await incrementUsage('examQuestion');
     }
   }, [user, questions, answers, examTypeId, subjectId, sessionId]);
 
+  const handleExit = () => {
+    if (!finished && questions.length > 0) {
+      const leave = window.confirm('Your progress is saved. You can resume this exam later. Leave now?');
+      if (!leave) return;
+    }
+    sessionStorage.removeItem('exam_in_progress');
+    onBack();
+  };
+
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+
+  // Resume prompt
+  if (showResume) {
+    return (
+      <div className="text-center py-16 space-y-6">
+        <p className="text-5xl">📝</p>
+        <h2 className="text-xl font-display font-bold text-foreground">Resume Previous Exam?</h2>
+        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+          You have an unfinished mock exam for {subjectName}. Would you like to continue where you left off?
+        </p>
+        <div className="flex gap-3 justify-center">
+          <Button variant="outline" onClick={startFresh} className="gap-2">
+            <RotateCcw size={16} /> Start Fresh
+          </Button>
+          <Button onClick={resumeDraft} className="gap-2">
+            <Clock size={16} /> Resume Exam
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -162,7 +270,6 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
       </div>
     );
   }
-
 
   if (finished) {
     const score = questions.reduce((acc, q, i) => acc + (answers[i] === q.correct_index ? 1 : 0), 0);
@@ -254,7 +361,7 @@ const MockExamMode = ({ examTypeId, subjectId, subjectName, questionCount = 40, 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm text-primary font-medium">
+        <button onClick={handleExit} className="flex items-center gap-1 text-sm text-primary font-medium">
           <ArrowLeft size={16} /> Exit
         </button>
         <div className="flex items-center gap-2 text-sm font-mono">
