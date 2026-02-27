@@ -1,3 +1,5 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
 // Paystack configuration
 // The public key is safe to include in frontend code
 export const PAYSTACK_PUBLIC_KEY = Deno.env.get("PAYSTACK_SECRET_KEY");
