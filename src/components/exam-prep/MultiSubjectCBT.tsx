@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Clock, Loader2, CheckCircle2, XCircle, Eye } from 'lucide-react';
+import { ArrowLeft, Clock, Loader2, CheckCircle2, XCircle, Eye, RotateCcw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -37,6 +37,18 @@ interface MultiSubjectCBTProps {
 
 type Phase = 'select' | 'exam' | 'results';
 
+interface DraftState {
+  selectedSubjectIds: string[];
+  questionsBySubject: Record<string, Question[]>;
+  answers: Record<string, Record<number, number>>;
+  currentIndexes: Record<string, number>;
+  activeSubject: string;
+  timeLeft: number;
+  sessionId: string;
+}
+
+const DRAFT_KEY_PREFIX = 'cbt_draft_';
+
 const MultiSubjectCBT = ({
   examTypeId,
   examName,
@@ -52,6 +64,7 @@ const MultiSubjectCBT = ({
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showResume, setShowResume] = useState(false);
 
   // Exam state
   const [questionsBySubject, setQuestionsBySubject] = useState<Record<string, Question[]>>({});
@@ -60,12 +73,39 @@ const MultiSubjectCBT = ({
   const [currentIndexes, setCurrentIndexes] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(timeLimitMinutes * 60);
   const [finished, setFinished] = useState(false);
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
   const [reviewWrong, setReviewWrong] = useState(false);
+  const saveThrottleRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch subjects
+  const draftKey = `${DRAFT_KEY_PREFIX}${examTypeId}`;
+
+  // Check for draft on mount
   useEffect(() => {
-    const fetchSubjects = async () => {
+    const checkDraft = async () => {
+      try {
+        const saved = localStorage.getItem(draftKey);
+        if (saved) {
+          const draft: DraftState = JSON.parse(saved);
+          if (draft.timeLeft > 0 && Object.keys(draft.questionsBySubject).length > 0) {
+            // Fetch subjects first so we can show names
+            const { data } = await supabase
+              .from('exam_subjects')
+              .select('id, name, icon')
+              .eq('exam_type_id', examTypeId)
+              .eq('is_active', true)
+              .order('name');
+            setAllSubjects(data || []);
+            setLoading(false);
+            setShowResume(true);
+            return;
+          } else {
+            localStorage.removeItem(draftKey);
+          }
+        }
+      } catch {
+        localStorage.removeItem(draftKey);
+      }
+      // Normal fetch
       const { data } = await supabase
         .from('exam_subjects')
         .select('id, name, icon')
@@ -75,8 +115,54 @@ const MultiSubjectCBT = ({
       setAllSubjects(data || []);
       setLoading(false);
     };
-    fetchSubjects();
+    checkDraft();
   }, [examTypeId]);
+
+  const resumeDraft = () => {
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) {
+        const draft: DraftState = JSON.parse(saved);
+        setSelectedSubjectIds(draft.selectedSubjectIds);
+        setQuestionsBySubject(draft.questionsBySubject);
+        setAnswers(draft.answers);
+        setCurrentIndexes(draft.currentIndexes);
+        setActiveSubject(draft.activeSubject);
+        setTimeLeft(draft.timeLeft);
+        setSessionId(draft.sessionId);
+        setPhase('exam');
+        setShowResume(false);
+        sessionStorage.setItem('exam_in_progress', 'true');
+      }
+    } catch {
+      localStorage.removeItem(draftKey);
+      setShowResume(false);
+    }
+  };
+
+  const startFresh = () => {
+    localStorage.removeItem(draftKey);
+    setShowResume(false);
+  };
+
+  // Save draft (throttled)
+  const saveDraft = useCallback(() => {
+    if (saveThrottleRef.current) clearTimeout(saveThrottleRef.current);
+    saveThrottleRef.current = setTimeout(() => {
+      if (finished || phase !== 'exam') return;
+      const draft: DraftState = { selectedSubjectIds, questionsBySubject, answers, currentIndexes, activeSubject, timeLeft, sessionId };
+      try { localStorage.setItem(draftKey, JSON.stringify(draft)); } catch {}
+    }, 1000);
+  }, [selectedSubjectIds, questionsBySubject, answers, currentIndexes, activeSubject, timeLeft, sessionId, finished, phase, draftKey]);
+
+  useEffect(() => {
+    if (phase === 'exam' && !finished && !showResume) saveDraft();
+  }, [answers, currentIndexes, activeSubject, timeLeft, saveDraft, phase, finished, showResume]);
+
+  const clearDraft = () => {
+    localStorage.removeItem(draftKey);
+    sessionStorage.removeItem('exam_in_progress');
+  };
 
   const toggleSubject = (id: string) => {
     setSelectedSubjectIds(prev => {
@@ -86,7 +172,7 @@ const MultiSubjectCBT = ({
     });
   };
 
-  // Start exam - fetch questions for all selected subjects
+  // Start exam
   const startExam = async () => {
     setLoading(true);
     const qBySubj: Record<string, Question[]> = {};
@@ -127,7 +213,6 @@ const MultiSubjectCBT = ({
           qBySubj[subjId] = [];
         }
       } catch {
-        // Fallback
         const { data } = await supabase
           .from('exam_questions')
           .select('*')
@@ -157,6 +242,7 @@ const MultiSubjectCBT = ({
     setActiveSubject(selectedSubjectIds[0]);
     setPhase('exam');
     setLoading(false);
+    sessionStorage.setItem('exam_in_progress', 'true');
   };
 
   // Timer
@@ -178,6 +264,7 @@ const MultiSubjectCBT = ({
   const handleSubmit = useCallback(async () => {
     setFinished(true);
     setPhase('results');
+    clearDraft();
     if (!user) return;
 
     const inserts: any[] = [];
@@ -204,9 +291,39 @@ const MultiSubjectCBT = ({
     }
   }, [user, selectedSubjectIds, questionsBySubject, answers, examTypeId, sessionId]);
 
+  const handleExit = () => {
+    if (phase === 'exam' && !finished) {
+      const leave = window.confirm('Your progress is saved. You can resume this exam later. Leave now?');
+      if (!leave) return;
+    }
+    sessionStorage.removeItem('exam_in_progress');
+    onBack();
+  };
+
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
   const selectedSubjects = allSubjects.filter(s => selectedSubjectIds.includes(s.id));
+
+  // Resume prompt
+  if (showResume) {
+    return (
+      <div className="text-center py-16 space-y-6">
+        <p className="text-5xl">📋</p>
+        <h2 className="text-xl font-display font-bold text-foreground">Resume Previous CBT?</h2>
+        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+          You have an unfinished {examName} CBT exam. Would you like to continue where you left off?
+        </p>
+        <div className="flex gap-3 justify-center">
+          <Button variant="outline" onClick={startFresh} className="gap-2">
+            <RotateCcw size={16} /> Start Fresh
+          </Button>
+          <Button onClick={resumeDraft} className="gap-2">
+            <Clock size={16} /> Resume Exam
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Subject Selection Phase ───
   if (phase === 'select') {
@@ -379,7 +496,7 @@ const MultiSubjectCBT = ({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm text-primary font-medium">
+        <button onClick={handleExit} className="flex items-center gap-1 text-sm text-primary font-medium">
           <ArrowLeft size={16} /> Exit
         </button>
         <div className="flex items-center gap-2 text-sm font-mono">

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { useMobileBackNavigation } from "@/hooks/useMobileBackNavigation";
 import PWAUpdateBanner from "@/components/pwa/PWAUpdateBanner";
 import OfflineStatusBanner from "@/components/pwa/OfflineStatusBanner";
 
@@ -63,6 +64,11 @@ const HomeRoute = () => {
   return <AppLayout><Dashboard /></AppLayout>;
 };
 
+const MobileBackHandler = () => {
+  useMobileBackNavigation();
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -72,6 +78,7 @@ const App = () => (
       <OfflineStatusBanner />
       <BrowserRouter>
         <AuthProvider>
+            <MobileBackHandler />
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<HomeRoute />} />
