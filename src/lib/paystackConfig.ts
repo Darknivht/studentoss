@@ -1,8 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 // Paystack configuration
 // The public key is safe to include in frontend code
-export const PAYSTACK_PUBLIC_KEY = Deno.env.get("PAYSTACK_SECRET_KEY");
+export const PAYSTACK_PUBLIC_KEY = "pk_test_58f4b0b6d69b01ee0e2b3a78b5de225b1ebd0ed8";
 
 // Plan pricing in Kobo (NGN smallest unit)
 export const PLAN_PRICING = {
