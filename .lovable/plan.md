@@ -1,149 +1,160 @@
 
-Goal: fix four user-facing regressions in one pass: CBT sessions resetting, mobile PDF downloads producing screen-like output, Admin Exams > PDF Import missing controls, and Admin Exams > Questions blank screen; plus hardware back behavior on mobile.
 
-1) Findings from code inspection (root causes)
+# Fix Payments, Add Install Button, Build Admin Documentation, and Google Ads
 
-A. CBT session loss/reset
-- `MultiSubjectCBT.tsx` and `MockExamMode.tsx` keep all exam state only in component memory.
-- If users navigate away, trigger back behavior, or app reloads, exam state is lost and they start over.
-- No session-recovery flow exists.
-- No hardware back interception exists for active exam sessions.
+## Readiness Score: 78/100
 
-B. Mobile back button exits app / unexpected navigation
-- There is currently no global native mobile back handler.
-- The app does not currently define route-aware back behavior for native Android back presses.
+Here's the breakdown:
+- **Core features** (study tools, AI tutor, notes, flashcards, quizzes): 90% ready
+- **Payment system**: Currently broken due to a configuration typo -- will be fixed in this update
+- **Exam prep**: Functional with recent fixes
+- **Social features**: Working (chat, groups, friends)
+- **PWA/offline**: Recently added, functional
+- **Admin panel**: Functional with recent fixes
+- **Marketing/documentation**: 0% -- will be built in this update
+- **Google Ads monetization**: 0% -- will be added in this update
 
-C. PDF download issue on mobile
-- Export utility (`ExportUtils.tsx`) currently uses hidden iframe + `window.print()`.
-- On some mobile/browser combinations this yields viewport-like output behavior instead of a clean generated-content PDF flow.
-- Many callers still pass `.html` filenames and at least one UI still tells users to open HTML then print.
+**What's blocking launch:** The payment system typo (critical fix below), missing admin documentation, and no ad revenue for free users.
 
-D. Admin Exams regressions
-- Missing subject selector in PDF Import:
-  - Subject selector is rendered only for `topics` and `questions`, not `pdf-import`.
-- Questions tab blank:
-  - `AdminResources.tsx` uses multiple `<SelectItem value="">...` entries; Radix Select does not support empty item values, which can crash that section.
+---
 
-2) Implementation approach
+## 1. Fix Payment System (Critical)
 
-A. Stabilize CBT sessions (no forced restart)
-Files:
-- `src/components/exam-prep/MultiSubjectCBT.tsx`
-- `src/components/exam-prep/MockExamMode.tsx`
+**Root cause found:** The secret is stored as `PAYSTACK_SERCET_KEY` (typo: "SERCET") but the edge function reads `PAYSTACK_SECRET_KEY`. This causes every payment verification to fail.
 
-Plan:
-- Add persistent draft state (local storage) keyed by exam mode + exam type + subject(s) + user.
-- Autosave on:
-  - answer changes
-  - index/tab changes
-  - timer ticks (throttled)
-- Restore prompt on mount:
-  - if unfinished draft exists, show “Resume previous exam” vs “Start new”.
-- Clear draft on successful submit and on confirmed manual exit.
-- Add guarded exit:
-  - if exam is in progress, show confirmation before leaving.
-  - prevent accidental loss from single taps/back actions.
+**Fix:** Update the edge function to read from `PAYSTACK_SERCET_KEY` (the actual stored name) instead. This is the fastest, safest fix.
 
-B. Mobile hardware back behavior
-Files:
-- new hook: `src/hooks/useMobileBackNavigation.ts` (or similar)
-- `src/App.tsx` to register globally
-- optional exam-specific override in CBT components
+**Yearly expiry:** The existing code already correctly adds 1 year for yearly plans and 1 month for monthly plans. Once the secret name is fixed, this will work as intended.
 
-Plan:
-- Add native back listener for mobile app runtime:
-  - default behavior: navigate to previous route if possible
-  - do not immediately exit app from in-app pages
-- Exam-aware behavior:
-  - when an exam is active, intercept back and require confirmation first.
-- Keep behavior route-safe so normal browsing still feels expected.
+**File:** `supabase/functions/verify-payment/index.ts` -- change line 24 from `PAYSTACK_SECRET_KEY` to `PAYSTACK_SERCET_KEY`.
 
-C. Fix one-click PDF generation on mobile (content PDF, not screen-like output)
-Files:
-- `src/components/export/ExportUtils.tsx`
-- call sites with user-facing text/filenames, at minimum:
-  - `src/components/study/CheatSheetCreator.tsx`
-  - `src/components/ai-tools/AIToolLayout.tsx`
-  - (and any export buttons currently passing `.html` names)
+---
 
-Plan:
-- Replace print/iframe-first export path with direct PDF file generation for markdown content.
-- Keep API compatibility so existing callers still work:
-  - `downloadAsHTML(...)` will internally generate PDF for backward compatibility.
-  - `printMarkdownContent(...)` will use same PDF generation path.
-- Ensure filename/title handling:
-  - sanitize title
-  - strip `.html` suffix if passed
-  - always output `.pdf`
-  - preserve generated-content titles (e.g., study plan subject title, AI output title, cheat sheet title).
-- Update UI copy where needed (remove “open HTML and print to PDF” messaging).
+## 2. Add Install Button to Profile Page
 
-D. Fix Admin Exams: PDF Import controls + Questions blank tab
-File:
-- `src/pages/AdminResources.tsx`
+Add a "Get the App" card to the Profile page (between the Subscription Badge and Streak Calendar) that links to `/install`.
 
-Plan:
-- Show Subject selector for `pdf-import` section too.
-- Fix Select values:
-  - replace empty-string item values with sentinel values (`all_topics`, `all_difficulty`, `all_source`).
-  - translate sentinel values to empty filters before sending requests.
-- Add defensive guards in question rendering/filtering to avoid runtime crashes from malformed records.
-- Keep current tab persistence behavior intact (`forceMount` remains).
+**File:** `src/pages/Profile.tsx` -- add a Download/Install link card with a smartphone icon.
 
-3) Sequencing and dependencies
+---
 
-Step 1: Admin crash + missing controls (fastest unblock for admins)
-- Fix selector rendering and empty SelectItem values first.
-- This immediately restores Questions and PDF Import usability.
+## 3. Google Ads Integration for Free Plan
 
-Step 2: CBT persistence and guarded exits
-- Add draft autosave/restore for both mock and multi-subject CBT.
-- Add exam exit confirmation logic.
+Add Google AdSense banner ads that show only to free-tier users. This generates real ad revenue from users who don't pay.
 
-Step 3: Global mobile back handling
-- Add app-wide native back behavior and ensure exam-specific override still takes priority.
+**Implementation:**
+- Create a `GoogleAdBanner` component that renders a Google AdSense ad unit
+- Replace the current self-promotional `AdBanner` with the real Google ad for free users
+- The ad slot ID will need to be configured once you have a Google AdSense account
+- Ads will automatically hide for Plus/Pro subscribers (existing logic)
 
-Step 4: PDF export engine hardening
-- Switch export implementation to deterministic file PDF generation.
-- Keep compatibility wrappers so existing features continue to work without large refactors.
+**Files:**
+- New: `src/components/ads/GoogleAdBanner.tsx`
+- Update: `src/components/ads/AdBanner.tsx` to show Google ads instead of self-promo
+- Update: `index.html` to load the AdSense script
 
-4) Validation checklist (end-to-end)
+**Note:** You'll need a Google AdSense account and an ad unit ID. I'll add a placeholder that you can swap with your real ID.
 
-Admin flow:
-- Open Admin > Exams > Questions:
-  - no blank screen
-  - filters work
-  - load/edit/delete still works.
-- Open Admin > Exams > PDF Import:
-  - both exam type and subject are selectable
-  - upload button appears once file selected
-  - import submission path still functions.
+---
 
-CBT flow:
-- Start mock exam, answer some questions, leave route, return:
-  - resume prompt appears
-  - resume restores timer, answers, index.
-- Start multi-subject CBT and switch tabs/questions:
-  - autosave works
-  - back press requires confirmation.
-- Submit exam:
-  - draft is cleared
-  - results still save correctly.
+## 4. Hidden Admin Documentation Portal
 
-Mobile back flow:
-- On native mobile, press hardware back from multiple screens:
-  - navigates to previous page instead of sudden exit.
-- During active exam:
-  - back press prompts before exit.
+Build a multi-page documentation site at `/docs` that is password-protected (using the existing `ADMIN_PANEL_PASSWORD`). Only you and your team can access it.
 
-PDF flow:
-- Export from Study Plan, Cheat Sheet, AI tools:
-  - one tap downloads `.pdf`
-  - file title matches generated content
-  - output contains generated content (not screen-like capture behavior).
+### Pages to create:
 
-5) Notes on scope and data model
+**a) `/docs` -- Documentation Hub (main index)**
+- Overview of StudentOS
+- Quick links to all doc sections
+- Password gate on entry
 
-- No backend schema change is required for this fix set.
-- CBT resume persistence will be local-device/session based initially (fast, low risk).
-- If needed later, we can extend to cross-device recovery via backend draft storage.
+**b) Platform Architecture page**
+- Tech stack overview
+- Database schema summary
+- Edge functions list
+- Authentication flow
+
+**c) Feature Guide page**
+- Every feature explained with how it works
+- Subscription tiers and what each unlocks
+- AI integration details
+
+**d) Business & Revenue page**
+- Pricing model breakdown
+- Payment flow (Paystack integration)
+- Google Ads revenue model
+- Growth metrics to track
+
+**e) Launch & Marketing Playbook page**
+- Step-by-step launch checklist
+- Marketing channels and strategies
+- Social media plan
+- School partnership approach
+- Influencer outreach template
+- App Store listing tips
+
+**f) Admin Guide page**
+- How to use the admin panel
+- Adding exam questions
+- Managing resources
+- Viewing user analytics
+
+### Files:
+- New: `src/pages/docs/DocsLayout.tsx` (password-protected wrapper)
+- New: `src/pages/docs/DocsHome.tsx`
+- New: `src/pages/docs/DocsArchitecture.tsx`
+- New: `src/pages/docs/DocsFeatures.tsx`
+- New: `src/pages/docs/DocsBusiness.tsx`
+- New: `src/pages/docs/DocsLaunchPlaybook.tsx`
+- New: `src/pages/docs/DocsAdminGuide.tsx`
+- Update: `src/App.tsx` to add `/docs/*` routes
+
+---
+
+## 5. Launch & Marketing Plan (embedded in docs)
+
+The Launch Playbook documentation page will include:
+
+1. **Pre-Launch Checklist**
+   - Switch Paystack from test to live keys
+   - Set up Google AdSense account
+   - Set up custom domain
+   - Test all payment flows end-to-end
+   - Publish to app stores (PWA listing)
+
+2. **Marketing Channels**
+   - School WhatsApp groups and class reps
+   - TikTok/Instagram student study content
+   - Twitter/X education community
+   - Student ambassadors program
+   - School partnerships (bulk licensing)
+
+3. **Growth Strategy**
+   - Free tier as acquisition funnel
+   - Exam season push campaigns
+   - Referral/invite code system
+   - Content marketing (study tips blog)
+
+4. **Revenue Projections Model**
+   - Google Ads CPM estimates for Nigerian traffic
+   - Conversion funnel: Free to Plus to Pro
+   - Target metrics for first 90 days
+
+---
+
+## Technical Summary
+
+| Change | Files | Impact |
+|--------|-------|--------|
+| Fix payment secret typo | 1 edge function | Critical -- unblocks all payments |
+| Install button on profile | 1 file | Small UI addition |
+| Google Ads integration | 3 files | New revenue stream |
+| Documentation portal | 8 new files + 1 update | Admin-only, hidden pages |
+
+## Sequencing
+
+1. Fix payment (immediate unblock)
+2. Profile install button (quick win)
+3. Google Ads component (revenue)
+4. Documentation portal (all pages in parallel)
+
