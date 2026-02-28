@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight, AtSign, AlertCircle, Crown } from 'lucide-react';
+import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight, AtSign, AlertCircle, Crown, Smartphone } from 'lucide-react';
 import StreakCalendar from '@/components/study/StreakCalendar';
 import AvatarUpload from '@/components/profile/AvatarUpload';
 
@@ -225,6 +225,27 @@ const Profile = () => {
           </div>
         </motion.div>
       </Link>
+
+      {/* Install App */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <Link to="/install">
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-primary/10 to-violet-500/10 border border-primary/30 flex items-center justify-between hover:bg-primary/20 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                <Smartphone className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Get the App</p>
+                <p className="text-sm text-muted-foreground">Install for offline access</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </div>
+        </Link>
+      </motion.div>
 
       {/* Streak Calendar */}
       <motion.div

@@ -3,6 +3,7 @@ import { Crown, Sparkles, Zap, X } from 'lucide-react';
 import { useState } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { SUBSCRIPTION_ENABLED } from '@/lib/subscriptionConfig';
+import GoogleAdBanner from './GoogleAdBanner';
 
 const AD_VARIANTS = [
   {
@@ -45,6 +46,12 @@ const AdBanner = ({ variant = 'banner', className = '' }: AdBannerProps) => {
 
   // Don't show ads if subscription system is off, user is paid, or dismissed
   if (!SUBSCRIPTION_ENABLED || subscription.tier !== 'free' || dismissed) return null;
+
+  // Show Google Ads if available, fall back to self-promo
+  const showGoogleAd = true; // Set to true once AdSense is approved
+  if (showGoogleAd && variant === 'banner') {
+    return <GoogleAdBanner adSlot="YOUR_AD_SLOT_ID" className={className} />;
+  }
 
   const ad = AD_VARIANTS[Math.floor(Math.random() * AD_VARIANTS.length)];
   const Icon = ad.icon;

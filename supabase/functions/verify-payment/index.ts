@@ -21,9 +21,9 @@ serve(async (req) => {
       );
     }
 
-    const PAYSTACK_SECRET_KEY = Deno.env.get("PAYSTACK_SECRET_KEY");
+    const PAYSTACK_SECRET_KEY = Deno.env.get("PAYSTACK_SERCET_KEY");
     if (!PAYSTACK_SECRET_KEY) {
-      console.error("PAYSTACK_SECRET_KEY not configured");
+      console.error("PAYSTACK_SERCET_KEY not configured");
       return new Response(
         JSON.stringify({ error: "Payment service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

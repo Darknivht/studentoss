@@ -39,6 +39,13 @@ import Store from "./pages/Store";
 import AdminResources from "./pages/AdminResources";
 import ExamPrep from "./pages/ExamPrep";
 import Install from "./pages/Install";
+import DocsLayout from "./pages/docs/DocsLayout";
+import DocsHome from "./pages/docs/DocsHome";
+import DocsArchitecture from "./pages/docs/DocsArchitecture";
+import DocsFeatures from "./pages/docs/DocsFeatures";
+import DocsBusiness from "./pages/docs/DocsBusiness";
+import DocsLaunchPlaybook from "./pages/docs/DocsLaunchPlaybook";
+import DocsAdminGuide from "./pages/docs/DocsAdminGuide";
 
 const queryClient = new QueryClient();
 
@@ -104,6 +111,14 @@ const App = () => (
               <Route path="/exams" element={<AppLayout><ExamPrep /></AppLayout>} />
               <Route path="/admin-resources" element={<AdminResources />} />
               <Route path="/install" element={<Install />} />
+              <Route path="/docs" element={<DocsLayout />}>
+                <Route index element={<DocsHome />} />
+                <Route path="architecture" element={<DocsArchitecture />} />
+                <Route path="features" element={<DocsFeatures />} />
+                <Route path="business" element={<DocsBusiness />} />
+                <Route path="launch" element={<DocsLaunchPlaybook />} />
+                <Route path="admin" element={<DocsAdminGuide />} />
+              </Route>
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />
