@@ -1,160 +1,126 @@
 
 
-# Fix Payments, Add Install Button, Build Admin Documentation, and Google Ads
+# Admin Student Analytics, Payment Duration, Forgot Password, Enhanced Analytics, and CBT Navigation
 
-## Readiness Score: 78/100
+## Overview
 
-Here's the breakdown:
-- **Core features** (study tools, AI tutor, notes, flashcards, quizzes): 90% ready
-- **Payment system**: Currently broken due to a configuration typo -- will be fixed in this update
-- **Exam prep**: Functional with recent fixes
-- **Social features**: Working (chat, groups, friends)
-- **PWA/offline**: Recently added, functional
-- **Admin panel**: Functional with recent fixes
-- **Marketing/documentation**: 0% -- will be built in this update
-- **Google Ads monetization**: 0% -- will be added in this update
-
-**What's blocking launch:** The payment system typo (critical fix below), missing admin documentation, and no ad revenue for free users.
+Five changes: (1) per-student activity/analytics view in admin, (2) payment resolution with monthly/yearly duration choice, (3) forgot password flow, (4) richer analytics dashboard with charts, (5) CBT "Next Subject" button so users don't prematurely submit.
 
 ---
 
-## 1. Fix Payment System (Critical)
+## 1. Per-Student Analytics in Admin (Users Tab)
 
-**Root cause found:** The secret is stored as `PAYSTACK_SERCET_KEY` (typo: "SERCET") but the edge function reads `PAYSTACK_SECRET_KEY`. This causes every payment verification to fail.
+**Current state:** The Users tab shows a flat table with name, username, tier, XP, streak, grade. No way to drill into a student's activity.
 
-**Fix:** Update the edge function to read from `PAYSTACK_SERCET_KEY` (the actual stored name) instead. This is the fastest, safest fix.
-
-**Yearly expiry:** The existing code already correctly adds 1 year for yearly plans and 1 month for monthly plans. Once the secret name is fixed, this will work as intended.
-
-**File:** `supabase/functions/verify-payment/index.ts` -- change line 24 from `PAYSTACK_SECRET_KEY` to `PAYSTACK_SERCET_KEY`.
-
----
-
-## 2. Add Install Button to Profile Page
-
-Add a "Get the App" card to the Profile page (between the Subscription Badge and Streak Calendar) that links to `/install`.
-
-**File:** `src/pages/Profile.tsx` -- add a Download/Install link card with a smartphone icon.
-
----
-
-## 3. Google Ads Integration for Free Plan
-
-Add Google AdSense banner ads that show only to free-tier users. This generates real ad revenue from users who don't pay.
-
-**Implementation:**
-- Create a `GoogleAdBanner` component that renders a Google AdSense ad unit
-- Replace the current self-promotional `AdBanner` with the real Google ad for free users
-- The ad slot ID will need to be configured once you have a Google AdSense account
-- Ads will automatically hide for Plus/Pro subscribers (existing logic)
+**Plan:**
+- Add a "View" button on each user row in UsersTab
+- When clicked, show an expandable detail panel (or modal) for that student with:
+  - **Profile summary**: tier, XP, streak, join date, subscription expiry
+  - **Exam activity**: fetch from `exam_attempts` -- total attempts, average score, recent sessions
+  - **Study sessions**: fetch from `study_sessions` -- total minutes studied, sessions count
+  - **Quiz history**: fetch from `quiz_attempts` -- total quizzes, average score
+  - **AI usage**: show `ai_calls_today` from their profile
+  - **Notes/flashcards count**: count from `notes` and `flashcards` tables
+- Add a "Block/Unblock" toggle that sets a new `is_blocked` boolean column on profiles (requires a small migration)
+- When `is_blocked = true`, the auth hook will sign the user out and prevent login
 
 **Files:**
-- New: `src/components/ads/GoogleAdBanner.tsx`
-- Update: `src/components/ads/AdBanner.tsx` to show Google ads instead of self-promo
-- Update: `index.html` to load the AdSense script
-
-**Note:** You'll need a Google AdSense account and an ad unit ID. I'll add a placeholder that you can swap with your real ID.
-
----
-
-## 4. Hidden Admin Documentation Portal
-
-Build a multi-page documentation site at `/docs` that is password-protected (using the existing `ADMIN_PANEL_PASSWORD`). Only you and your team can access it.
-
-### Pages to create:
-
-**a) `/docs` -- Documentation Hub (main index)**
-- Overview of StudentOS
-- Quick links to all doc sections
-- Password gate on entry
-
-**b) Platform Architecture page**
-- Tech stack overview
-- Database schema summary
-- Edge functions list
-- Authentication flow
-
-**c) Feature Guide page**
-- Every feature explained with how it works
-- Subscription tiers and what each unlocks
-- AI integration details
-
-**d) Business & Revenue page**
-- Pricing model breakdown
-- Payment flow (Paystack integration)
-- Google Ads revenue model
-- Growth metrics to track
-
-**e) Launch & Marketing Playbook page**
-- Step-by-step launch checklist
-- Marketing channels and strategies
-- Social media plan
-- School partnership approach
-- Influencer outreach template
-- App Store listing tips
-
-**f) Admin Guide page**
-- How to use the admin panel
-- Adding exam questions
-- Managing resources
-- Viewing user analytics
-
-### Files:
-- New: `src/pages/docs/DocsLayout.tsx` (password-protected wrapper)
-- New: `src/pages/docs/DocsHome.tsx`
-- New: `src/pages/docs/DocsArchitecture.tsx`
-- New: `src/pages/docs/DocsFeatures.tsx`
-- New: `src/pages/docs/DocsBusiness.tsx`
-- New: `src/pages/docs/DocsLaunchPlaybook.tsx`
-- New: `src/pages/docs/DocsAdminGuide.tsx`
-- Update: `src/App.tsx` to add `/docs/*` routes
+- `src/pages/AdminResources.tsx` -- extend UsersTab with detail view
+- Database migration: add `is_blocked` column to `profiles` (default false)
+- `src/hooks/useAuth.tsx` -- check `is_blocked` on auth state change
+- `supabase/functions/admin-resources/index.ts` -- add `user-detail` action that queries multiple tables for a specific user_id
 
 ---
 
-## 5. Launch & Marketing Plan (embedded in docs)
+## 2. Payment Resolution with Duration Choice
 
-The Launch Playbook documentation page will include:
+**Current state:** The PaymentsTab `updateSub` function hardcodes 30 days for all tiers. No option for yearly.
 
-1. **Pre-Launch Checklist**
-   - Switch Paystack from test to live keys
-   - Set up Google AdSense account
-   - Set up custom domain
-   - Test all payment flows end-to-end
-   - Publish to app stores (PWA listing)
+**Plan:**
+- Add a duration selector (Monthly / Yearly / Custom) next to each tier button
+- Monthly = 30 days, Yearly = 365 days, Free = null expiry
+- Update the `updateSub` function to accept the selected duration and calculate `subscription_expires_at` accordingly
 
-2. **Marketing Channels**
-   - School WhatsApp groups and class reps
-   - TikTok/Instagram student study content
-   - Twitter/X education community
-   - Student ambassadors program
-   - School partnerships (bulk licensing)
+**File:** `src/pages/AdminResources.tsx` -- PaymentsTab component only
 
-3. **Growth Strategy**
-   - Free tier as acquisition funnel
-   - Exam season push campaigns
-   - Referral/invite code system
-   - Content marketing (study tips blog)
+---
 
-4. **Revenue Projections Model**
-   - Google Ads CPM estimates for Nigerian traffic
-   - Conversion funnel: Free to Plus to Pro
-   - Target metrics for first 90 days
+## 3. Forgot Password Flow
+
+**Current state:** Auth page has login/signup but no forgot password link or reset page.
+
+**Plan:**
+- Add "Forgot password?" link on the Auth page login form
+- When clicked, show an email input that calls `supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' })`
+- Create a new `/reset-password` page that:
+  - Detects `type=recovery` in the URL hash
+  - Shows a "Set new password" form
+  - Calls `supabase.auth.updateUser({ password })` on submit
+  - Redirects to `/` on success
+
+**Files:**
+- `src/pages/Auth.tsx` -- add forgot password UI state and handler
+- New file: `src/pages/ResetPassword.tsx`
+- `src/App.tsx` -- add `/reset-password` route
+
+---
+
+## 4. Enhanced Analytics Dashboard
+
+**Current state:** Analytics tab shows 6 stat cards (total users, active today, resources, quizzes, plus/pro subscribers) with no graphs.
+
+**Plan:**
+- Add time-series charts using Recharts (already installed):
+  - **Daily signups** (last 30 days) -- line chart
+  - **Daily active users** trend -- area chart
+  - **Revenue breakdown** -- bar chart showing Plus vs Pro subscribers over time
+  - **Feature usage** -- bar chart (AI calls, quizzes, flashcards, exam attempts per day)
+- Add summary cards for:
+  - Total study hours (sum of study_sessions.total_minutes)
+  - Total exam attempts
+  - Average streak
+  - Notes created
+- Backend: extend `admin-resources` edge function `analytics` action to return time-series data by querying `profiles.created_at`, `study_sessions`, `exam_attempts`, `quiz_attempts` grouped by date
+
+**Files:**
+- `supabase/functions/admin-resources/index.ts` -- extend analytics action
+- `src/pages/AdminResources.tsx` -- AnalyticsTab with Recharts charts
+
+---
+
+## 5. CBT "Next Subject" Navigation Button
+
+**Current state:** When a user finishes the last question of a subject, only "Submit Exam" appears. Users may accidentally submit before completing other subjects.
+
+**Plan:**
+- At line 561-565 in `MultiSubjectCBT.tsx`, when the user is on the last question of the current subject:
+  - Check if there are other subjects with unanswered questions
+  - If yes, show THREE buttons: "Previous", "Next Subject" (navigates to the first unanswered question of the next incomplete subject), and "Submit Exam"
+  - If all subjects are complete, show "Previous" and "Submit Exam"
+- The "Next Subject" button will:
+  - Find the next subject in the list that has unanswered questions
+  - Switch `activeSubject` to that subject
+  - Set the index to the first unanswered question in that subject
+
+**File:** `src/components/exam-prep/MultiSubjectCBT.tsx` -- bottom navigation buttons section
 
 ---
 
 ## Technical Summary
 
-| Change | Files | Impact |
-|--------|-------|--------|
-| Fix payment secret typo | 1 edge function | Critical -- unblocks all payments |
-| Install button on profile | 1 file | Small UI addition |
-| Google Ads integration | 3 files | New revenue stream |
-| Documentation portal | 8 new files + 1 update | Admin-only, hidden pages |
+| Change | Files | Complexity |
+|--------|-------|------------|
+| Per-student analytics | 4 files + 1 migration | Medium |
+| Payment duration choice | 1 file | Low |
+| Forgot password | 3 files (1 new) | Low |
+| Enhanced analytics | 2 files | Medium |
+| CBT next subject button | 1 file | Low |
 
 ## Sequencing
 
-1. Fix payment (immediate unblock)
-2. Profile install button (quick win)
-3. Google Ads component (revenue)
-4. Documentation portal (all pages in parallel)
+1. Database migration (add `is_blocked` to profiles)
+2. CBT navigation fix (quick UX win)
+3. Forgot password flow (standalone)
+4. Payment duration selector (standalone)
+5. Admin analytics + per-student view (largest change, edge function + frontend)
 
