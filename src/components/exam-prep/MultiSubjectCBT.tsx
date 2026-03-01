@@ -561,7 +561,35 @@ const MultiSubjectCBT = ({
               {activeIdx + 1 < activeQs.length ? (
                 <Button onClick={() => setCurrentIndexes(c => ({ ...c, [activeSubject]: c[activeSubject] + 1 }))} className="flex-1">Next</Button>
               ) : (
-                <Button onClick={handleSubmit} className="flex-1 bg-green-600 hover:bg-green-700">Submit Exam</Button>
+                <>
+                  {(() => {
+                    const nextIncomplete = selectedSubjects.find(s => {
+                      if (s.id === activeSubject) return false;
+                      const sQs = questionsBySubject[s.id] || [];
+                      const sAnswered = Object.keys(answers[s.id] || {}).length;
+                      return sAnswered < sQs.length;
+                    });
+                    if (nextIncomplete) {
+                      return (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setActiveSubject(nextIncomplete.id);
+                            const subjAnswers = answers[nextIncomplete.id] || {};
+                            const subjQs = questionsBySubject[nextIncomplete.id] || [];
+                            const firstUnanswered = subjQs.findIndex((_, i) => subjAnswers[i] === undefined);
+                            setCurrentIndexes(c => ({ ...c, [nextIncomplete.id]: firstUnanswered >= 0 ? firstUnanswered : 0 }));
+                          }}
+                          className="flex-1"
+                        >
+                          Next Subject →
+                        </Button>
+                      );
+                    }
+                    return null;
+                  })()}
+                  <Button onClick={handleSubmit} className="flex-1 bg-green-600 hover:bg-green-700">Submit Exam</Button>
+                </>
               )}
             </div>
 

@@ -19,16 +19,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Check if user is blocked
+        if (session?.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_blocked')
+            .eq('user_id', session.user.id)
+            .single();
+          if (profile?.is_blocked) {
+            await supabase.auth.signOut();
+            setUser(null);
+            setSession(null);
+          }
+        }
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
