@@ -971,6 +971,7 @@ export type Database = {
           full_name: string | null
           grade_level: string | null
           id: string
+          is_blocked: boolean | null
           is_under_14: boolean | null
           job_searches_reset_month: string | null
           job_searches_this_month: number | null
@@ -1003,6 +1004,7 @@ export type Database = {
           full_name?: string | null
           grade_level?: string | null
           id?: string
+          is_blocked?: boolean | null
           is_under_14?: boolean | null
           job_searches_reset_month?: string | null
           job_searches_this_month?: number | null
@@ -1035,6 +1037,7 @@ export type Database = {
           full_name?: string | null
           grade_level?: string | null
           id?: string
+          is_blocked?: boolean | null
           is_under_14?: boolean | null
           job_searches_reset_month?: string | null
           job_searches_this_month?: number | null

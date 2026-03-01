@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { BookOpen, Sparkles, Brain, Rocket, Eye, EyeOff } from 'lucide-react';
+import { BookOpen, Sparkles, Brain, Rocket, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email');
@@ -20,6 +21,9 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
   
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
@@ -274,6 +278,16 @@ const Auth = () => {
               )}
             </div>
 
+            {isLogin && (
+              <button
+                type="button"
+                onClick={() => setForgotPassword(true)}
+                className="text-xs text-primary hover:underline w-full text-right -mt-1"
+              >
+                Forgot password?
+              </button>
+            )}
+
             <Button
               type="submit"
               disabled={isLoading}
@@ -293,6 +307,52 @@ const Auth = () => {
               )}
             </Button>
           </form>
+
+          {/* Forgot Password Modal */}
+          <AnimatePresence>
+            {forgotPassword && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-2xl"
+              >
+                <div className="p-6 space-y-4 w-full">
+                  <button onClick={() => { setForgotPassword(false); setResetSent(false); }} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                    <ArrowLeft size={16} /> Back to login
+                  </button>
+                  <h2 className="text-xl font-bold">Reset Password</h2>
+                  {resetSent ? (
+                    <p className="text-sm text-muted-foreground">Check your email for a password reset link. You can close this now.</p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">Enter your email and we'll send you a reset link.</p>
+                      <Input placeholder="you@school.edu" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} />
+                      <Button
+                        className="w-full"
+                        disabled={isLoading}
+                        onClick={async () => {
+                          setIsLoading(true);
+                          const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+                            redirectTo: `${window.location.origin}/reset-password`,
+                          });
+                          setIsLoading(false);
+                          if (error) {
+                            toast({ title: "Failed", description: error.message, variant: "destructive" });
+                          } else {
+                            setResetSent(true);
+                            toast({ title: "Email sent!", description: "Check your inbox for the reset link." });
+                          }
+                        }}
+                      >
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send Reset Link"}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Features preview */}
           <motion.div 

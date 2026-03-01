@@ -9,9 +9,11 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lock, Plus, Trash2, Edit, Loader2, LogOut, Megaphone, Trophy, Users, BarChart3, CreditCard, Search, BookOpen, Upload } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Lock, Plus, Trash2, Edit, Loader2, LogOut, Megaphone, Trophy, Users, BarChart3, CreditCard, Search, BookOpen, Upload, Eye, Ban, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 const AdminResources = () => {
   const [password, setPassword] = useState("");
@@ -108,42 +110,104 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetch = async () => {
+  const fetchData = async () => {
     setLoading(true);
     const { data, error } = await supabase.functions.invoke('admin-resources', { body: { password: adminPassword, action: 'analytics' } });
     if (!error && data) setStats(data);
     setLoading(false);
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const items = stats ? [
+  const summaryItems = stats ? [
     { label: "Total Users", value: stats.total_users, icon: "👥" },
     { label: "Active Today", value: stats.active_today, icon: "🟢" },
     { label: "Total Resources", value: stats.total_resources, icon: "📚" },
     { label: "Quiz Attempts", value: stats.total_quizzes, icon: "📝" },
     { label: "Plus Subscribers", value: stats.plus_subscribers, icon: "⭐" },
     { label: "Pro Subscribers", value: stats.pro_subscribers, icon: "💎" },
+    { label: "Exam Attempts", value: stats.total_exam_attempts, icon: "🎯" },
+    { label: "Total Notes", value: stats.total_notes, icon: "📒" },
+    { label: "Study Hours", value: stats.total_study_hours, icon: "⏱️" },
+    { label: "Avg Streak", value: stats.avg_streak, icon: "🔥" },
   ] : [];
 
   return (
-    <div className="space-y-4">
-      {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
+    <div className="space-y-6">
+      {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div> : stats ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {items.map(i => (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {summaryItems.map(i => (
               <Card key={i.label}>
-                <CardContent className="pt-6 text-center">
-                  <p className="text-3xl mb-1">{i.icon}</p>
-                  <p className="text-2xl font-bold">{i.value}</p>
-                  <p className="text-sm text-muted-foreground">{i.label}</p>
+                <CardContent className="pt-4 pb-3 text-center">
+                  <p className="text-2xl mb-0.5">{i.icon}</p>
+                  <p className="text-xl font-bold">{i.value ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">{i.label}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={fetch}><Loader2 className="w-3 h-3 mr-1" />Refresh</Button>
+
+          {/* Daily Active Users Chart */}
+          {stats.daily_active_users?.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Daily Active Users (30 days)</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={stats.daily_active_users}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.2} name="Active Users" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Daily Signups Chart */}
+          {stats.daily_signups?.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Daily Signups (30 days)</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={stats.daily_signups}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Signups" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Feature Usage Chart */}
+          {stats.daily_feature_usage?.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Feature Usage (30 days)</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={stats.daily_feature_usage}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="quizzes" fill="hsl(var(--primary))" name="Quizzes" />
+                    <Bar dataKey="exams" fill="hsl(var(--secondary))" name="Exams" />
+                    <Bar dataKey="flashcards" fill="hsl(var(--accent))" name="Flashcards" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          <Button variant="outline" size="sm" onClick={fetchData}><Loader2 className="w-3 h-3 mr-1" />Refresh</Button>
         </>
-      )}
+      ) : null}
     </div>
   );
 };
@@ -469,12 +533,34 @@ const UsersTab = ({ adminPassword }: { adminPassword: string }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [userDetail, setUserDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [blocking, setBlocking] = useState<string | null>(null);
 
   const fetchUsers = async (q?: string) => {
     setLoading(true);
     const { data } = await supabase.functions.invoke('admin-resources', { body: { password: adminPassword, action: 'list-users', search: q || "" } });
     if (data?.data) setUsers(data.data);
     setLoading(false);
+  };
+
+  const fetchUserDetail = async (userId: string) => {
+    setDetailLoading(true);
+    const { data } = await supabase.functions.invoke('admin-resources', { body: { password: adminPassword, action: 'user-detail', userId } });
+    if (data) setUserDetail(data);
+    setDetailLoading(false);
+  };
+
+  const toggleBlock = async (userId: string, currentBlocked: boolean) => {
+    setBlocking(userId);
+    await supabase.functions.invoke('admin-resources', { body: { password: adminPassword, action: 'toggle-block-user', userId, is_blocked: !currentBlocked } });
+    toast({ title: currentBlocked ? "User unblocked" : "User blocked" });
+    fetchUsers(search);
+    if (userDetail?.profile?.user_id === userId) {
+      setUserDetail((d: any) => d ? { ...d, profile: { ...d.profile, is_blocked: !currentBlocked } } : d);
+    }
+    setBlocking(null);
   };
 
   useEffect(() => { fetchUsers(); }, []);
@@ -490,7 +576,7 @@ const UsersTab = ({ adminPassword }: { adminPassword: string }) => {
           {loading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Username</TableHead><TableHead>Tier</TableHead><TableHead>XP</TableHead><TableHead>Streak</TableHead><TableHead>Grade</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Username</TableHead><TableHead>Tier</TableHead><TableHead>XP</TableHead><TableHead>Streak</TableHead><TableHead>Status</TableHead><TableHead className="w-[80px]">Actions</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {users.map(u => (
                     <TableRow key={u.id}>
@@ -499,7 +585,19 @@ const UsersTab = ({ adminPassword }: { adminPassword: string }) => {
                       <TableCell><Badge className="capitalize text-xs">{u.subscription_tier || "free"}</Badge></TableCell>
                       <TableCell>{u.total_xp || 0}</TableCell>
                       <TableCell>{u.current_streak || 0}🔥</TableCell>
-                      <TableCell className="text-sm">{u.grade_level || "—"}</TableCell>
+                      <TableCell>
+                        {u.is_blocked ? <Badge variant="destructive" className="text-xs">Blocked</Badge> : <Badge variant="outline" className="text-xs">Active</Badge>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setSelectedUser(u); fetchUserDetail(u.user_id); }}>
+                            <Eye className="w-3 h-3" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={blocking === u.user_id} onClick={() => toggleBlock(u.user_id, !!u.is_blocked)}>
+                            {u.is_blocked ? <ShieldCheck className="w-3 h-3 text-green-600" /> : <Ban className="w-3 h-3 text-destructive" />}
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -509,6 +607,41 @@ const UsersTab = ({ adminPassword }: { adminPassword: string }) => {
           )}
         </CardContent>
       </Card>
+
+      {/* Student Detail Dialog */}
+      <Dialog open={!!selectedUser} onOpenChange={(open) => { if (!open) { setSelectedUser(null); setUserDetail(null); } }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Student Details: {selectedUser?.full_name || selectedUser?.username || "Unknown"}</DialogTitle>
+          </DialogHeader>
+          {detailLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+          ) : userDetail ? (
+            <div className="space-y-4">
+              {/* Profile Summary */}
+              <Card>
+                <CardContent className="pt-4 space-y-1 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Tier</span><Badge className="capitalize">{userDetail.profile?.subscription_tier || "free"}</Badge></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">XP</span><span className="font-bold">{userDetail.profile?.total_xp || 0}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Streak</span><span>{userDetail.profile?.current_streak || 0}🔥 (Best: {userDetail.profile?.longest_streak || 0})</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Joined</span><span>{userDetail.profile?.created_at ? new Date(userDetail.profile.created_at).toLocaleDateString() : "—"}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">AI Calls Today</span><span>{userDetail.profile?.ai_calls_today || 0}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Subscription Expires</span><span>{userDetail.profile?.subscription_expires_at ? new Date(userDetail.profile.subscription_expires_at).toLocaleDateString() : "—"}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Status</span>{userDetail.profile?.is_blocked ? <Badge variant="destructive">Blocked</Badge> : <Badge variant="outline">Active</Badge>}</div>
+                </CardContent>
+              </Card>
+
+              {/* Activity Stats */}
+              <div className="grid grid-cols-2 gap-3">
+                <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{userDetail.exam?.total || 0}</p><p className="text-xs text-muted-foreground">Exam Attempts</p><p className="text-xs text-primary">{userDetail.exam?.accuracy || 0}% accuracy</p></CardContent></Card>
+                <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{userDetail.quiz?.total || 0}</p><p className="text-xs text-muted-foreground">Quizzes Taken</p><p className="text-xs text-primary">{userDetail.quiz?.avg_score || 0}% avg score</p></CardContent></Card>
+                <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{Math.round((userDetail.study?.total_minutes || 0) / 60)}h</p><p className="text-xs text-muted-foreground">Study Time</p><p className="text-xs text-primary">{userDetail.study?.sessions || 0} sessions</p></CardContent></Card>
+                <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{userDetail.notes_count || 0}</p><p className="text-xs text-muted-foreground">Notes</p><p className="text-xs text-primary">{userDetail.flashcards_count || 0} flashcards</p></CardContent></Card>
+              </div>
+            </div>
+          ) : <p className="text-center text-muted-foreground py-4">No data available</p>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -519,6 +652,7 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [durations, setDurations] = useState<Record<string, string>>({});
 
   const fetchUsers = async () => {
     if (!search) return;
@@ -531,11 +665,19 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
   const updateSub = async (userId: string, tier: string) => {
     setUpdating(userId);
     try {
-      const expiresAt = tier === 'free' ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const duration = durations[userId] || 'monthly';
+      let expiresAt: string | null = null;
+      if (tier !== 'free') {
+        if (duration === 'yearly') {
+          expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+        } else {
+          expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        }
+      }
       await supabase.functions.invoke('admin-resources', {
         body: { password: adminPassword, action: 'update-subscription', userId, subscription_tier: tier, subscription_expires_at: expiresAt },
       });
-      toast({ title: `Updated to ${tier}` });
+      toast({ title: `Updated to ${tier} (${tier === 'free' ? 'no expiry' : duration})` });
       fetchUsers();
     } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
     finally { setUpdating(null); }
@@ -546,7 +688,7 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
       <Card>
         <CardHeader><CardTitle className="text-lg">Payment Resolution</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">Search for a user, then manually upgrade or downgrade their subscription.</p>
+          <p className="text-sm text-muted-foreground">Search for a user, then manually upgrade or downgrade their subscription with duration choice.</p>
           <div className="flex gap-2">
             <Input placeholder="Search by username or name..." value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && fetchUsers()} />
             <Button onClick={fetchUsers}><Search className="w-4 h-4" /></Button>
@@ -554,14 +696,23 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
           {loading ? <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
             <div className="space-y-3">
               {users.map(u => (
-                <div key={u.id} className="flex items-center justify-between p-3 rounded-lg border">
-                  <div>
-                    <p className="font-medium">{u.full_name || u.display_name || u.username || "Unknown"}</p>
-                    <p className="text-xs text-muted-foreground">Current: <Badge className="capitalize text-xs">{u.subscription_tier || "free"}</Badge>
-                      {u.subscription_expires_at && <span className="ml-2">Expires: {new Date(u.subscription_expires_at).toLocaleDateString()}</span>}
-                    </p>
+                <div key={u.id} className="p-3 rounded-lg border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{u.full_name || u.display_name || u.username || "Unknown"}</p>
+                      <p className="text-xs text-muted-foreground">Current: <Badge className="capitalize text-xs">{u.subscription_tier || "free"}</Badge>
+                        {u.subscription_expires_at && <span className="ml-2">Expires: {new Date(u.subscription_expires_at).toLocaleDateString()}</span>}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Select value={durations[u.user_id] || 'monthly'} onValueChange={(v) => setDurations(d => ({ ...d, [u.user_id]: v }))}>
+                      <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monthly">Monthly (30d)</SelectItem>
+                        <SelectItem value="yearly">Yearly (365d)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     {['free', 'plus', 'pro'].map(tier => (
                       <Button key={tier} size="sm" variant={u.subscription_tier === tier ? "default" : "outline"} className="text-xs capitalize" disabled={updating === u.user_id} onClick={() => updateSub(u.user_id, tier)}>
                         {updating === u.user_id ? <Loader2 className="w-3 h-3 animate-spin" /> : tier}

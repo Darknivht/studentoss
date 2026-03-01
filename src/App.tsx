@@ -46,6 +46,7 @@ import DocsFeatures from "./pages/docs/DocsFeatures";
 import DocsBusiness from "./pages/docs/DocsBusiness";
 import DocsLaunchPlaybook from "./pages/docs/DocsLaunchPlaybook";
 import DocsAdminGuide from "./pages/docs/DocsAdminGuide";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -88,6 +89,7 @@ const App = () => (
             <MobileBackHandler />
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<HomeRoute />} />
               <Route path="/course/:courseId" element={<AppLayout><CoursePage /></AppLayout>} />
               <Route path="/study" element={<AppLayout><Study /></AppLayout>} />

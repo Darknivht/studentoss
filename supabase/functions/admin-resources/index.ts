@@ -125,26 +125,82 @@ serve(async (req) => {
         return json({ data });
       }
 
-      // ─── Analytics ───
+      // ─── Block/Unblock User ───
+      case 'toggle-block-user': {
+        const { userId, is_blocked } = body;
+        const { data, error } = await supabase
+          .from('profiles')
+          .update({ is_blocked })
+          .eq('user_id', userId)
+          .select()
+          .single();
+        if (error) throw error;
+        return json({ data });
+      }
+
+      // ─── User Detail (per-student analytics) ───
+      case 'user-detail': {
+        const { userId } = body;
+        
+        const [profileRes, examRes, studyRes, quizRes, notesRes, flashcardsRes] = await Promise.all([
+          supabase.from('profiles').select('*').eq('user_id', userId).single(),
+          supabase.from('exam_attempts').select('is_correct, created_at, session_id').eq('user_id', userId).order('created_at', { ascending: false }).limit(500),
+          supabase.from('study_sessions').select('total_minutes, session_date, xp_earned').eq('user_id', userId).order('session_date', { ascending: false }).limit(100),
+          supabase.from('quiz_attempts').select('score, total_questions, completed_at').eq('user_id', userId).order('completed_at', { ascending: false }).limit(100),
+          supabase.from('notes').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+          supabase.from('flashcards').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+        ]);
+
+        const examAttempts = examRes.data || [];
+        const totalExamAttempts = examAttempts.length;
+        const correctExamAttempts = examAttempts.filter(a => a.is_correct).length;
+        const examAccuracy = totalExamAttempts > 0 ? Math.round((correctExamAttempts / totalExamAttempts) * 100) : 0;
+
+        const studySessions = studyRes.data || [];
+        const totalStudyMinutes = studySessions.reduce((s, r) => s + (r.total_minutes || 0), 0);
+
+        const quizAttempts = quizRes.data || [];
+        const totalQuizzes = quizAttempts.length;
+        const avgQuizScore = totalQuizzes > 0 ? Math.round(quizAttempts.reduce((s, q) => s + (q.score / q.total_questions) * 100, 0) / totalQuizzes) : 0;
+
+        return json({
+          profile: profileRes.data,
+          exam: { total: totalExamAttempts, accuracy: examAccuracy, recent: examAttempts.slice(0, 10) },
+          study: { total_minutes: totalStudyMinutes, sessions: studySessions.length, recent: studySessions.slice(0, 10) },
+          quiz: { total: totalQuizzes, avg_score: avgQuizScore, recent: quizAttempts.slice(0, 10) },
+          notes_count: notesRes.count || 0,
+          flashcards_count: flashcardsRes.count || 0,
+        });
+      }
+
+      // ─── Enhanced Analytics ───
       case 'analytics': {
-        const [usersRes, activeRes, resourcesRes, quizzesRes, plusRes, proRes] = await Promise.all([
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+
+        const [usersRes, activeRes, resourcesRes, quizzesRes, plusRes, proRes, examAttemptsRes, notesCountRes, studyMinutesRes, streakRes] = await Promise.all([
           supabase.from('profiles').select('*', { count: 'exact', head: true }),
           supabase.from('study_sessions').select('*', { count: 'exact', head: true }).eq('session_date', new Date().toISOString().split('T')[0]),
           supabase.from('store_resources').select('*', { count: 'exact', head: true }),
           supabase.from('quiz_attempts').select('*', { count: 'exact', head: true }),
           supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('subscription_tier', 'plus'),
           supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('subscription_tier', 'pro'),
+          supabase.from('exam_attempts').select('*', { count: 'exact', head: true }),
+          supabase.from('notes').select('*', { count: 'exact', head: true }),
+          supabase.from('study_sessions').select('total_minutes'),
+          supabase.from('profiles').select('current_streak'),
         ]);
 
+        const totalStudyHours = Math.round((studyMinutesRes.data || []).reduce((s, r) => s + (r.total_minutes || 0), 0) / 60);
+        const streaks = (streakRes.data || []).map(p => p.current_streak || 0);
+        const avgStreak = streaks.length > 0 ? Math.round(streaks.reduce((a, b) => a + b, 0) / streaks.length) : 0;
+
         // 30-day daily active users
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
         const { data: dailySessions } = await supabase
           .from('study_sessions')
           .select('session_date, user_id')
           .gte('session_date', thirtyDaysAgo)
           .order('session_date');
 
-        // Group by date for DAU
         const dauMap: Record<string, Set<string>> = {};
         for (const s of (dailySessions || [])) {
           if (!dauMap[s.session_date]) dauMap[s.session_date] = new Set();
@@ -154,6 +210,45 @@ serve(async (req) => {
           date, count: users.size,
         })).sort((a, b) => a.date.localeCompare(b.date));
 
+        // Daily signups (last 30 days)
+        const { data: recentProfiles } = await supabase
+          .from('profiles')
+          .select('created_at')
+          .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
+          .order('created_at');
+
+        const signupMap: Record<string, number> = {};
+        for (const p of (recentProfiles || [])) {
+          const d = (p.created_at || '').split('T')[0];
+          signupMap[d] = (signupMap[d] || 0) + 1;
+        }
+        const daily_signups = Object.entries(signupMap).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
+
+        // Feature usage (last 30 days)
+        const [quizUsage, examUsage, flashcardUsage] = await Promise.all([
+          supabase.from('quiz_attempts').select('completed_at').gte('completed_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+          supabase.from('exam_attempts').select('created_at').gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+          supabase.from('flashcards').select('created_at').gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+        ]);
+
+        const featureMap: Record<string, { quizzes: number; exams: number; flashcards: number }> = {};
+        for (const q of (quizUsage.data || [])) {
+          const d = (q.completed_at || '').split('T')[0];
+          if (!featureMap[d]) featureMap[d] = { quizzes: 0, exams: 0, flashcards: 0 };
+          featureMap[d].quizzes++;
+        }
+        for (const e of (examUsage.data || [])) {
+          const d = (e.created_at || '').split('T')[0];
+          if (!featureMap[d]) featureMap[d] = { quizzes: 0, exams: 0, flashcards: 0 };
+          featureMap[d].exams++;
+        }
+        for (const f of (flashcardUsage.data || [])) {
+          const d = (f.created_at || '').split('T')[0];
+          if (!featureMap[d]) featureMap[d] = { quizzes: 0, exams: 0, flashcards: 0 };
+          featureMap[d].flashcards++;
+        }
+        const daily_feature_usage = Object.entries(featureMap).map(([date, data]) => ({ date, ...data })).sort((a, b) => a.date.localeCompare(b.date));
+
         return json({
           total_users: usersRes.count || 0,
           active_today: activeRes.count || 0,
@@ -161,7 +256,13 @@ serve(async (req) => {
           total_quizzes: quizzesRes.count || 0,
           plus_subscribers: plusRes.count || 0,
           pro_subscribers: proRes.count || 0,
+          total_exam_attempts: examAttemptsRes.count || 0,
+          total_notes: notesCountRes.count || 0,
+          total_study_hours: totalStudyHours,
+          avg_streak: avgStreak,
           daily_active_users,
+          daily_signups,
+          daily_feature_usage,
         });
       }
 
@@ -187,7 +288,7 @@ serve(async (req) => {
         return json({ success: true });
       }
 
-      // ─── Exam Subjects CRUD (now includes ai_prompt) ───
+      // ─── Exam Subjects CRUD ───
       case 'list-exam-subjects': {
         let query = supabase.from('exam_subjects').select('*').order('name');
         if (body.examTypeId) query = query.eq('exam_type_id', body.examTypeId);
