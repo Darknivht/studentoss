@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { SUBSCRIPTION_ENABLED } from '@/lib/subscriptionConfig';
@@ -113,12 +113,9 @@ export const useSubscription = () => {
     canUseChat: true, canUseGroupChat: false, canUseAdvancedTools: false, canUseMockExam: false, showAds: true,
   });
   const [loading, setLoading] = useState(true);
+  const lastFetchRef = useRef<number>(0);
 
-  useEffect(() => {
-    if (user) fetchSubscription();
-  }, [user]);
-
-  const fetchSubscription = async () => {
+  const fetchSubscription = useCallback(async () => {
     if (!user) return;
     if (!SUBSCRIPTION_ENABLED) {
       setSubscription(FULL_ACCESS);
@@ -127,7 +124,6 @@ export const useSubscription = () => {
     }
 
     try {
-      // Fetch profile + lifetime counts in parallel
       const [profileRes, notesCountRes, quizzesCountRes, flashcardsCountRes, aiCountRes, examAttemptsCountRes] = await Promise.all([
         supabase.from('profiles')
           .select('subscription_tier, subscription_expires_at, ai_calls_today, ai_calls_reset_at, quizzes_today, flashcards_generated_today, notes_today, job_searches_this_month, job_searches_reset_month')
@@ -136,7 +132,6 @@ export const useSubscription = () => {
         supabase.from('quiz_attempts').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
         supabase.from('flashcards').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
         supabase.from('chat_messages').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('role', 'user'),
-        // Count today's exam attempts
         supabase.from('exam_attempts').select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
           .gte('created_at', new Date().toISOString().split('T')[0]),
@@ -191,18 +186,41 @@ export const useSubscription = () => {
         canUseMockExam: isPro || isPlus,
         showAds: tier === 'free',
       });
+      lastFetchRef.current = Date.now();
     } catch (error) {
       console.error('Error fetching subscription:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  // Initial fetch when user changes
+  useEffect(() => {
+    if (user) fetchSubscription();
+  }, [user, fetchSubscription]);
+
+  // Listen for subscription-updated events from payment flow
+  useEffect(() => {
+    const handler = () => {
+      fetchSubscription();
+    };
+    window.addEventListener('subscription-updated', handler);
+    return () => window.removeEventListener('subscription-updated', handler);
+  }, [fetchSubscription]);
+
+  // Auto-refresh if data is stale (>5 min) when component re-renders
+  useEffect(() => {
+    if (!user || !SUBSCRIPTION_ENABLED) return;
+    const staleMs = 5 * 60 * 1000;
+    if (lastFetchRef.current > 0 && Date.now() - lastFetchRef.current > staleMs) {
+      fetchSubscription();
+    }
+  });
 
   const gateFeature = useCallback((type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch' | 'examQuestion'): GateResult => {
     if (!SUBSCRIPTION_ENABLED) return { allowed: true, reason: null, currentUsage: 0, limit: Infinity, isLifetime: false, requiredTier: 'plus' };
     if (subscription.isPro) return { allowed: true, reason: null, currentUsage: 0, limit: Infinity, isLifetime: false, requiredTier: 'plus' };
 
-    // Monthly job search check
     if (type === 'jobSearch') {
       const monthlyLimit = subscription.isPlus ? 10 : 2;
       const currentMonth = new Date().toISOString().slice(0, 7);
@@ -213,7 +231,6 @@ export const useSubscription = () => {
       return { allowed: true, reason: null, currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
     }
 
-    // Exam questions daily check
     if (type === 'examQuestion') {
       const limit = subscription.limits.examQuestionsLimit;
       const usage = subscription.examQuestionsToday;
@@ -223,7 +240,6 @@ export const useSubscription = () => {
       return { allowed: true, reason: null, currentUsage: usage, limit, isLifetime: false, requiredTier: 'plus' };
     }
 
-    // Check lifetime first
     const lifetimeMap = {
       ai: { current: subscription.totalAIUsesCount, limit: subscription.lifetimeLimits.totalAIUses },
       quiz: { current: subscription.totalQuizzesCount, limit: subscription.lifetimeLimits.totalQuizzes },
@@ -236,7 +252,6 @@ export const useSubscription = () => {
       return { allowed: false, reason: 'lifetime', currentUsage: lifetime.current, limit: lifetime.limit, isLifetime: true, requiredTier: 'plus' };
     }
 
-    // Check daily
     const dailyMap = {
       ai: { current: subscription.aiCallsToday, limit: subscription.limits.aiCallsLimit },
       quiz: { current: subscription.quizzesToday, limit: subscription.limits.quizzesLimit },
@@ -256,7 +271,6 @@ export const useSubscription = () => {
     if (!user) return false;
     if (!SUBSCRIPTION_ENABLED) return true;
 
-    // examQuestion usage is tracked via exam_attempts table, no profile field needed
     if (type === 'examQuestion') {
       setSubscription(prev => ({ ...prev, examQuestionsToday: prev.examQuestionsToday + 1 }));
       return true;

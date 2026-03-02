@@ -186,8 +186,8 @@ serve(async (req) => {
           supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('subscription_tier', 'pro'),
           supabase.from('exam_attempts').select('*', { count: 'exact', head: true }),
           supabase.from('notes').select('*', { count: 'exact', head: true }),
-          supabase.from('study_sessions').select('total_minutes'),
-          supabase.from('profiles').select('current_streak'),
+          supabase.from('study_sessions').select('total_minutes').limit(1000),
+          supabase.from('profiles').select('current_streak').limit(1000),
         ]);
 
         const totalStudyHours = Math.round((studyMinutesRes.data || []).reduce((s, r) => s + (r.total_minutes || 0), 0) / 60);
@@ -199,7 +199,8 @@ serve(async (req) => {
           .from('study_sessions')
           .select('session_date, user_id')
           .gte('session_date', thirtyDaysAgo)
-          .order('session_date');
+          .order('session_date')
+          .limit(1000);
 
         const dauMap: Record<string, Set<string>> = {};
         for (const s of (dailySessions || [])) {
@@ -226,9 +227,9 @@ serve(async (req) => {
 
         // Feature usage (last 30 days)
         const [quizUsage, examUsage, flashcardUsage] = await Promise.all([
-          supabase.from('quiz_attempts').select('completed_at').gte('completed_at', new Date(Date.now() - 30 * 86400000).toISOString()),
-          supabase.from('exam_attempts').select('created_at').gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
-          supabase.from('flashcards').select('created_at').gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+          supabase.from('quiz_attempts').select('completed_at').gte('completed_at', new Date(Date.now() - 30 * 86400000).toISOString()).limit(1000),
+          supabase.from('exam_attempts').select('created_at').gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()).limit(1000),
+          supabase.from('flashcards').select('created_at').gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()).limit(1000),
         ]);
 
         const featureMap: Record<string, { quizzes: number; exams: number; flashcards: number }> = {};

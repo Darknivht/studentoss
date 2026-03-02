@@ -139,7 +139,11 @@ const Upgrade = () => {
                 title: 'Payment successful! 🎉',
                 description: `Welcome to ${tier.name}! Enjoy your new features.`,
               });
-              refetch();
+              // Wait for DB propagation, then refresh subscription
+              await new Promise(resolve => setTimeout(resolve, 1500));
+              await refetch();
+              // Dispatch event so other components can react
+              window.dispatchEvent(new Event('subscription-updated'));
             } else {
               toast({
                 title: 'Verification issue',
@@ -152,7 +156,9 @@ const Upgrade = () => {
               title: 'Payment received',
               description: 'Your subscription will be activated shortly.',
             });
-            refetch();
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            await refetch();
+            window.dispatchEvent(new Event('subscription-updated'));
           }
         },
         onClose: function() {
