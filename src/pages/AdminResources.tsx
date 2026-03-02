@@ -93,13 +93,13 @@ const AdminResources = () => {
           </TabsList>
         </div>
 
-        <TabsContent value="analytics" forceMount className="data-[state=inactive]:hidden"><AnalyticsTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="resources" forceMount className="data-[state=inactive]:hidden"><ResourcesTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="announcements" forceMount className="data-[state=inactive]:hidden"><AnnouncementsTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="achievements" forceMount className="data-[state=inactive]:hidden"><AchievementsTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="users" forceMount className="data-[state=inactive]:hidden"><UsersTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="payments" forceMount className="data-[state=inactive]:hidden"><PaymentsTab adminPassword={adminPassword} /></TabsContent>
-        <TabsContent value="exams" forceMount className="data-[state=inactive]:hidden"><ExamsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="analytics"><AnalyticsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="resources"><ResourcesTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="announcements"><AnnouncementsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="achievements"><AchievementsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="users"><UsersTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="payments"><PaymentsTab adminPassword={adminPassword} /></TabsContent>
+        <TabsContent value="exams"><ExamsTab adminPassword={adminPassword} /></TabsContent>
       </Tabs>
     </div>
   );
