@@ -1,126 +1,74 @@
 
 
-# Admin Student Analytics, Payment Duration, Forgot Password, Enhanced Analytics, and CBT Navigation
+# Fix Slow Admin Pages and Payment Not Reflecting
 
-## Overview
+## Root Causes Found
 
-Five changes: (1) per-student activity/analytics view in admin, (2) payment resolution with monthly/yearly duration choice, (3) forgot password flow, (4) richer analytics dashboard with charts, (5) CBT "Next Subject" button so users don't prematurely submit.
+### 1. Admin Pages Loading Slowly
+All 7 admin tabs use `forceMount`, which means every tab mounts and fetches data simultaneously when the admin page opens. This fires 7+ edge function calls and multiple database queries in parallel the instant you authenticate -- even for tabs you never look at.
 
----
-
-## 1. Per-Student Analytics in Admin (Users Tab)
-
-**Current state:** The Users tab shows a flat table with name, username, tier, XP, streak, grade. No way to drill into a student's activity.
-
-**Plan:**
-- Add a "View" button on each user row in UsersTab
-- When clicked, show an expandable detail panel (or modal) for that student with:
-  - **Profile summary**: tier, XP, streak, join date, subscription expiry
-  - **Exam activity**: fetch from `exam_attempts` -- total attempts, average score, recent sessions
-  - **Study sessions**: fetch from `study_sessions` -- total minutes studied, sessions count
-  - **Quiz history**: fetch from `quiz_attempts` -- total quizzes, average score
-  - **AI usage**: show `ai_calls_today` from their profile
-  - **Notes/flashcards count**: count from `notes` and `flashcards` tables
-- Add a "Block/Unblock" toggle that sets a new `is_blocked` boolean column on profiles (requires a small migration)
-- When `is_blocked = true`, the auth hook will sign the user out and prevent login
-
-**Files:**
-- `src/pages/AdminResources.tsx` -- extend UsersTab with detail view
-- Database migration: add `is_blocked` column to `profiles` (default false)
-- `src/hooks/useAuth.tsx` -- check `is_blocked` on auth state change
-- `supabase/functions/admin-resources/index.ts` -- add `user-detail` action that queries multiple tables for a specific user_id
+### 2. Payment Not Reflecting on Frontend
+The database IS updated correctly after payment (confirmed in the database). The problem is in the frontend:
+- In `Upgrade.tsx` line 142, `refetch()` is called but NOT awaited -- meaning the page may not wait for the fresh subscription data
+- `useSubscription` only fetches on initial mount (when `user` changes) -- if the user stays on the same page, the stale "free" state persists even after the DB is updated
+- There's no mechanism to force-refresh the subscription after returning from a payment flow
 
 ---
 
-## 2. Payment Resolution with Duration Choice
+## Fix Plan
 
-**Current state:** The PaymentsTab `updateSub` function hardcodes 30 days for all tiers. No option for yearly.
+### A. Remove `forceMount` from Admin Tabs (Fix Slow Loading)
 
-**Plan:**
-- Add a duration selector (Monthly / Yearly / Custom) next to each tier button
-- Monthly = 30 days, Yearly = 365 days, Free = null expiry
-- Update the `updateSub` function to accept the selected duration and calculate `subscription_expires_at` accordingly
+**File:** `src/pages/AdminResources.tsx`
 
-**File:** `src/pages/AdminResources.tsx` -- PaymentsTab component only
+- Remove `forceMount` and the `data-[state=inactive]:hidden` class from all 7 `TabsContent` elements
+- This way, only the active tab mounts and fetches data -- switching tabs triggers the new tab's `useEffect`
+- Result: admin page loads in ~1 second instead of 5-10+
 
----
+### B. Fix Payment Subscription Refresh
 
-## 3. Forgot Password Flow
+**File:** `src/pages/Upgrade.tsx`
 
-**Current state:** Auth page has login/signup but no forgot password link or reset page.
+- Add `await` to the `refetch()` call on line 142 (after successful verification)
+- Add a small delay before refetch to let the database update propagate
+- After refetch completes, force a page state update so the UI immediately reflects the new tier
 
-**Plan:**
-- Add "Forgot password?" link on the Auth page login form
-- When clicked, show an email input that calls `supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' })`
-- Create a new `/reset-password` page that:
-  - Detects `type=recovery` in the URL hash
-  - Shows a "Set new password" form
-  - Calls `supabase.auth.updateUser({ password })` on submit
-  - Redirects to `/` on success
+**File:** `src/hooks/useSubscription.ts`
 
-**Files:**
-- `src/pages/Auth.tsx` -- add forgot password UI state and handler
-- New file: `src/pages/ResetPassword.tsx`
-- `src/App.tsx` -- add `/reset-password` route
+- Expose a `forceRefresh` function that clears the current state and re-fetches from the database
+- Add a `useEffect` that listens for a custom event (e.g., `subscription-updated`) so any component can trigger a refresh
+- This ensures the subscription state is always fresh after payment, even if the user navigates away and back
 
----
+### C. Optimize Analytics Edge Function (Prevent Future Slowdowns)
 
-## 4. Enhanced Analytics Dashboard
+**File:** `supabase/functions/admin-resources/index.ts`
 
-**Current state:** Analytics tab shows 6 stat cards (total users, active today, resources, quizzes, plus/pro subscribers) with no graphs.
+- For the `analytics` action, the queries fetching `study_sessions.select('total_minutes')` and `profiles.select('current_streak')` currently fetch ALL rows (up to 1000 limit). With growth, this will break.
+- Change these to use `.limit(1000)` explicitly and add pagination awareness, or switch to count-only queries where possible
+- For the daily chart data queries, add `.limit(1000)` to prevent silent truncation
 
-**Plan:**
-- Add time-series charts using Recharts (already installed):
-  - **Daily signups** (last 30 days) -- line chart
-  - **Daily active users** trend -- area chart
-  - **Revenue breakdown** -- bar chart showing Plus vs Pro subscribers over time
-  - **Feature usage** -- bar chart (AI calls, quizzes, flashcards, exam attempts per day)
-- Add summary cards for:
-  - Total study hours (sum of study_sessions.total_minutes)
-  - Total exam attempts
-  - Average streak
-  - Notes created
-- Backend: extend `admin-resources` edge function `analytics` action to return time-series data by querying `profiles.created_at`, `study_sessions`, `exam_attempts`, `quiz_attempts` grouped by date
+### D. Add Subscription Auto-Refresh on Navigation
 
-**Files:**
-- `supabase/functions/admin-resources/index.ts` -- extend analytics action
-- `src/pages/AdminResources.tsx` -- AnalyticsTab with Recharts charts
+**File:** `src/hooks/useSubscription.ts`
 
----
-
-## 5. CBT "Next Subject" Navigation Button
-
-**Current state:** When a user finishes the last question of a subject, only "Submit Exam" appears. Users may accidentally submit before completing other subjects.
-
-**Plan:**
-- At line 561-565 in `MultiSubjectCBT.tsx`, when the user is on the last question of the current subject:
-  - Check if there are other subjects with unanswered questions
-  - If yes, show THREE buttons: "Previous", "Next Subject" (navigates to the first unanswered question of the next incomplete subject), and "Submit Exam"
-  - If all subjects are complete, show "Previous" and "Submit Exam"
-- The "Next Subject" button will:
-  - Find the next subject in the list that has unanswered questions
-  - Switch `activeSubject` to that subject
-  - Set the index to the first unanswered question in that subject
-
-**File:** `src/components/exam-prep/MultiSubjectCBT.tsx` -- bottom navigation buttons section
+- Add a timestamp check: if the last subscription fetch was more than 5 minutes ago, auto-refetch when any gated feature is accessed
+- This catches cases where the DB was updated (by payment or admin) but the frontend hasn't refreshed
 
 ---
 
 ## Technical Summary
 
-| Change | Files | Complexity |
-|--------|-------|------------|
-| Per-student analytics | 4 files + 1 migration | Medium |
-| Payment duration choice | 1 file | Low |
-| Forgot password | 3 files (1 new) | Low |
-| Enhanced analytics | 2 files | Medium |
-| CBT next subject button | 1 file | Low |
+| Fix | File(s) | Impact |
+|-----|---------|--------|
+| Remove forceMount from tabs | AdminResources.tsx | Immediate 5-10x faster admin load |
+| Await refetch after payment | Upgrade.tsx | Payment tier reflects instantly |
+| Add subscription refresh mechanism | useSubscription.ts | Catches all missed updates |
+| Optimize analytics queries | admin-resources/index.ts | Prevents future slowdowns |
 
 ## Sequencing
 
-1. Database migration (add `is_blocked` to profiles)
-2. CBT navigation fix (quick UX win)
-3. Forgot password flow (standalone)
-4. Payment duration selector (standalone)
-5. Admin analytics + per-student view (largest change, edge function + frontend)
+1. Remove `forceMount` (fastest fix, biggest impact)
+2. Fix payment refetch flow (critical user-facing bug)
+3. Add subscription auto-refresh
+4. Optimize analytics queries
 
