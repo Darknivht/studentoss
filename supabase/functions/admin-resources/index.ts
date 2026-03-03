@@ -142,13 +142,17 @@ serve(async (req) => {
       case 'user-detail': {
         const { userId } = body;
         
-        const [profileRes, examRes, studyRes, quizRes, notesRes, flashcardsRes] = await Promise.all([
+        const [profileRes, examRes, studyRes, quizRes, notesRes, flashcardsRes, coursesRes, achievementsRes, focusRes, pomodoroRes] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', userId).single(),
-          supabase.from('exam_attempts').select('is_correct, created_at, session_id').eq('user_id', userId).order('created_at', { ascending: false }).limit(500),
+          supabase.from('exam_attempts').select('is_correct, created_at, session_id, subject_id').eq('user_id', userId).order('created_at', { ascending: false }).limit(500),
           supabase.from('study_sessions').select('total_minutes, session_date, xp_earned').eq('user_id', userId).order('session_date', { ascending: false }).limit(100),
           supabase.from('quiz_attempts').select('score, total_questions, completed_at').eq('user_id', userId).order('completed_at', { ascending: false }).limit(100),
           supabase.from('notes').select('id', { count: 'exact', head: true }).eq('user_id', userId),
           supabase.from('flashcards').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+          supabase.from('courses').select('id, name, progress, icon').eq('user_id', userId).order('name'),
+          supabase.from('user_achievements').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+          supabase.from('focus_sessions').select('actual_duration_minutes, created_at, status').eq('user_id', userId).order('created_at', { ascending: false }).limit(100),
+          supabase.from('pomodoro_sessions').select('duration_minutes, completed_at').eq('user_id', userId).order('completed_at', { ascending: false }).limit(100),
         ]);
 
         const examAttempts = examRes.data || [];
@@ -163,6 +167,55 @@ serve(async (req) => {
         const totalQuizzes = quizAttempts.length;
         const avgQuizScore = totalQuizzes > 0 ? Math.round(quizAttempts.reduce((s, q) => s + (q.score / q.total_questions) * 100, 0) / totalQuizzes) : 0;
 
+        // Subject performance breakdown
+        const subjectMap: Record<string, { correct: number; total: number }> = {};
+        for (const a of examAttempts) {
+          const sid = a.subject_id;
+          if (!subjectMap[sid]) subjectMap[sid] = { correct: 0, total: 0 };
+          subjectMap[sid].total++;
+          if (a.is_correct) subjectMap[sid].correct++;
+        }
+        const subjectIds = Object.keys(subjectMap);
+        let subjectNames: Record<string, string> = {};
+        if (subjectIds.length > 0) {
+          const { data: subs } = await supabase.from('exam_subjects').select('id, name').in('id', subjectIds);
+          if (subs) subjectNames = Object.fromEntries(subs.map(s => [s.id, s.name]));
+        }
+        const subject_performance = Object.entries(subjectMap).map(([sid, s]) => ({
+          subject_id: sid,
+          subject_name: subjectNames[sid] || 'Unknown',
+          accuracy: Math.round((s.correct / s.total) * 100),
+          total: s.total, correct: s.correct,
+        })).sort((a, b) => a.accuracy - b.accuracy);
+
+        // Weekly study trend (last 7 days)
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+        const weekly_study = studySessions.filter(s => s.session_date >= sevenDaysAgo).reduce((acc, s) => {
+          const existing = acc.find(d => d.date === s.session_date);
+          if (existing) existing.minutes += (s.total_minutes || 0);
+          else acc.push({ date: s.session_date, minutes: s.total_minutes || 0 });
+          return acc;
+        }, [] as Array<{ date: string; minutes: number }>).sort((a, b) => a.date.localeCompare(b.date));
+
+        // Focus session totals
+        const focusSessions = focusRes.data || [];
+        const totalFocusMinutes = focusSessions.reduce((s, f) => s + (f.actual_duration_minutes || 0), 0);
+        const pomodoroSessions = pomodoroRes.data || [];
+        const totalPomodoroMinutes = pomodoroSessions.reduce((s, p) => s + (p.duration_minutes || 0), 0);
+
+        // Activity timeline (last 10 actions across study, quiz, exam)
+        const timeline: Array<{ type: string; date: string; detail: string }> = [];
+        for (const s of studySessions.slice(0, 5)) {
+          timeline.push({ type: 'study', date: s.session_date, detail: `${s.total_minutes || 0}min study session` });
+        }
+        for (const q of quizAttempts.slice(0, 5)) {
+          timeline.push({ type: 'quiz', date: q.completed_at, detail: `Quiz: ${q.score}/${q.total_questions}` });
+        }
+        for (const e of examAttempts.slice(0, 5)) {
+          timeline.push({ type: 'exam', date: e.created_at, detail: `Exam attempt: ${e.is_correct ? '✓' : '✗'}` });
+        }
+        timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
         return json({
           profile: profileRes.data,
           exam: { total: totalExamAttempts, accuracy: examAccuracy, recent: examAttempts.slice(0, 10) },
@@ -170,6 +223,13 @@ serve(async (req) => {
           quiz: { total: totalQuizzes, avg_score: avgQuizScore, recent: quizAttempts.slice(0, 10) },
           notes_count: notesRes.count || 0,
           flashcards_count: flashcardsRes.count || 0,
+          courses: coursesRes.data || [],
+          achievements_count: achievementsRes.count || 0,
+          focus: { total_minutes: totalFocusMinutes, sessions: focusSessions.length },
+          pomodoro: { total_minutes: totalPomodoroMinutes, sessions: pomodoroSessions.length },
+          subject_performance,
+          weekly_study,
+          timeline: timeline.slice(0, 10),
         });
       }
 
@@ -250,6 +310,79 @@ serve(async (req) => {
         }
         const daily_feature_usage = Object.entries(featureMap).map(([date, data]) => ({ date, ...data })).sort((a, b) => a.date.localeCompare(b.date));
 
+        // Tier distribution
+        const freeUsers = (usersRes.count || 0) - (plusRes.count || 0) - (proRes.count || 0);
+        const tier_distribution = [
+          { name: 'Free', value: freeUsers, fill: 'hsl(var(--muted-foreground))' },
+          { name: 'Plus', value: plusRes.count || 0, fill: 'hsl(var(--primary))' },
+          { name: 'Pro', value: proRes.count || 0, fill: 'hsl(var(--accent))' },
+        ];
+
+        // Daily study minutes trend (30 days)
+        const studyMinutesByDay: Record<string, number> = {};
+        for (const s of (dailySessions || [])) {
+          // dailySessions has session_date and user_id; we need total_minutes too
+        }
+        const { data: dailyStudy } = await supabase
+          .from('study_sessions')
+          .select('session_date, total_minutes')
+          .gte('session_date', thirtyDaysAgo)
+          .order('session_date')
+          .limit(1000);
+        for (const s of (dailyStudy || [])) {
+          const d = s.session_date;
+          studyMinutesByDay[d] = (studyMinutesByDay[d] || 0) + (s.total_minutes || 0);
+        }
+        const daily_study_minutes = Object.entries(studyMinutesByDay).map(([date, minutes]) => ({ date, minutes })).sort((a, b) => a.date.localeCompare(b.date));
+
+        // Weekly retention: users active this week vs last week
+        const thisWeekStart = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+        const lastWeekStart = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
+        const thisWeekUsers = new Set<string>();
+        const lastWeekUsers = new Set<string>();
+        for (const s of (dailySessions || [])) {
+          if (s.session_date >= thisWeekStart) thisWeekUsers.add(s.user_id);
+          else if (s.session_date >= lastWeekStart) lastWeekUsers.add(s.user_id);
+        }
+        const retainedUsers = [...thisWeekUsers].filter(u => lastWeekUsers.has(u)).length;
+        const retention_rate = lastWeekUsers.size > 0 ? Math.round((retainedUsers / lastWeekUsers.size) * 100) : 0;
+
+        // Top 10 users by XP this week
+        const { data: topUsersData } = await supabase
+          .from('weekly_xp')
+          .select('user_id, xp_earned')
+          .gte('week_start', thisWeekStart)
+          .order('xp_earned', { ascending: false })
+          .limit(10);
+        let top_users: Array<{ name: string; xp: number }> = [];
+        if (topUsersData && topUsersData.length > 0) {
+          const uids = topUsersData.map(u => u.user_id);
+          const { data: topProfiles } = await supabase.from('profiles').select('user_id, full_name, username, display_name').in('user_id', uids);
+          const profileMap = Object.fromEntries((topProfiles || []).map(p => [p.user_id, p.full_name || p.display_name || p.username || 'Unknown']));
+          top_users = topUsersData.map(u => ({ name: profileMap[u.user_id] || 'Unknown', xp: u.xp_earned }));
+        }
+
+        // AI usage trend (from profiles ai_calls_today doesn't have history, use chat_messages as proxy)
+        const { data: aiMessages } = await supabase
+          .from('chat_messages')
+          .select('created_at')
+          .eq('role', 'assistant')
+          .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
+          .order('created_at')
+          .limit(1000);
+        const aiByDay: Record<string, number> = {};
+        for (const m of (aiMessages || [])) {
+          const d = (m.created_at || '').split('T')[0];
+          aiByDay[d] = (aiByDay[d] || 0) + 1;
+        }
+        const daily_ai_usage = Object.entries(aiByDay).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
+
+        // Focus & pomodoro usage counts
+        const [focusCountRes, pomodoroCountRes] = await Promise.all([
+          supabase.from('focus_sessions').select('*', { count: 'exact', head: true }),
+          supabase.from('pomodoro_sessions').select('*', { count: 'exact', head: true }),
+        ]);
+
         return json({
           total_users: usersRes.count || 0,
           active_today: activeRes.count || 0,
@@ -261,9 +394,19 @@ serve(async (req) => {
           total_notes: notesCountRes.count || 0,
           total_study_hours: totalStudyHours,
           avg_streak: avgStreak,
+          total_focus_sessions: focusCountRes.count || 0,
+          total_pomodoro_sessions: pomodoroCountRes.count || 0,
           daily_active_users,
           daily_signups,
           daily_feature_usage,
+          tier_distribution,
+          daily_study_minutes,
+          retention_rate,
+          retention_this_week: thisWeekUsers.size,
+          retention_last_week: lastWeekUsers.size,
+          retention_retained: retainedUsers,
+          top_users,
+          daily_ai_usage,
         });
       }
 
