@@ -208,8 +208,8 @@ ${examType?.description ? `Exam context: ${examType.description}` : ""}
 
 Return ONLY a valid JSON array of objects, each with:
 - "question": string
-- "options": array of exactly 4 strings
-- "correct_index": integer 0-3
+- "options": array of exactly 5 strings (A through E)
+- "correct_index": integer 0-4
 - "explanation": string (why the correct answer is correct)
 - "difficulty": "easy" | "medium" | "hard"
 
@@ -439,8 +439,8 @@ Return as JSON with this exact structure:
   "questions": [
     {
       "question": "Question text",
-      "options": ["A", "B", "C", "D"],
-      "correct_index": 0,
+      "options": ["A", "B", "C", "D", "E"],
+      "correct_index": 0-4,
       "explanation": "Why this is correct"
     }
   ]
@@ -509,8 +509,8 @@ The text is from a PDF related to ${examType?.name ?? "exams"}, subject: ${subje
 
 For each question found or derivable from the content, create a structured MCQ with:
 - "question": the question text
-- "options": array of exactly 4 answer choices
-- "correct_index": integer 0-3 for the correct answer
+- "options": array of exactly 5 answer choices (A through E)
+- "correct_index": integer 0-4 for the correct answer
 - "explanation": a detailed step-by-step explanation
 - "difficulty": "easy" | "medium" | "hard"
 

@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Lock, Plus, Trash2, Edit, Loader2, LogOut, Megaphone, Trophy, Users, BarChart3, CreditCard, Search, BookOpen, Upload, Eye, Ban, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 const AdminResources = () => {
   const [password, setPassword] = useState("");
@@ -130,13 +130,17 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
     { label: "Total Notes", value: stats.total_notes, icon: "📒" },
     { label: "Study Hours", value: stats.total_study_hours, icon: "⏱️" },
     { label: "Avg Streak", value: stats.avg_streak, icon: "🔥" },
+    { label: "Focus Sessions", value: stats.total_focus_sessions, icon: "🎧" },
+    { label: "Pomodoro Sessions", value: stats.total_pomodoro_sessions, icon: "🍅" },
   ] : [];
+
+  const PIE_COLORS = ['hsl(var(--muted-foreground))', 'hsl(var(--primary))', 'hsl(var(--accent))'];
 
   return (
     <div className="space-y-6">
       {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div> : stats ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {summaryItems.map(i => (
               <Card key={i.label}>
                 <CardContent className="pt-4 pb-3 text-center">
@@ -146,6 +150,54 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
                 </CardContent>
               </Card>
             ))}
+          </div>
+
+          {/* Retention & Tier Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Retention Card */}
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Weekly Retention</CardTitle></CardHeader>
+              <CardContent className="text-center space-y-1">
+                <p className="text-4xl font-bold text-primary">{stats.retention_rate ?? 0}%</p>
+                <p className="text-xs text-muted-foreground">
+                  {stats.retention_retained ?? 0} retained / {stats.retention_last_week ?? 0} last week → {stats.retention_this_week ?? 0} this week
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Tier Distribution Pie */}
+            {stats.tier_distribution?.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Subscription Tiers</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <PieChart>
+                      <Pie data={stats.tier_distribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={55} label={({ name, value }) => `${name}: ${value}`}>
+                        {stats.tier_distribution.map((_: any, i: number) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Top Active Students */}
+            {stats.top_users?.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Top Students This Week</CardTitle></CardHeader>
+                <CardContent className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                  {stats.top_users.map((u: any, i: number) => (
+                    <div key={i} className="flex justify-between items-center text-sm">
+                      <span className="truncate max-w-[60%]">{i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {u.name}</span>
+                      <Badge variant="outline" className="text-xs">{u.xp} XP</Badge>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Daily Active Users Chart */}
@@ -166,6 +218,24 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
             </Card>
           )}
 
+          {/* Study Time Trend */}
+          {stats.daily_study_minutes?.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Daily Study Minutes (30 days)</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={stats.daily_study_minutes}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="minutes" stroke="hsl(var(--accent))" fill="hsl(var(--accent))" fillOpacity={0.2} name="Minutes" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Daily Signups Chart */}
           {stats.daily_signups?.length > 0 && (
             <Card>
@@ -179,6 +249,24 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
                     <Tooltip />
                     <Line type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Signups" />
                   </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* AI Usage Trend */}
+          {stats.daily_ai_usage?.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">AI Usage Trend (30 days)</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={stats.daily_ai_usage}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" name="AI Calls" radius={[2, 2, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -610,7 +698,7 @@ const UsersTab = ({ adminPassword }: { adminPassword: string }) => {
 
       {/* Student Detail Dialog */}
       <Dialog open={!!selectedUser} onOpenChange={(open) => { if (!open) { setSelectedUser(null); setUserDetail(null); } }}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Student Details: {selectedUser?.full_name || selectedUser?.username || "Unknown"}</DialogTitle>
           </DialogHeader>
@@ -632,12 +720,90 @@ const UsersTab = ({ adminPassword }: { adminPassword: string }) => {
               </Card>
 
               {/* Activity Stats */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{userDetail.exam?.total || 0}</p><p className="text-xs text-muted-foreground">Exam Attempts</p><p className="text-xs text-primary">{userDetail.exam?.accuracy || 0}% accuracy</p></CardContent></Card>
                 <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{userDetail.quiz?.total || 0}</p><p className="text-xs text-muted-foreground">Quizzes Taken</p><p className="text-xs text-primary">{userDetail.quiz?.avg_score || 0}% avg score</p></CardContent></Card>
                 <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{Math.round((userDetail.study?.total_minutes || 0) / 60)}h</p><p className="text-xs text-muted-foreground">Study Time</p><p className="text-xs text-primary">{userDetail.study?.sessions || 0} sessions</p></CardContent></Card>
                 <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{userDetail.notes_count || 0}</p><p className="text-xs text-muted-foreground">Notes</p><p className="text-xs text-primary">{userDetail.flashcards_count || 0} flashcards</p></CardContent></Card>
+                <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{userDetail.achievements_count || 0}</p><p className="text-xs text-muted-foreground">Achievements</p><p className="text-xs text-primary">🏆 unlocked</p></CardContent></Card>
+                <Card><CardContent className="pt-4 text-center"><p className="text-xl font-bold">{Math.round(((userDetail.focus?.total_minutes || 0) + (userDetail.pomodoro?.total_minutes || 0)) / 60)}h</p><p className="text-xs text-muted-foreground">Focus Time</p><p className="text-xs text-primary">{(userDetail.focus?.sessions || 0) + (userDetail.pomodoro?.sessions || 0)} sessions</p></CardContent></Card>
               </div>
+
+              {/* Weekly Study Trend */}
+              {userDetail.weekly_study?.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Study Trend (Last 7 Days)</CardTitle></CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={120}>
+                      <BarChart data={userDetail.weekly_study}>
+                        <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={(v) => v.slice(5)} />
+                        <YAxis tick={{ fontSize: 9 }} />
+                        <Tooltip />
+                        <Bar dataKey="minutes" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} name="Minutes" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Subject Performance Breakdown */}
+              {userDetail.subject_performance?.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Subject Performance</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {userDetail.subject_performance.map((s: any) => (
+                      <div key={s.subject_id} className="flex items-center justify-between text-sm">
+                        <span className="truncate max-w-[50%]">{s.subject_name}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-primary" style={{ width: `${s.accuracy}%` }} />
+                          </div>
+                          <span className="text-xs font-medium w-12 text-right">{s.accuracy}%</span>
+                          <span className="text-xs text-muted-foreground">({s.total})</span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Course Progress */}
+              {userDetail.courses?.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Courses ({userDetail.courses.length})</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {userDetail.courses.map((c: any) => (
+                      <div key={c.id} className="flex items-center justify-between text-sm">
+                        <span className="truncate max-w-[50%]">{c.icon || '📚'} {c.name}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-primary" style={{ width: `${c.progress || 0}%` }} />
+                          </div>
+                          <span className="text-xs font-medium w-10 text-right">{c.progress || 0}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Recent Activity Timeline */}
+              {userDetail.timeline?.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Recent Activity</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {userDetail.timeline.map((t: any, i: number) => (
+                      <div key={i} className="flex items-start gap-2 text-sm">
+                        <span className="text-base">{t.type === 'study' ? '📖' : t.type === 'quiz' ? '📝' : '🎯'}</span>
+                        <div className="flex-1">
+                          <p className="text-sm">{t.detail}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(t.date).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           ) : <p className="text-center text-muted-foreground py-4">No data available</p>}
         </DialogContent>
