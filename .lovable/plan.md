@@ -1,74 +1,65 @@
 
 
-# Fix Slow Admin Pages and Payment Not Reflecting
+# Enhanced Admin Analytics, JAMB 5 Options, and Richer User Details
 
-## Root Causes Found
+## 1. JAMB Questions: 5 Options (A-E)
 
-### 1. Admin Pages Loading Slowly
-All 7 admin tabs use `forceMount`, which means every tab mounts and fetches data simultaneously when the admin page opens. This fires 7+ edge function calls and multiple database queries in parallel the instant you authenticate -- even for tabs you never look at.
+The AI prompt in `supabase/functions/exam-practice/index.ts` currently says "exactly 4 strings" and "correct_index: integer 0-3". The frontend already renders options dynamically using `String.fromCharCode(65 + i)`, so it handles 5 options automatically.
 
-### 2. Payment Not Reflecting on Frontend
-The database IS updated correctly after payment (confirmed in the database). The problem is in the frontend:
-- In `Upgrade.tsx` line 142, `refetch()` is called but NOT awaited -- meaning the page may not wait for the fresh subscription data
-- `useSubscription` only fetches on initial mount (when `user` changes) -- if the user stays on the same page, the stale "free" state persists even after the DB is updated
-- There's no mechanism to force-refresh the subscription after returning from a payment flow
+**Changes:**
+- `supabase/functions/exam-practice/index.ts` lines 211-212: Change "exactly 4 strings" to "exactly 5 strings" and "correct_index: integer 0-3" to "0-4"
+- Same change in the `extractPdfQuestions` prompt (lines 512-513)
+- Also update the `guidedLearning` prompt (search for similar "4" references)
+
+Existing database questions with 4 options will still work fine -- the UI handles any number of options.
 
 ---
 
-## Fix Plan
+## 2. Enhanced Admin Analytics Dashboard
 
-### A. Remove `forceMount` from Admin Tabs (Fix Slow Loading)
+Current analytics has 10 summary cards and 3 charts (DAU, Signups, Feature Usage). Will add:
 
-**File:** `src/pages/AdminResources.tsx`
+**New charts/sections in AnalyticsTab (frontend):**
+- **Subscription Revenue Pie Chart** -- breakdown of Free vs Plus vs Pro users (PieChart from recharts)
+- **Study Time Trend** -- daily total study minutes over 30 days (AreaChart)
+- **Retention Rate** -- users who studied this week vs last week
+- **Top Active Students** -- leaderboard of top 10 users by XP this week
+- **AI Usage Trend** -- daily AI calls aggregated
 
-- Remove `forceMount` and the `data-[state=inactive]:hidden` class from all 7 `TabsContent` elements
-- This way, only the active tab mounts and fetches data -- switching tabs triggers the new tab's `useEffect`
-- Result: admin page loads in ~1 second instead of 5-10+
+**Backend (`admin-resources/index.ts` analytics action):**
+- Add queries for: daily study minutes, top users by XP, weekly retention (users active both weeks), tier distribution breakdown
+- Add focus sessions and pomodoro data to feature usage
 
-### B. Fix Payment Subscription Refresh
+---
 
-**File:** `src/pages/Upgrade.tsx`
+## 3. Richer Per-Student Detail View
 
-- Add `await` to the `refetch()` call on line 142 (after successful verification)
-- Add a small delay before refetch to let the database update propagate
-- After refetch completes, force a page state update so the UI immediately reflects the new tier
+Current user detail shows: tier, XP, streak, join date, AI calls, subscription expiry, exam attempts (count + accuracy), quizzes (count + avg score), study time, notes count, flashcards count.
 
-**File:** `src/hooks/useSubscription.ts`
+**Add to the detail dialog:**
+- **Recent Activity Timeline** -- last 10 actions (study sessions, quiz attempts, exam attempts) with dates
+- **Subject Performance Breakdown** -- for exam attempts, group by subject and show per-subject accuracy
+- **Weekly Study Trend** -- small sparkline/bar chart of daily study minutes for the last 7 days
+- **Course Progress** -- list courses with progress %
+- **Achievement Count** -- unlocked achievements
+- **Focus Sessions** -- total focus time from `focus_sessions` and `pomodoro_sessions`
 
-- Expose a `forceRefresh` function that clears the current state and re-fetches from the database
-- Add a `useEffect` that listens for a custom event (e.g., `subscription-updated`) so any component can trigger a refresh
-- This ensures the subscription state is always fresh after payment, even if the user navigates away and back
-
-### C. Optimize Analytics Edge Function (Prevent Future Slowdowns)
-
-**File:** `supabase/functions/admin-resources/index.ts`
-
-- For the `analytics` action, the queries fetching `study_sessions.select('total_minutes')` and `profiles.select('current_streak')` currently fetch ALL rows (up to 1000 limit). With growth, this will break.
-- Change these to use `.limit(1000)` explicitly and add pagination awareness, or switch to count-only queries where possible
-- For the daily chart data queries, add `.limit(1000)` to prevent silent truncation
-
-### D. Add Subscription Auto-Refresh on Navigation
-
-**File:** `src/hooks/useSubscription.ts`
-
-- Add a timestamp check: if the last subscription fetch was more than 5 minutes ago, auto-refetch when any gated feature is accessed
-- This catches cases where the DB was updated (by payment or admin) but the frontend hasn't refreshed
+**Backend (`admin-resources/index.ts` user-detail action):**
+- Add queries for: courses, achievements, focus_sessions, pomodoro_sessions, exam subjects breakdown
+- Return structured data for the timeline and subject breakdown
 
 ---
 
 ## Technical Summary
 
-| Fix | File(s) | Impact |
-|-----|---------|--------|
-| Remove forceMount from tabs | AdminResources.tsx | Immediate 5-10x faster admin load |
-| Await refetch after payment | Upgrade.tsx | Payment tier reflects instantly |
-| Add subscription refresh mechanism | useSubscription.ts | Catches all missed updates |
-| Optimize analytics queries | admin-resources/index.ts | Prevents future slowdowns |
+| Change | Files | Impact |
+|--------|-------|--------|
+| 5 options for JAMB | `exam-practice/index.ts` | AI generates A-E options |
+| Enhanced analytics dashboard | `AdminResources.tsx`, `admin-resources/index.ts` | More charts + data |
+| Richer user detail view | `AdminResources.tsx`, `admin-resources/index.ts` | Deeper student insights |
 
 ## Sequencing
-
-1. Remove `forceMount` (fastest fix, biggest impact)
-2. Fix payment refetch flow (critical user-facing bug)
-3. Add subscription auto-refresh
-4. Optimize analytics queries
+1. Fix JAMB 5 options in edge function
+2. Extend `admin-resources` edge function with new analytics + user-detail data
+3. Update `AdminResources.tsx` with new charts and enriched user detail panel
 
