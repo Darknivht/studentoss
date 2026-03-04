@@ -1,8 +1,7 @@
 import { markdownToHtml, stripMarkdown } from '@/lib/formatters';
+import html2pdf from 'html2pdf.js';
 
 const KATEX_CSS_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css';
-const KATEX_JS_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.js';
-const KATEX_AUTO_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/contrib/auto-render.min.js';
 
 function buildHtmlDoc(title: string, htmlContent: string): string {
   return `<!DOCTYPE html>
@@ -32,36 +31,11 @@ function buildHtmlDoc(title: string, htmlContent: string): string {
   td { word-wrap: break-word; }
   tr:nth-child(even) { background: #fafafa; }
   .katex-display { overflow-x: auto; max-width: 100%; }
-  @media print {
-    body { padding: 0; font-size: 9pt; }
-    table { page-break-inside: auto; }
-    tr { page-break-inside: avoid; }
-    h1, h2, h3 { page-break-after: avoid; }
-  }
-  @media (max-width: 600px) {
-    body { padding: 12px; font-size: 10pt; }
-    th, td { padding: 4px 6px; font-size: 9pt; }
-  }
 </style>
 </head>
 <body>
 <h1>${title}</h1>
 ${htmlContent}
-<script src="${KATEX_JS_CDN}"><\/script>
-<script src="${KATEX_AUTO_CDN}"><\/script>
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  renderMathInElement(document.body, {
-    delimiters: [
-      {left: "$$", right: "$$", display: true},
-      {left: "$", right: "$", display: false},
-      {left: "\\\\(", right: "\\\\)", display: false},
-      {left: "\\\\[", right: "\\\\]", display: true}
-    ],
-    throwOnError: false
-  });
-});
-<\/script>
 </body>
 </html>`;
 }
@@ -123,32 +97,85 @@ function sanitizeFilename(title: string): string {
 }
 
 /**
- * Download markdown content as a styled HTML file (works reliably on all mobile browsers).
- * This directly downloads the file instead of using window.print() which produces
- * screen-like output on many mobile browsers.
+ * Download markdown content as a real PDF file using html2pdf.js.
+ * Works reliably on all browsers including mobile.
  */
-export const downloadAsHTML = (markdownContent: string, title: string, _filename?: string) => {
+export const downloadAsHTML = async (markdownContent: string, title: string, _filename?: string) => {
   const htmlContent = markdownToHtml(markdownContent);
   const fullHtml = buildHtmlDoc(title, htmlContent);
 
-  // Determine filename - strip any existing extension and use .html
   let baseName = _filename || sanitizeFilename(title);
   baseName = baseName.replace(/\.(html|pdf)$/i, '');
 
-  const blob = new Blob([fullHtml], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${baseName}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  // Create a temporary container to render the HTML
+  const container = document.createElement('div');
+  container.innerHTML = fullHtml;
+  // Extract just the body content for html2pdf
+  const bodyContent = container.querySelector('body');
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = bodyContent ? bodyContent.innerHTML : htmlContent;
+  wrapper.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  wrapper.style.fontSize = '11pt';
+  wrapper.style.lineHeight = '1.5';
+  wrapper.style.color = '#1a1a1a';
+  wrapper.style.padding = '0';
+
+  const opt = {
+    margin: [10, 10, 10, 10] as [number, number, number, number],
+    filename: `${baseName}.pdf`,
+    image: { type: 'jpeg' as const, quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+  };
+
+  try {
+    await html2pdf().set(opt).from(wrapper).save();
+  } catch (err) {
+    console.error('PDF generation failed, falling back to HTML download:', err);
+    // Fallback to HTML download
+    const blob = new Blob([fullHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${baseName}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
 };
 
 /**
- * One-click download of markdown content as a styled HTML document.
- * Direct file download - no print dialog, works on all devices including mobile.
+ * Generate a PDF from raw HTML string (e.g. resume templates).
+ */
+export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = htmlString;
+
+  const opt = {
+    margin: [5, 5, 5, 5] as [number, number, number, number],
+    filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`,
+    image: { type: 'jpeg' as const, quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+  };
+
+  try {
+    await html2pdf().set(opt).from(wrapper).save();
+  } catch (err) {
+    console.error('PDF generation failed:', err);
+    // Fallback
+    const blob = new Blob([htmlString], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename.replace('.pdf', '.html');
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+};
+
+/**
+ * One-click download of markdown content as PDF.
  */
 export const printMarkdownContent = (markdownContent: string, title: string) => {
   downloadAsHTML(markdownContent, title);

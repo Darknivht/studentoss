@@ -134,7 +134,26 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
     { label: "Pomodoro Sessions", value: stats.total_pomodoro_sessions, icon: "🍅" },
   ] : [];
 
-  const PIE_COLORS = ['hsl(var(--muted-foreground))', 'hsl(var(--primary))', 'hsl(var(--accent))'];
+  const PIE_COLORS = ['#22c55e', '#3b82f6', '#a855f7']; // Green Free, Blue Plus, Purple Pro
+
+  const estimatedRevenue = stats ? ((stats.plus_subscribers || 0) * 2000) + ((stats.pro_subscribers || 0) * 5000) : 0;
+
+  const exportCSV = () => {
+    if (!stats) return;
+    const rows = [
+      ['Metric', 'Value'],
+      ...summaryItems.map(i => [i.label, String(i.value ?? 0)]),
+      ['Est. Monthly Revenue (₦)', String(estimatedRevenue)],
+      ['Weekly Retention (%)', String(stats.retention_rate ?? 0)],
+    ];
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `analytics_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   return (
     <div className="space-y-6">
@@ -152,53 +171,63 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
             ))}
           </div>
 
-          {/* Retention & Tier Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Revenue & Retention Row */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Revenue Estimator */}
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader className="pb-1"><CardTitle className="text-sm">Est. Monthly Revenue</CardTitle></CardHeader>
+              <CardContent className="text-center">
+                <p className="text-3xl font-bold text-primary">₦{estimatedRevenue.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.plus_subscribers || 0} Plus × ₦2k + {stats.pro_subscribers || 0} Pro × ₦5k</p>
+              </CardContent>
+            </Card>
+
             {/* Retention Card */}
             <Card>
-              <CardHeader><CardTitle className="text-sm">Weekly Retention</CardTitle></CardHeader>
-              <CardContent className="text-center space-y-1">
-                <p className="text-4xl font-bold text-primary">{stats.retention_rate ?? 0}%</p>
-                <p className="text-xs text-muted-foreground">
-                  {stats.retention_retained ?? 0} retained / {stats.retention_last_week ?? 0} last week → {stats.retention_this_week ?? 0} this week
+              <CardHeader className="pb-1"><CardTitle className="text-sm">Weekly Retention</CardTitle></CardHeader>
+              <CardContent className="text-center">
+                <p className="text-3xl font-bold text-primary">{stats.retention_rate ?? 0}%</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.retention_retained ?? 0} retained / {stats.retention_last_week ?? 0} last wk
                 </p>
               </CardContent>
             </Card>
 
             {/* Tier Distribution Pie */}
             {stats.tier_distribution?.length > 0 && (
-              <Card>
-                <CardHeader><CardTitle className="text-sm">Subscription Tiers</CardTitle></CardHeader>
+              <Card className="md:col-span-2">
+                <CardHeader className="pb-1"><CardTitle className="text-sm">Subscription Tiers</CardTitle></CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={160}>
+                  <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
-                      <Pie data={stats.tier_distribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={55} label={({ name, value }) => `${name}: ${value}`}>
+                      <Pie data={stats.tier_distribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`} labelLine={true}>
                         {stats.tier_distribution.map((_: any, i: number) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip formatter={(value: number, name: string) => [`${value} users`, name]} />
+                      <Legend formatter={(value: string) => <span className="text-xs">{value}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             )}
-
-            {/* Top Active Students */}
-            {stats.top_users?.length > 0 && (
-              <Card>
-                <CardHeader><CardTitle className="text-sm">Top Students This Week</CardTitle></CardHeader>
-                <CardContent className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                  {stats.top_users.map((u: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center text-sm">
-                      <span className="truncate max-w-[60%]">{i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {u.name}</span>
-                      <Badge variant="outline" className="text-xs">{u.xp} XP</Badge>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
           </div>
+
+          {/* Top Active Students */}
+          {stats.top_users?.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Top Students This Week</CardTitle></CardHeader>
+              <CardContent className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                {stats.top_users.map((u: any, i: number) => (
+                  <div key={i} className="flex justify-between items-center text-sm">
+                    <span className="truncate max-w-[60%]">{i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {u.name}</span>
+                    <Badge variant="outline" className="text-xs">{u.xp} XP</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Daily Active Users Chart */}
           {stats.daily_active_users?.length > 0 && (
@@ -293,7 +322,10 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
             </Card>
           )}
 
-          <Button variant="outline" size="sm" onClick={fetchData}><Loader2 className="w-3 h-3 mr-1" />Refresh</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={fetchData}><Loader2 className="w-3 h-3 mr-1" />Refresh</Button>
+            <Button variant="outline" size="sm" onClick={exportCSV}><BarChart3 className="w-3 h-3 mr-1" />Export CSV</Button>
+          </div>
         </>
       ) : null}
     </div>
