@@ -16,7 +16,15 @@ const DocsAdminGuide = () => (
       <div className="grid gap-3 text-sm">
         <div className="p-4 rounded-lg border border-border bg-card">
           <h3 className="font-semibold text-foreground">📊 Analytics</h3>
-          <p className="text-muted-foreground mt-1">View total users, active users, resources count, and other platform metrics. Click "Refresh" to fetch latest data.</p>
+          <ul className="list-disc pl-5 text-muted-foreground mt-2 space-y-1">
+            <li>View total users, active users, resources count, and other platform metrics.</li>
+            <li><strong className="text-foreground">Revenue Estimator:</strong> Shows estimated monthly revenue based on current Plus (×₦2,000) and Pro (×₦5,000) subscriber counts.</li>
+            <li><strong className="text-foreground">Subscription Pie Chart:</strong> Visual breakdown of Free/Plus/Pro users with percentages.</li>
+            <li><strong className="text-foreground">Weekly Retention:</strong> Percentage of last week's active users who returned this week.</li>
+            <li><strong className="text-foreground">Charts:</strong> Daily Active Users, Study Minutes, Signups, AI Usage, and Feature Usage over 30 days.</li>
+            <li><strong className="text-foreground">Export CSV:</strong> Download all summary stats as a CSV file for spreadsheets.</li>
+            <li>Click "Refresh" to fetch latest data.</li>
+          </ul>
         </div>
         <div className="p-4 rounded-lg border border-border bg-card">
           <h3 className="font-semibold text-foreground">📚 Resources</h3>
@@ -47,11 +55,19 @@ const DocsAdminGuide = () => (
         </div>
         <div className="p-4 rounded-lg border border-border bg-card">
           <h3 className="font-semibold text-foreground">👥 Users</h3>
-          <p className="text-muted-foreground mt-1">Search and view all registered users. See their subscription tier, XP, streak, and grade level.</p>
+          <ul className="list-disc pl-5 text-muted-foreground mt-2 space-y-1">
+            <li>Search and view all registered users. See their subscription tier, XP, streak, and grade level.</li>
+            <li><strong className="text-foreground">View Detail:</strong> Click the eye icon to see full student profile with activity stats, study trends, subject performance, course progress, and recent activity timeline.</li>
+            <li><strong className="text-foreground">Block/Unblock:</strong> Click the shield/ban icon to toggle a user's blocked status. Blocked users cannot access the app.</li>
+          </ul>
         </div>
         <div className="p-4 rounded-lg border border-border bg-card">
           <h3 className="font-semibold text-foreground">💳 Payments</h3>
-          <p className="text-muted-foreground mt-1">Manually resolve subscription issues. Search for a user and update their tier. Use this for refunds, manual upgrades, or fixing payment failures.</p>
+          <ul className="list-disc pl-5 text-muted-foreground mt-2 space-y-1">
+            <li>Manually resolve subscription issues. Search for a user and update their tier.</li>
+            <li><strong className="text-foreground">Duration:</strong> Choose monthly (30 days) or yearly (365 days) when upgrading a user.</li>
+            <li>Use this for refunds, manual upgrades, or fixing payment failures.</li>
+          </ul>
         </div>
       </div>
     </section>
@@ -69,11 +85,19 @@ const DocsAdminGuide = () => (
         </div>
         <div className="p-3 rounded-lg bg-muted/50">
           <p className="font-medium text-foreground">Grant a user Pro access manually</p>
-          <p className="text-muted-foreground mt-1">Go to Payments tab. Search the user by name/email. Select "pro" tier and save. This bypasses the payment flow.</p>
+          <p className="text-muted-foreground mt-1">Go to Payments tab. Search the user by name/email. Select "pro" tier, choose duration (monthly/yearly), and save. This bypasses the payment flow.</p>
         </div>
         <div className="p-3 rounded-lg bg-muted/50">
           <p className="font-medium text-foreground">Post an announcement</p>
           <p className="text-muted-foreground mt-1">Go to Announcements tab. Fill in title and content. Set type and check "Is Active". All users will see the banner on their Dashboard.</p>
+        </div>
+        <div className="p-3 rounded-lg bg-muted/50">
+          <p className="font-medium text-foreground">Block a problematic user</p>
+          <p className="text-muted-foreground mt-1">Go to Users tab. Search for the user. Click the ban icon (🚫) next to their name. Their status will change to "Blocked". Click the shield icon to unblock.</p>
+        </div>
+        <div className="p-3 rounded-lg bg-muted/50">
+          <p className="font-medium text-foreground">Export analytics data</p>
+          <p className="text-muted-foreground mt-1">Go to Analytics tab. Click "Export CSV" at the bottom. This downloads all summary metrics as a spreadsheet-compatible CSV file.</p>
         </div>
       </div>
     </section>
