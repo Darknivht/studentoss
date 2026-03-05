@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Lock, Plus, Trash2, Edit, Loader2, LogOut, Megaphone, Trophy, Users, BarChart3, CreditCard, Search, BookOpen, Upload, Eye, Ban, ShieldCheck } from "lucide-react";
+import { Lock, Plus, Trash2, Edit, Loader2, LogOut, Megaphone, Trophy, Users, BarChart3, CreditCard, Search, BookOpen, Upload, Eye, Ban, ShieldCheck, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -1808,8 +1808,40 @@ const PdfImportSection = ({ adminPassword, examTypes, subjects, selectedExamType
               )}
             </CardContent>
           </Card>
-        </div>
+      </div>
       )}
+
+      {/* Force Update Button */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><RefreshCw className="w-4 h-4" /> App Maintenance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">Clear all cached data, service workers, and force reload to fix display issues.</p>
+          <Button
+            variant="destructive"
+            onClick={async () => {
+              toast({ title: 'Updating...', description: 'Clearing cache and reloading.' });
+              try {
+                if ('serviceWorker' in navigator) {
+                  const registrations = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(registrations.map(r => r.unregister()));
+                }
+                if ('caches' in window) {
+                  const keys = await caches.keys();
+                  await Promise.all(keys.map(k => caches.delete(k)));
+                }
+                window.location.reload();
+              } catch {
+                window.location.reload();
+              }
+            }}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Force Update App
+          </Button>
+        </CardContent>
+      </Card>
     </>
   );
 };
