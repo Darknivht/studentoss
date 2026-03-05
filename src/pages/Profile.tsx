@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight, AtSign, AlertCircle, Crown, Smartphone } from 'lucide-react';
+import { LogOut, User, School, GraduationCap, Save, Sparkles, Trophy, ChevronRight, AtSign, AlertCircle, Crown, Smartphone, RefreshCw } from 'lucide-react';
 import StreakCalendar from '@/components/study/StreakCalendar';
 import AvatarUpload from '@/components/profile/AvatarUpload';
 
@@ -402,6 +402,29 @@ const Profile = () => {
         >
           <Save className="w-4 h-4 mr-2" />
           {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={async () => {
+            toast({ title: 'Updating...', description: 'Clearing cache and reloading app.' });
+            try {
+              if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(r => r.unregister()));
+              }
+              if ('caches' in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(k => caches.delete(k)));
+              }
+              window.location.reload();
+            } catch {
+              window.location.reload();
+            }
+          }}
+          className="w-full"
+        >
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Force Update App
         </Button>
         <Button
           variant="outline"
