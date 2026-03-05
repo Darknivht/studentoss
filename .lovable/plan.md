@@ -1,93 +1,44 @@
 
 
-# Improvements: PDF Exports, Admin Analytics, Student Exam Analytics, Docs & Marketing
+# Fix PDF Formatting, Math Rendering, and Achievement Dropdown
 
-## 1. Real PDF Downloads (Replace HTML exports)
+## Problems Found
 
-**Problem:** All downloads currently produce `.html` files. Users want actual `.pdf` files.
+1. **PDF shows raw asterisks and bad formatting**: The `markdownToHtml()` function in `formatters.ts` uses fragile regex that fails on multi-line bold, nested formatting, and doesn't strip `**` properly in many cases. The bold regex `\*\*(.+?)\*\*` is non-greedy single-line only and runs after headers, causing conflicts.
 
-**Solution:** Install `html2pdf.js` (lightweight, client-side, no server needed) and update `ExportUtils.tsx` to generate real PDF blobs.
+2. **Math equations not rendered in PDFs**: The HTML doc includes KaTeX CSS but the `markdownToHtml()` never converts `$...$` or `$$...$$` to KaTeX HTML. The `katex` package is already installed and has a `renderToString()` API we can use directly.
 
-**Changes:**
-- Install `html2pdf.js` package
-- `src/components/export/ExportUtils.tsx`: Replace `downloadAsHTML` internals to use `html2pdf.js` -- convert the styled HTML doc to a PDF blob and trigger download as `.pdf`. Keep the same function signature so all 10+ callers work without changes.
-- `printMarkdownContent` will open a print dialog using the same HTML (unchanged behavior)
-- Resume `exportPDF` in `ResumeBuilder.tsx`: Replace the iframe+print hack with `html2pdf.js` to download an actual PDF file
-- Resume `exportHTML` stays as-is for users who want raw HTML
-
-## 2. Enhanced Student-Facing Exam Analytics
-
-**Problem:** Current `ExamPerformance.tsx` only shows overall accuracy and per-topic breakdown with a line chart. Needs richer visualizations.
-
-**Changes to `src/components/exam-prep/ExamPerformance.tsx`:**
-- Add **Radar Chart** (from recharts) showing per-topic scores as a spider/radar for visual weak-area identification
-- Add **Session History Table** showing last 10 sessions with date, questions attempted, accuracy, time spent
-- Add **Streak & Improvement** summary cards: total sessions, best score, average score, improvement trend (comparing first 5 vs last 5 sessions)
-- Add **Time Analysis**: average time per question, fastest/slowest topics
-- Add **Difficulty Breakdown**: accuracy by easy/medium/hard questions (requires fetching `exam_questions.difficulty` joined with attempts)
-
-## 3. Improved Admin Pie Chart & More Admin Features
-
-**Changes to `src/pages/AdminResources.tsx`:**
-
-**Pie Chart improvements:**
-- Use distinct, vibrant colors (green for Free, blue for Plus, purple for Pro) instead of CSS variable colors that are hard to see
-- Add percentage labels and a legend below the chart
-- Make it larger (200px height instead of 160px)
-
-**New admin features:**
-- **Revenue Estimator card**: Calculate estimated monthly revenue = (Plus users × ₦2000) + (Pro users × ₦5000), show in a card
-- **Content Health summary**: Questions without explanations count, subjects with < 10 questions
-- **User Growth Rate**: Show week-over-week growth percentage
-- **Export analytics as CSV**: Button to download summary stats as CSV
-- **Quick user count by grade level**: Group profiles by `grade_level` and show distribution
-
-## 4. Updated Docs: Admin Guide, Features, Marketing Playbook
-
-**`src/pages/docs/DocsAdminGuide.tsx`:**
-- Add section for new analytics features (revenue estimator, CSV export, user growth)
-- Document the block/unblock user workflow
-- Document payment duration selector (monthly/yearly)
-
-**`src/pages/docs/DocsFeatures.tsx`:**
-- Add entry for enhanced exam analytics (radar chart, session history, difficulty breakdown)
-- Update export description: "Downloads as PDF" instead of HTML
-
-**`src/pages/docs/DocsLaunchPlaybook.tsx` -- Expanded Marketing:**
-- Add **"Free Tier Strategy"** section: Yes, keep free tier generous -- it's your growth engine. Free users become ambassadors. Key insight: give enough value for free that students tell friends, gate advanced features (unlimited AI, exam prep) behind paid tiers
-- Add **"University/Polytechnic Marketing"** section (since you're in 3rd year):
-  - Start with YOUR department -- demo in class, get lecturer buy-in
-  - Create a "Study Group Challenge" -- first group to hit 1000 XP gets free Pro for a semester
-  - Partner with SUG (Student Union) for official endorsement
-  - Target exam period (2-3 weeks before) with urgency messaging
-  - Put up posters in libraries, hostels, lecture halls with QR codes
-- Add **"Referral Program"** section: Each user gets a unique invite code (already in DB). Reward: referrer gets 1 week Pro free per 3 referrals
-- Add **"Content Marketing"** section: Create a WhatsApp channel posting daily study tips with app screenshots, Create YouTube shorts showing "How to pass JAMB with AI"
-- Add **"Pricing Psychology"** section: Anchor on yearly pricing (show monthly as expensive), offer first month at 50% off, create urgency with "Exam season special"
-- Add **"Metrics to Track Weekly"** checklist: New signups, DAU/WAU ratio, free→paid conversion, referral rate, feature adoption
-
-## 5. Resume Export as PDF
-
-**`src/components/career/ResumeBuilder.tsx`:**
-- Replace `exportPDF` (currently uses iframe print dialog) with `html2pdf.js` for direct PDF download
-- Label button as "Download PDF" instead of "Print PDF"
+3. **Achievement requirement_type is a free text Input**: Admin can type anything, but only 12 specific keys from `UserStats` are valid (`notes_count`, `quizzes_count`, `flashcards_reviewed`, `streak`, `focus_sessions`, `total_xp`, `groups_joined`, `messages_sent`, `challenges_sent`, `perfect_quizzes`, `study_minutes`, `subjects_with_notes`).
 
 ---
 
-## Technical Summary
+## Plan
 
-| Change | Files | Complexity |
-|--------|-------|------------|
-| PDF exports via html2pdf.js | ExportUtils.tsx, ResumeBuilder.tsx + install | Medium |
-| Student exam analytics | ExamPerformance.tsx | Medium |
-| Admin pie chart & features | AdminResources.tsx | Low-Medium |
-| Docs updates | 3 docs files | Low |
-| Marketing playbook expansion | DocsLaunchPlaybook.tsx | Low |
+### A. Fix `markdownToHtml()` in `src/lib/formatters.ts`
 
-## Sequencing
-1. Install html2pdf.js and update ExportUtils (all exports become PDF instantly)
-2. Fix resume export to use html2pdf.js
-3. Enhance ExamPerformance with radar chart, session history, difficulty breakdown
-4. Improve admin pie chart colors and add revenue estimator + CSV export
-5. Update all three docs pages
+- Rewrite the conversion pipeline with correct ordering: code blocks first (escape them), then math, then tables, then headers, then bold/italic, then lists, then paragraphs
+- Add math rendering: use `katex.renderToString()` for `$$...$$` (display) and `$...$` (inline) blocks before other processing
+- Fix bold/italic regex to handle multi-line and nested cases properly
+- Add blockquote support (`>` lines)
+- Handle numbered lists properly (wrap in `<ol>` not just `<li>`)
+
+### B. Achievement Requirement Type Dropdown in `src/pages/AdminResources.tsx`
+
+- Replace the `<Input>` on line 606 with a `<Select>` dropdown
+- Options: all 12 keys from UserStats with human-readable labels (e.g., `notes_count` → "Notes Count", `study_minutes` → "Study Minutes", `perfect_quizzes` → "Perfect Quizzes")
+
+### C. Minor Improvements
+
+- In the PDF `buildHtmlDoc` styles (`ExportUtils.tsx`), add `.katex-display` margin and `.katex` inline styling for better math presentation
+- Ensure `downloadAsHTML` appends the wrapper to `document.body` temporarily so html2pdf can measure it (fixes blank PDFs on some browsers)
+
+---
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `src/lib/formatters.ts` | Rewrite `markdownToHtml` with KaTeX math rendering, fix bold/italic/list conversion |
+| `src/components/export/ExportUtils.tsx` | Add KaTeX CSS styles to `buildHtmlDoc`, fix wrapper visibility for html2pdf |
+| `src/pages/AdminResources.tsx` | Replace requirement_type Input with Select dropdown (12 options) |
 
