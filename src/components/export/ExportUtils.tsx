@@ -30,7 +30,13 @@ function buildHtmlDoc(title: string, htmlContent: string): string {
   th { background: #f0f0f0; font-weight: 600; }
   td { word-wrap: break-word; }
   tr:nth-child(even) { background: #fafafa; }
-  .katex-display { overflow-x: auto; max-width: 100%; }
+  .katex-display { overflow-x: auto; max-width: 100%; margin: 12px 0; text-align: center; }
+  .katex { font-size: 1.1em; }
+  .katex-error { color: #c00; font-family: monospace; font-size: 10pt; }
+  blockquote { border-left: 3px solid #ccc; margin: 8px 0; padding: 4px 12px; color: #555; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 16px 0; }
+  img { max-width: 100%; height: auto; }
+  a { color: #1a73e8; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -120,6 +126,12 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   wrapper.style.color = '#1a1a1a';
   wrapper.style.padding = '0';
 
+  // Append to DOM temporarily so html2pdf can measure dimensions
+  wrapper.style.position = 'absolute';
+  wrapper.style.left = '-9999px';
+  wrapper.style.top = '0';
+  document.body.appendChild(wrapper);
+
   const opt = {
     margin: [10, 10, 10, 10] as [number, number, number, number],
     filename: `${baseName}.pdf`,
@@ -132,7 +144,6 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
     await html2pdf().set(opt).from(wrapper).save();
   } catch (err) {
     console.error('PDF generation failed, falling back to HTML download:', err);
-    // Fallback to HTML download
     const blob = new Blob([fullHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -142,6 +153,11 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } finally {
+    // Clean up the temporary wrapper
+    if (wrapper.parentNode) {
+      document.body.removeChild(wrapper);
+    }
   }
 };
 

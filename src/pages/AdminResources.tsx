@@ -603,7 +603,25 @@ const AchievementsTab = ({ adminPassword }: { adminPassword: string }) => {
             <div><Label>ID *</Label><Input value={form.id} onChange={(e) => setForm(f => ({ ...f, id: e.target.value }))} disabled={!!editingId} placeholder="e.g. study_marathon" /></div>
             <div><Label>Name *</Label><Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} /></div>
             <div><Label>Icon (emoji)</Label><Input value={form.icon} onChange={(e) => setForm(f => ({ ...f, icon: e.target.value }))} /></div>
-            <div><Label>Requirement Type</Label><Input value={form.requirement_type} onChange={(e) => setForm(f => ({ ...f, requirement_type: e.target.value }))} /></div>
+            <div><Label>Requirement Type</Label>
+              <Select value={form.requirement_type} onValueChange={(val) => setForm(f => ({ ...f, requirement_type: val }))}>
+                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="notes_count">Notes Count</SelectItem>
+                  <SelectItem value="quizzes_count">Quizzes Count</SelectItem>
+                  <SelectItem value="flashcards_reviewed">Flashcards Reviewed</SelectItem>
+                  <SelectItem value="streak">Streak</SelectItem>
+                  <SelectItem value="focus_sessions">Focus Sessions</SelectItem>
+                  <SelectItem value="total_xp">Total XP</SelectItem>
+                  <SelectItem value="groups_joined">Groups Joined</SelectItem>
+                  <SelectItem value="messages_sent">Messages Sent</SelectItem>
+                  <SelectItem value="challenges_sent">Challenges Sent</SelectItem>
+                  <SelectItem value="perfect_quizzes">Perfect Quizzes</SelectItem>
+                  <SelectItem value="study_minutes">Study Minutes</SelectItem>
+                  <SelectItem value="subjects_with_notes">Subjects With Notes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>Requirement Value</Label><Input type="number" value={form.requirement_value} onChange={(e) => setForm(f => ({ ...f, requirement_value: Number(e.target.value) }))} /></div>
             <div><Label>XP Reward</Label><Input type="number" value={form.xp_reward} onChange={(e) => setForm(f => ({ ...f, xp_reward: Number(e.target.value) }))} /></div>
           </div>
