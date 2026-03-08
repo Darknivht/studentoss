@@ -320,7 +320,7 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
 
     toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
 
-    await generateSectionPDF(container, pdfFilename);
+    await generateFastPDF(container, pdfFilename);
 
     toast.success('PDF downloaded!', { id: toastId, description: pdfFilename, duration: 3000 });
   } catch (err) {
