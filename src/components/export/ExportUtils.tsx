@@ -306,6 +306,8 @@ function downloadHtmlBlob(fullHtml: string, filename: string) {
  * Falls back to HTML download if PDF generation fails.
  */
 export const downloadAsHTML = async (markdownContent: string, title: string, _filename?: string) => {
+  const toastId = toast.loading('Preparing your PDF…', { description: 'Rendering content for download' });
+
   const [htmlContent, katexCss] = await Promise.all([
     Promise.resolve(markdownToHtml(markdownContent)),
     getKatexCss(),
@@ -328,11 +330,16 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
     // Small delay to ensure KaTeX SVGs/spans are fully laid out
     await new Promise(r => setTimeout(r, 200));
 
+    toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
+
     await generateSectionPDF(container, `${baseName}.pdf`);
+
+    toast.success('PDF downloaded!', { id: toastId, description: `${baseName}.pdf`, duration: 3000 });
   } catch (err) {
     console.error('PDF generation failed, falling back to HTML:', err);
     const fullHtml = buildHtmlDoc(title, htmlContent, katexCss);
     downloadHtmlBlob(fullHtml, `${baseName}.html`);
+    toast.warning('Downloaded as HTML instead', { id: toastId, description: 'PDF generation encountered an issue', duration: 3000 });
   } finally {
     document.body.removeChild(container);
   }
