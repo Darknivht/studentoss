@@ -350,6 +350,7 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
  */
 export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
   const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+  const toastId = toast.loading('Preparing your PDF…', { description: 'Rendering content for download' });
 
   const sectionedHtml = wrapSections(htmlString);
 
@@ -362,7 +363,11 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
     await document.fonts.ready;
     await new Promise(r => setTimeout(r, 200));
 
+    toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
+
     await generateSectionPDF(container, pdfFilename);
+
+    toast.success('PDF downloaded!', { id: toastId, description: pdfFilename, duration: 3000 });
   } catch (err) {
     console.error('PDF generation failed:', err);
     const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
@@ -373,6 +378,7 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 200);
+    toast.warning('Downloaded as HTML instead', { id: toastId, description: 'PDF generation encountered an issue', duration: 3000 });
   } finally {
     if (container.parentNode) document.body.removeChild(container);
   }
