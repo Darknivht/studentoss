@@ -202,7 +202,11 @@ export const useSubscription = () => {
 
   // Initial fetch when user changes
   useEffect(() => {
-    if (user) fetchSubscription();
+    if (user) {
+      fetchSubscription();
+    } else {
+      setLoading(false);
+    }
   }, [user, fetchSubscription]);
 
   // Listen for subscription-updated events from payment flow
