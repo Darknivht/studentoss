@@ -166,10 +166,11 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   let wrapper: HTMLDivElement | null = null;
 
   try {
-    const [{ jsPDF }, html2canvas] = await Promise.all([
+    const [{ jsPDF }, html2canvasModule] = await Promise.all([
       import('jspdf'),
-      import('html2canvas').then(m => m.default ?? m),
+      import('html2canvas'),
     ]);
+    const html2canvas = (html2canvasModule as { default?: typeof html2canvasModule }).default ?? html2canvasModule;
 
     wrapper = document.createElement('div');
     wrapper.innerHTML = `<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`;
