@@ -7,6 +7,7 @@ import { Loader2, User, Settings, Bell, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import AdBanner from '@/components/ads/AdBanner';
+import ThemeToggle from '@/components/ThemeToggle';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -77,7 +78,8 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             <span className="font-display font-bold text-foreground">StudentOS</span>
           </Link>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
             <Button variant="ghost" size="icon" className="rounded-full" asChild>
               <Link to="/profile">
                 <User className="w-5 h-5" />

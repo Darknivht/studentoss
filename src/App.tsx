@@ -9,6 +9,7 @@ import PWAUpdateBanner from "@/components/pwa/PWAUpdateBanner";
 import OfflineStatusBanner from "@/components/pwa/OfflineStatusBanner";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { OfflineAIProvider } from "@/context/OfflineAIContext";
+import { ThemeProvider } from "next-themes";
 
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -81,6 +82,7 @@ const MobileBackHandler = () => {
 
 const App = () => (
   <ErrorBoundary>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="studentos-theme">
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -134,6 +136,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ThemeProvider>
   </ErrorBoundary>
 );
 
