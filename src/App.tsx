@@ -129,6 +129,7 @@ const App = () => (
               <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+          </OfflineAIProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
