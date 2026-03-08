@@ -166,11 +166,9 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   let wrapper: HTMLDivElement | null = null;
 
   try {
-    const [{ jsPDF }, html2canvasModule] = await Promise.all([
-      import('jspdf'),
-      import('html2canvas'),
-    ]);
-    const html2canvas = (html2canvasModule as { default?: typeof html2canvasModule }).default ?? html2canvasModule;
+    const { jsPDF } = await import('jspdf');
+    const html2canvasModule = await import('html2canvas');
+    const renderToCanvas = (html2canvasModule as unknown as { default: (el: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement> }).default ?? html2canvasModule;
 
     wrapper = document.createElement('div');
     wrapper.innerHTML = `<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`;
@@ -184,7 +182,7 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
 
     await new Promise(r => setTimeout(r, 150));
 
-    const canvas = await html2canvas(wrapper, {
+    const canvas = await renderToCanvas(wrapper, {
       scale: 2,
       useCORS: true,
       logging: false,
