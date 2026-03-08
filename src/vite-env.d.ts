@@ -1,3 +1,4 @@
 /// <reference types="vite/client" />
 
-declare const __APP_VERSION__: string;
+// eslint-disable-next-line no-var
+declare var __APP_VERSION__: string;

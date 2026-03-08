@@ -427,7 +427,7 @@ const Profile = () => {
           Force Update App
         </Button>
         <p className="text-center text-xs text-muted-foreground/60">
-          App version: {__APP_VERSION__}
+          App version: {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'latest'}
         </p>
         <Button
           variant="outline"
