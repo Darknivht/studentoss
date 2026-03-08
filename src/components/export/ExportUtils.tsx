@@ -1,6 +1,7 @@
 import { markdownToHtml } from '@/lib/formatters';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { toast } from 'sonner';
 
 /**
  * Fetch and cache KaTeX CSS for inline injection into PDF exports.
@@ -305,6 +306,8 @@ function downloadHtmlBlob(fullHtml: string, filename: string) {
  * Falls back to HTML download if PDF generation fails.
  */
 export const downloadAsHTML = async (markdownContent: string, title: string, _filename?: string) => {
+  const toastId = toast.loading('Preparing your PDF…', { description: 'Rendering content for download' });
+
   const [htmlContent, katexCss] = await Promise.all([
     Promise.resolve(markdownToHtml(markdownContent)),
     getKatexCss(),
@@ -327,11 +330,16 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
     // Small delay to ensure KaTeX SVGs/spans are fully laid out
     await new Promise(r => setTimeout(r, 200));
 
+    toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
+
     await generateSectionPDF(container, `${baseName}.pdf`);
+
+    toast.success('PDF downloaded!', { id: toastId, description: `${baseName}.pdf`, duration: 3000 });
   } catch (err) {
     console.error('PDF generation failed, falling back to HTML:', err);
     const fullHtml = buildHtmlDoc(title, htmlContent, katexCss);
     downloadHtmlBlob(fullHtml, `${baseName}.html`);
+    toast.warning('Downloaded as HTML instead', { id: toastId, description: 'PDF generation encountered an issue', duration: 3000 });
   } finally {
     document.body.removeChild(container);
   }
@@ -342,6 +350,7 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
  */
 export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
   const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+  const toastId = toast.loading('Preparing your PDF…', { description: 'Rendering content for download' });
 
   const sectionedHtml = wrapSections(htmlString);
 
@@ -354,7 +363,11 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
     await document.fonts.ready;
     await new Promise(r => setTimeout(r, 200));
 
+    toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
+
     await generateSectionPDF(container, pdfFilename);
+
+    toast.success('PDF downloaded!', { id: toastId, description: pdfFilename, duration: 3000 });
   } catch (err) {
     console.error('PDF generation failed:', err);
     const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
@@ -365,6 +378,7 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 200);
+    toast.warning('Downloaded as HTML instead', { id: toastId, description: 'PDF generation encountered an issue', duration: 3000 });
   } finally {
     if (container.parentNode) document.body.removeChild(container);
   }
