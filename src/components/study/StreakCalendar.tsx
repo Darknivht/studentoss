@@ -18,32 +18,45 @@ const StreakCalendar = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      fetchSessions();
-    } else {
-      setLoading(false);
-    }
+    fetchSessions();
   }, [user, currentMonth]);
 
   const fetchSessions = async () => {
-    if (!user) return;
+    if (!user) {
+      setSessions([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    let timeoutId: number | undefined;
 
     try {
       const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
 
-      const { data, error } = await supabase
+      const queryPromise = supabase
         .from('study_sessions')
         .select('session_date, total_minutes, xp_earned')
         .eq('user_id', user.id)
         .gte('session_date', startOfMonth.toISOString().split('T')[0])
         .lte('session_date', endOfMonth.toISOString().split('T')[0]);
 
-      if (error) throw error;
-      setSessions(data || []);
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) => {
+        timeoutId = window.setTimeout(() => {
+          resolve({ data: null, error: new Error('Study sessions request timed out') });
+        }, 12000);
+      });
+
+      const result = await Promise.race([queryPromise, timeoutPromise]);
+      if (result.error) throw result.error;
+
+      setSessions(result.data || []);
     } catch (error) {
       console.error('Error fetching sessions:', error);
+      setSessions([]);
     } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
       setLoading(false);
     }
   };
