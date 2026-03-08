@@ -1,84 +1,44 @@
 
 
-# Improve Error Handling, Fixes, and UI Polish
+# Fix PDF Formatting, Math Rendering, and Achievement Dropdown
 
-## Current State Assessment
+## Problems Found
 
-After reviewing the codebase thoroughly, the previous stabilization work (auth hardening, subscription normalization, PWA cache strategy) is solid. The remaining issues fall into three categories: **missing error boundaries in data fetches**, **UI polish gaps**, and **minor reliability issues**.
+1. **PDF shows raw asterisks and bad formatting**: The `markdownToHtml()` function in `formatters.ts` uses fragile regex that fails on multi-line bold, nested formatting, and doesn't strip `**` properly in many cases. The bold regex `\*\*(.+?)\*\*` is non-greedy single-line only and runs after headers, causing conflicts.
+
+2. **Math equations not rendered in PDFs**: The HTML doc includes KaTeX CSS but the `markdownToHtml()` never converts `$...$` or `$$...$$` to KaTeX HTML. The `katex` package is already installed and has a `renderToString()` API we can use directly.
+
+3. **Achievement requirement_type is a free text Input**: Admin can type anything, but only 12 specific keys from `UserStats` are valid (`notes_count`, `quizzes_count`, `flashcards_reviewed`, `streak`, `focus_sessions`, `total_xp`, `groups_joined`, `messages_sent`, `challenges_sent`, `perfect_quizzes`, `study_minutes`, `subjects_with_notes`).
+
+---
 
 ## Plan
 
-### 1. Add Loading Timeout Safety Nets
-**Files:** `src/pages/Dashboard.tsx`, `src/components/gamification/DailyChallenges.tsx`, `src/components/dashboard/StudyProgressWidget.tsx`
+### A. Fix `markdownToHtml()` in `src/lib/formatters.ts`
 
-- Add a hard 10-second timeout to `fetchData()` in Dashboard so it never hangs indefinitely if a network call stalls
-- Same for DailyChallenges and StudyProgressWidget
-- If timeout triggers, show cached data or zeros instead of infinite spinner
+- Rewrite the conversion pipeline with correct ordering: code blocks first (escape them), then math, then tables, then headers, then bold/italic, then lists, then paragraphs
+- Add math rendering: use `katex.renderToString()` for `$$...$$` (display) and `$...$` (inline) blocks before other processing
+- Fix bold/italic regex to handle multi-line and nested cases properly
+- Add blockquote support (`>` lines)
+- Handle numbered lists properly (wrap in `<ol>` not just `<li>`)
 
-### 2. Fix DailyQuizChallenge Missing `authReady` Guard
-**File:** `src/components/gamification/DailyQuizChallenge.tsx`
+### B. Achievement Requirement Type Dropdown in `src/pages/AdminResources.tsx`
 
-- The component uses `useAuth()` but only checks `user`, not `authReady` — it can attempt to read data before auth is initialized
-- Add `authReady` check before any data operations
+- Replace the `<Input>` on line 606 with a `<Select>` dropdown
+- Options: all 12 keys from UserStats with human-readable labels (e.g., `notes_count` → "Notes Count", `study_minutes` → "Study Minutes", `perfect_quizzes` → "Perfect Quizzes")
 
-### 3. Fix AnnouncementBanner Unguarded Fetch
-**File:** `src/components/dashboard/AnnouncementBanner.tsx`
+### C. Minor Improvements
 
-- Fetches from `announcements` table on mount without any error handling — if the table doesn't exist or RLS blocks it, it silently fails but could cause console noise
-- Wrap in try/catch and silently fail
+- In the PDF `buildHtmlDoc` styles (`ExportUtils.tsx`), add `.katex-display` margin and `.katex` inline styling for better math presentation
+- Ensure `downloadAsHTML` appends the wrapper to `document.body` temporarily so html2pdf can measure it (fixes blank PDFs on some browsers)
 
-### 4. Improve AppLayout Loading State
-**File:** `src/components/layout/AppLayout.tsx`
+---
 
-- Add a maximum loading timeout (8s) so users don't see "Loading StudentOS..." forever if auth hangs
-- After timeout, show a retry/reload option
+## Files Modified
 
-### 5. Improve Dashboard Empty/Error States
-**File:** `src/pages/Dashboard.tsx`
-
-- When profile is null after loading, show a friendly fallback card instead of showing "0 days" / "0 XP" defaults
-- Add pull-to-refresh / retry button if data fetch fails
-
-### 6. Improve StreakCard Visual Polish
-**File:** `src/components/dashboard/StreakCard.tsx`
-
-- Add subtle animation when XP/streak values update
-- Show "Start your streak!" message when streak is 0
-
-### 7. Better Error Feedback in AI Tools
-**File:** `src/components/ai-tools/AIToolLayout.tsx`
-
-- When AI generation fails, show inline error with retry button instead of just toast
-- Ensure loading state always resolves (add timeout guard)
-
-### 8. Fix useStudyTimeTracker Missing authReady
-**File:** `src/hooks/useStudyTimeTracker.ts`
-
-- `refreshStats` only checks `user` but doesn't wait for `authReady`, potentially firing before session is ready
-- Gate on `authReady`
-
-### 9. Improve Profile Page Resilience
-**File:** `src/pages/Profile.tsx`
-
-- Add loading skeleton state while profile data loads
-- Show inline error if profile fetch fails with retry option
-
-### 10. Polish Bottom Navigation
-**File:** `src/components/layout/BottomNav.tsx`
-
-- Add haptic-style tap feedback animation
-- Improve active state visibility with a dot indicator
-
-## Files to modify
-- `src/pages/Dashboard.tsx` — timeout + empty states + retry
-- `src/components/gamification/DailyChallenges.tsx` — timeout safety
-- `src/components/gamification/DailyQuizChallenge.tsx` — authReady guard
-- `src/components/dashboard/StudyProgressWidget.tsx` — timeout safety
-- `src/components/dashboard/AnnouncementBanner.tsx` — error handling
-- `src/components/dashboard/StreakCard.tsx` — zero-state messaging
-- `src/components/layout/AppLayout.tsx` — loading timeout + retry
-- `src/components/ai-tools/AIToolLayout.tsx` — inline error + retry
-- `src/hooks/useStudyTimeTracker.ts` — authReady guard
-- `src/pages/Profile.tsx` — loading skeleton + error state
-- `src/components/layout/BottomNav.tsx` — active indicator polish
+| File | Change |
+|------|--------|
+| `src/lib/formatters.ts` | Rewrite `markdownToHtml` with KaTeX math rendering, fix bold/italic/list conversion |
+| `src/components/export/ExportUtils.tsx` | Add KaTeX CSS styles to `buildHtmlDoc`, fix wrapper visibility for html2pdf |
+| `src/pages/AdminResources.tsx` | Replace requirement_type Input with Select dropdown (12 options) |
 

@@ -57,7 +57,7 @@ interface DailyQuizChallengeProps {
 }
 
 const DailyQuizChallenge = ({ onComplete }: DailyQuizChallengeProps) => {
-  const { user } = useAuth();
+  const { user, authReady } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { subscription } = useSubscription();

@@ -40,6 +40,8 @@ interface DailyChallengesProps {
   refreshKey?: number;
 }
 
+const FETCH_TIMEOUT_MS = 10000;
+
 const DailyChallenges = ({ compact = false, refreshKey = 0 }: DailyChallengesProps) => {
   const { user, authReady } = useAuth();
   const { toast } = useToast();
@@ -48,7 +50,7 @@ const DailyChallenges = ({ compact = false, refreshKey = 0 }: DailyChallengesPro
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (authReady && user) fetchChallengesProgress();
+    if (authReady && user) fetchWithTimeout();
     else if (authReady) setLoading(false);
   }, [user, authReady, refreshKey]);
 
@@ -57,6 +59,15 @@ const DailyChallenges = ({ compact = false, refreshKey = 0 }: DailyChallengesPro
     const interval = setInterval(fetchChallengesProgress, 30000);
     return () => clearInterval(interval);
   }, [user, authReady]);
+
+  const fetchWithTimeout = async () => {
+    const timeout = new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), FETCH_TIMEOUT_MS));
+    const result = await Promise.race([fetchChallengesProgress(), timeout]);
+    if (result === 'timeout') {
+      console.warn('DailyChallenges fetch timed out');
+      setLoading(false);
+    }
+  };
 
   const fetchChallengesProgress = async () => {
     try {

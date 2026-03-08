@@ -13,15 +13,26 @@ interface StudyStats {
   totalQuizzes: number;
 }
 
+const FETCH_TIMEOUT_MS = 10000;
+
 const StudyProgressWidget = () => {
   const { user, authReady } = useAuth();
   const [stats, setStats] = useState<StudyStats>({ dueFlashcards: 0, todaySessions: 0, todayMinutes: 0, totalQuizzes: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (authReady && user) fetchStats();
+    if (authReady && user) fetchWithTimeout();
     else if (authReady) setLoading(false);
   }, [user, authReady]);
+
+  const fetchWithTimeout = async () => {
+    const timeout = new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), FETCH_TIMEOUT_MS));
+    const result = await Promise.race([fetchStats(), timeout]);
+    if (result === 'timeout') {
+      console.warn('StudyProgressWidget fetch timed out');
+      setLoading(false);
+    }
+  };
 
   const fetchStats = async () => {
     try {
