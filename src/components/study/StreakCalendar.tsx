@@ -20,6 +20,8 @@ const StreakCalendar = () => {
   useEffect(() => {
     if (user) {
       fetchSessions();
+    } else {
+      setLoading(false);
     }
   }, [user, currentMonth]);
 
