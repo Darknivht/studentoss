@@ -82,6 +82,7 @@ const MobileBackHandler = () => {
 
 const App = () => (
   <ErrorBoundary>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="studentos-theme">
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
