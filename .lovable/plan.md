@@ -1,44 +1,51 @@
 
+Goal: Fix the systemic “nothing loads / shows Free / AI not generating” regression by stabilizing auth initialization, data-fetch timing, and stale API caching.
 
-# Fix PDF Formatting, Math Rendering, and Achievement Dropdown
+1) Root-cause hardening (auth + race conditions)
+- Refactor `src/hooks/useAuth.tsx` so session restore is completed first, then listeners run.
+- Stop awaiting database calls inside `onAuthStateChange` callback (move blocked-user check to fire-and-forget helper).
+- Expose an explicit auth-ready signal so features don’t query too early.
 
-## Problems Found
+2) Make critical data fetches auth-ready + resilient
+- Update these high-impact files to fetch only when auth is ready and user exists:
+  - `src/hooks/useSubscription.ts`
+  - `src/pages/Profile.tsx`
+  - `src/pages/Dashboard.tsx`
+  - `src/components/gamification/DailyChallenges.tsx`
+  - `src/components/dashboard/StudyProgressWidget.tsx`
+  - `src/components/study/StreakCalendar.tsx`
+  - `src/hooks/useStudyTimeTracker.ts`
+- Add shared timeout + retry utility (short backoff, 2 retries) for profile/subscription/stats queries.
+- Preserve last good state on transient errors instead of reverting to default Free/0.
 
-1. **PDF shows raw asterisks and bad formatting**: The `markdownToHtml()` function in `formatters.ts` uses fragile regex that fails on multi-line bold, nested formatting, and doesn't strip `**` properly in many cases. The bold regex `\*\*(.+?)\*\*` is non-greedy single-line only and runs after headers, causing conflicts.
+3) Fix subscription misclassification and gating side effects
+- Normalize tier values safely (`trim().toLowerCase()`), and keep active-expiry checks robust.
+- Prevent paid users from being treated as Free while subscription is still loading:
+  - `src/components/ads/AdBanner.tsx`
+  - `src/components/ai-tools/AIToolLayout.tsx`
+- Keep auto-refresh on focus/online + `subscription-updated` event.
 
-2. **Math equations not rendered in PDFs**: The HTML doc includes KaTeX CSS but the `markdownToHtml()` never converts `$...$` or `$$...$$` to KaTeX HTML. The `katex` package is already installed and has a `renderToString()` API we can use directly.
+4) Fix AI request reliability end-to-end
+- Unify cloud AI calls to use authenticated session token (not static publishable bearer) in:
+  - `src/lib/ai.ts`
+  - `src/hooks/useOfflineAI.ts`
+- Ensure all AI loaders exit on failure and show user-facing error feedback (no hanging generation state).
 
-3. **Achievement requirement_type is a free text Input**: Admin can type anything, but only 12 specific keys from `UserStats` are valid (`notes_count`, `quizzes_count`, `flashcards_reviewed`, `streak`, `focus_sessions`, `total_xp`, `groups_joined`, `messages_sent`, `challenges_sent`, `perfect_quizzes`, `study_minutes`, `subjects_with_notes`).
+5) Remove stale authenticated API caching risk
+- In `vite.config.ts`, change authenticated REST API runtime cache strategy from cached fallback to network-only for user data endpoints.
+- Keep asset/storage caching as-is.
+- Bump cache namespace/version so old stale API entries are invalidated.
 
----
+6) Verification pass (must-pass checklist)
+```text
+A) Free user: XP/streak/challenges load after refresh
+B) Pro/Plus user: tier badge + gated tools unlock correctly
+C) AI tools: generate response successfully, fail gracefully when backend fails
+D) Profile page: no default fallback values when real data exists
+E) Dashboard: no infinite loading widgets
+F) After hard refresh + Force Update: same correct behavior
+```
 
-## Plan
-
-### A. Fix `markdownToHtml()` in `src/lib/formatters.ts`
-
-- Rewrite the conversion pipeline with correct ordering: code blocks first (escape them), then math, then tables, then headers, then bold/italic, then lists, then paragraphs
-- Add math rendering: use `katex.renderToString()` for `$$...$$` (display) and `$...$` (inline) blocks before other processing
-- Fix bold/italic regex to handle multi-line and nested cases properly
-- Add blockquote support (`>` lines)
-- Handle numbered lists properly (wrap in `<ol>` not just `<li>`)
-
-### B. Achievement Requirement Type Dropdown in `src/pages/AdminResources.tsx`
-
-- Replace the `<Input>` on line 606 with a `<Select>` dropdown
-- Options: all 12 keys from UserStats with human-readable labels (e.g., `notes_count` → "Notes Count", `study_minutes` → "Study Minutes", `perfect_quizzes` → "Perfect Quizzes")
-
-### C. Minor Improvements
-
-- In the PDF `buildHtmlDoc` styles (`ExportUtils.tsx`), add `.katex-display` margin and `.katex` inline styling for better math presentation
-- Ensure `downloadAsHTML` appends the wrapper to `document.body` temporarily so html2pdf can measure it (fixes blank PDFs on some browsers)
-
----
-
-## Files Modified
-
-| File | Change |
-|------|--------|
-| `src/lib/formatters.ts` | Rewrite `markdownToHtml` with KaTeX math rendering, fix bold/italic/list conversion |
-| `src/components/export/ExportUtils.tsx` | Add KaTeX CSS styles to `buildHtmlDoc`, fix wrapper visibility for html2pdf |
-| `src/pages/AdminResources.tsx` | Replace requirement_type Input with Select dropdown (12 options) |
-
+Technical implementation notes
+- This is primarily a frontend-state and cache-coherency fix; no schema changes required.
+- If any user is found without profile data during implementation, add a safe profile self-heal upsert path at auth init (without changing auth tables).
