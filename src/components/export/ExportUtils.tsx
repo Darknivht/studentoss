@@ -141,89 +141,44 @@ const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
 const SECTION_GAP_MM = 2;
 
 /**
- * Section-based PDF generation: captures each block-level element individually
- * and places them on pages without slicing text across page boundaries.
+ * Fast PDF generation: single html2canvas capture of the entire container,
+ * then slice the resulting image into A4 pages. ~1-3 seconds total.
  */
-async function generateSectionPDF(container: HTMLElement, filename: string): Promise<void> {
-  const sections = Array.from(
-    container.querySelectorAll('[data-pdf-section]')
-  ) as HTMLElement[];
+async function generateFastPDF(container: HTMLElement, filename: string): Promise<void> {
+  const canvas = await html2canvas(container, {
+    scale: 1.5,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    logging: false,
+    windowWidth: 595,
+  });
 
-  if (sections.length === 0) {
-    // Fallback: capture entire container as one section
-    sections.push(container);
-  }
+  const imgWidth = canvas.width;
+  const imgHeight = canvas.height;
+
+  if (imgWidth === 0 || imgHeight === 0) throw new Error('Empty canvas');
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  let currentY = MARGIN_MM;
-  let isFirstPage = true;
+  const scaleFactor = CONTENT_WIDTH_MM / imgWidth;
+  const pageContentHeightPx = (A4_HEIGHT_MM - MARGIN_MM * 2) / scaleFactor;
 
-  for (const section of sections) {
-    let canvas: HTMLCanvasElement;
-    try {
-      canvas = await html2canvas(section, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: 595,
-        width: section.scrollWidth,
-      });
-    } catch {
-      continue; // skip sections that fail to render
-    }
+  const totalPages = Math.ceil(imgHeight / pageContentHeightPx);
 
-    const widthPx = canvas.width / 2;
-    const heightPx = canvas.height / 2;
+  for (let page = 0; page < totalPages; page++) {
+    if (page > 0) pdf.addPage();
 
-    if (widthPx === 0 || heightPx === 0) continue;
+    const srcY = page * pageContentHeightPx;
+    const srcH = Math.min(pageContentHeightPx, imgHeight - srcY);
 
-    const scaleFactor = CONTENT_WIDTH_MM / widthPx;
-    const heightMM = heightPx * scaleFactor;
+    const sliceCanvas = document.createElement('canvas');
+    sliceCanvas.width = imgWidth;
+    sliceCanvas.height = srcH;
+    const ctx = sliceCanvas.getContext('2d');
+    if (!ctx) continue;
 
-    const remainingSpace = A4_HEIGHT_MM - MARGIN_MM - currentY;
-
-    // If section won't fit on current page, add new page
-    if (heightMM > remainingSpace && currentY > MARGIN_MM + 1) {
-      pdf.addPage();
-      currentY = MARGIN_MM;
-      isFirstPage = false;
-    }
-
-    // If a single section is taller than one full page, we need to split it
-    if (heightMM > A4_HEIGHT_MM - (MARGIN_MM * 2)) {
-      // Render as multi-page image slice
-      const pageContentHeight = A4_HEIGHT_MM - (MARGIN_MM * 2);
-      const totalPages = Math.ceil(heightMM / pageContentHeight);
-
-      for (let p = 0; p < totalPages; p++) {
-        if (p > 0 || currentY > MARGIN_MM + 1) {
-          if (p > 0) {
-            pdf.addPage();
-          }
-          currentY = MARGIN_MM;
-        }
-
-        // Create a clipped canvas for this page segment
-        const srcY = (p * pageContentHeight / scaleFactor) * 2; // account for scale:2
-        const srcH = Math.min((pageContentHeight / scaleFactor) * 2, canvas.height - srcY);
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = srcH;
-        const ctx = sliceCanvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
-          const sliceData = sliceCanvas.toDataURL('image/png');
-          const sliceHeightMM = (srcH / 2) * scaleFactor;
-          pdf.addImage(sliceData, 'PNG', MARGIN_MM, currentY, CONTENT_WIDTH_MM, sliceHeightMM);
-          currentY += sliceHeightMM + SECTION_GAP_MM;
-        }
-      }
-    } else {
-      const imgData = canvas.toDataURL('image/png');
-      pdf.addImage(imgData, 'PNG', MARGIN_MM, currentY, CONTENT_WIDTH_MM, heightMM);
-      currentY += heightMM + SECTION_GAP_MM;
-    }
+    ctx.drawImage(canvas, 0, srcY, imgWidth, srcH, 0, 0, imgWidth, srcH);
+    const sliceHeightMM = srcH * scaleFactor;
+    pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', MARGIN_MM, MARGIN_MM, CONTENT_WIDTH_MM, sliceHeightMM);
   }
 
   pdf.save(filename);
@@ -332,7 +287,7 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
 
     toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
 
-    await generateSectionPDF(container, `${baseName}.pdf`);
+    await generateFastPDF(container, `${baseName}.pdf`);
 
     toast.success('PDF downloaded!', { id: toastId, description: `${baseName}.pdf`, duration: 3000 });
   } catch (err) {
@@ -365,7 +320,7 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
 
     toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
 
-    await generateSectionPDF(container, pdfFilename);
+    await generateFastPDF(container, pdfFilename);
 
     toast.success('PDF downloaded!', { id: toastId, description: pdfFilename, duration: 3000 });
   } catch (err) {
