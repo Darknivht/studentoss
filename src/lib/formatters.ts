@@ -78,12 +78,55 @@ export function truncateText(text: string, maxLength: number): string {
 }
 
 /**
+ * Auto-wrap common undelimited math patterns in $...$ delimiters
+ * so KaTeX can render them properly.
+ */
+function autoWrapMath(content: string): string {
+  let result = content;
+
+  // Skip lines that are already inside $ delimiters or code blocks
+  // Process line by line to avoid false positives
+  const lines = result.split('\n');
+  const processed = lines.map(line => {
+    // Skip if already has $ delimiters, or is a code block fence, or inside code
+    if (line.includes('$') || line.startsWith('```') || line.startsWith('    ')) {
+      return line;
+    }
+
+    // Wrap common LaTeX commands that appear without delimiters
+    // \frac{...}{...}, \sqrt{...}, \sum, \int, \lim, \infty, etc.
+    line = line.replace(/(\\(?:frac|sqrt|sum|int|lim|infty|alpha|beta|gamma|delta|theta|pi|sigma|omega|partial|nabla|pm|mp|times|div|cdot|leq|geq|neq|approx|equiv|rightarrow|leftarrow|Rightarrow|Leftarrow|forall|exists|in|notin|subset|supset|cup|cap|log|ln|sin|cos|tan|sec|csc|cot)(?:\{[^}]*\})*(?:\{[^}]*\})*)/g, (match) => {
+      return `$${match}$`;
+    });
+
+    // Wrap expressions with ^ or _ that look like math (e.g., x^2, a_n, x^{n+1})
+    // But only when they look like isolated math expressions, not prose
+    line = line.replace(/(?<!\w)([a-zA-Z]\^(?:\{[^}]+\}|\d+))(?!\w)/g, '$$$1$$');
+    line = line.replace(/(?<!\w)([a-zA-Z]_(?:\{[^}]+\}|\d+))(?!\w)/g, '$$$1$$');
+
+    // Fix double-wrapped: $$...$$ that shouldn't be
+    line = line.replace(/\$\$([^$]+)\$\$/g, (match, inner) => {
+      // If it's on its own line and short, keep as display math; otherwise inline
+      if (inner.includes('\\frac') || inner.includes('\\sum') || inner.includes('\\int')) {
+        return match; // keep display
+      }
+      return `$${inner}$`;
+    });
+
+    return line;
+  });
+
+  return processed.join('\n');
+}
+
+/**
  * Convert markdown content to HTML for PDF/print with proper table, math, and formatting support
  */
 export function markdownToHtml(content: string): string {
   if (!content) return '';
 
-  let html = content;
+  // Pre-process: auto-wrap undelimited math
+  let html = autoWrapMath(content);
 
   // 1. Protect code blocks — replace with placeholders
   const codeBlocks: string[] = [];
@@ -106,7 +149,7 @@ export function markdownToHtml(content: string): string {
     try {
       return katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false });
     } catch {
-      return `<div class="katex-error">${escapeHtml(tex)}</div>`;
+      return `<div class="katex-fallback" style="font-family:monospace;font-size:10pt;background:#f4f4f4;padding:4px 8px;border-radius:4px;">${escapeHtml(tex)}</div>`;
     }
   });
 
@@ -114,7 +157,7 @@ export function markdownToHtml(content: string): string {
     try {
       return katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false });
     } catch {
-      return `<span class="katex-error">${escapeHtml(tex)}</span>`;
+      return `<span class="katex-fallback" style="font-family:monospace;background:#f4f4f4;padding:1px 3px;border-radius:3px;">${escapeHtml(tex)}</span>`;
     }
   });
 

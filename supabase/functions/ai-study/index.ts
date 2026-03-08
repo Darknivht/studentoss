@@ -670,6 +670,7 @@ Keep responses helpful but concise unless detail is needed.${adaptiveCtx}`;
           ...userMessages,
         ],
         stream: true,
+        max_tokens: 8192,
       }),
     });
 

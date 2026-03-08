@@ -193,6 +193,15 @@
   max-width: 100%;
 }
 
+.katex-error {
+  color: inherit !important;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  background: hsl(var(--muted));
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
 /* Prose table styling for markdown-rendered tables */
 .prose table {
   @apply w-full border-collapse text-sm;

@@ -1,16 +1,33 @@
 import { markdownToHtml, stripMarkdown } from '@/lib/formatters';
 import html2pdf from 'html2pdf.js';
+import katexCssUrl from 'katex/dist/katex.min.css?url';
 
-const KATEX_CSS_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css';
+/**
+ * Fetch and cache KaTeX CSS for inline injection into PDF exports.
+ * html2pdf renders from a detached DOM element, so external <link> tags never load.
+ */
+let katexCssCache: string | null = null;
+async function getKatexCss(): Promise<string> {
+  if (katexCssCache) return katexCssCache;
+  try {
+    const res = await fetch(katexCssUrl);
+    katexCssCache = await res.text();
+  } catch {
+    // Fallback: minimal styles so math is at least readable
+    katexCssCache = `.katex { font-size: 1.1em; } .katex-display { text-align: center; margin: 12px 0; }`;
+  }
+  return katexCssCache;
+}
 
-function buildHtmlDoc(title: string, htmlContent: string): string {
+function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: string): string {
+  const katexStyle = inlineKatexCss ? `<style>${inlineKatexCss}</style>` : '';
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
-<link rel="stylesheet" href="${KATEX_CSS_CDN}">
+${katexStyle}
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11pt; line-height: 1.5; padding: 24px; max-width: 800px; margin: 0 auto; color: #1a1a1a; }
@@ -32,7 +49,7 @@ function buildHtmlDoc(title: string, htmlContent: string): string {
   tr:nth-child(even) { background: #fafafa; }
   .katex-display { overflow-x: auto; max-width: 100%; margin: 12px 0; text-align: center; }
   .katex { font-size: 1.1em; }
-  .katex-error { color: #c00; font-family: monospace; font-size: 10pt; }
+  .katex-error, .katex-fallback { color: #333; font-family: 'Courier New', monospace; font-size: 10pt; background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }
   blockquote { border-left: 3px solid #ccc; margin: 8px 0; padding: 4px 12px; color: #555; }
   hr { border: none; border-top: 1px solid #ddd; margin: 16px 0; }
   img { max-width: 100%; height: auto; }
@@ -104,11 +121,14 @@ function sanitizeFilename(title: string): string {
 
 /**
  * Download markdown content as a real PDF file using html2pdf.js.
- * Works reliably on all browsers including mobile.
+ * KaTeX CSS is injected inline so math renders correctly in the detached DOM.
  */
 export const downloadAsHTML = async (markdownContent: string, title: string, _filename?: string) => {
-  const htmlContent = markdownToHtml(markdownContent);
-  const fullHtml = buildHtmlDoc(title, htmlContent);
+  const [htmlContent, katexCss] = await Promise.all([
+    Promise.resolve(markdownToHtml(markdownContent)),
+    getKatexCss(),
+  ]);
+  const fullHtml = buildHtmlDoc(title, htmlContent, katexCss);
 
   let baseName = _filename || sanitizeFilename(title);
   baseName = baseName.replace(/\.(html|pdf)$/i, '');
@@ -125,6 +145,15 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   wrapper.style.lineHeight = '1.5';
   wrapper.style.color = '#1a1a1a';
   wrapper.style.padding = '0';
+
+  // Inject KaTeX CSS as a <style> tag inside wrapper so html2pdf can use it
+  const styleEl = document.createElement('style');
+  styleEl.textContent = katexCss + `
+    .katex-error, .katex-fallback { color: #333 !important; font-family: 'Courier New', monospace; font-size: 10pt; background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }
+    .katex-display { overflow-x: auto; max-width: 100%; margin: 12px 0; text-align: center; }
+    .katex { font-size: 1.1em; }
+  `;
+  wrapper.prepend(styleEl);
 
   // Append to DOM temporarily so html2pdf can measure dimensions
   wrapper.style.position = 'absolute';
