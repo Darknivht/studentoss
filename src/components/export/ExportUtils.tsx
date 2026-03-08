@@ -6,18 +6,29 @@ import { markdownToHtml } from '@/lib/formatters';
 let katexCssCache: string | null = null;
 async function getKatexCss(): Promise<string> {
   if (katexCssCache) return katexCssCache;
+
+  const fallbackCss = `.katex { font-size: 1.1em; } .katex-display { text-align: center; margin: 12px 0; }`;
+
   try {
-    // Try fetching from CDN as the most reliable source
-    const res = await fetch('https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css');
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 1800);
+
+    const res = await fetch('https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css', {
+      signal: controller.signal,
+      cache: 'force-cache',
+    });
+
+    window.clearTimeout(timeoutId);
+
     if (res.ok) {
       katexCssCache = await res.text();
       return katexCssCache;
     }
   } catch {
-    // ignore
+    // fall back quickly when CDN is blocked/unreachable
   }
-  // Fallback: minimal styles so math is at least readable
-  katexCssCache = `.katex { font-size: 1.1em; } .katex-display { text-align: center; margin: 12px 0; }`;
+
+  katexCssCache = fallbackCss;
   return katexCssCache;
 }
 
