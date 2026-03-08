@@ -78,7 +78,8 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             <span className="font-display font-bold text-foreground">StudentOS</span>
           </Link>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
             <Button variant="ghost" size="icon" className="rounded-full" asChild>
               <Link to="/profile">
                 <User className="w-5 h-5" />
