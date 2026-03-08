@@ -57,18 +57,7 @@ export default defineConfig(({ mode }) => ({
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/rest\/v1\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "supabase-api-cache",
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24, // 24 hours
-              },
-              networkTimeoutSeconds: 5,
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
+            handler: "NetworkOnly",
           },
           {
             urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/auth\/.*/i,
