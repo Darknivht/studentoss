@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { SUBSCRIPTION_ENABLED } from '@/lib/subscriptionConfig';
+import { resilientQuery } from '@/lib/resilientFetch';
 
 interface FeatureLimits {
   aiCallsLimit: number;
@@ -58,33 +59,16 @@ interface SubscriptionData {
 }
 
 const FREE_LIMITS: FeatureLimits = {
-  aiCallsLimit: 5,
-  quizzesLimit: 5,
-  flashcardsLimit: 15,
-  notesLimit: 5,
-  jobSearchesLimit: 3,
-  resumeTemplatesLimit: 3,
-  examQuestionsLimit: 0,
+  aiCallsLimit: 5, quizzesLimit: 5, flashcardsLimit: 15, notesLimit: 5,
+  jobSearchesLimit: 3, resumeTemplatesLimit: 3, examQuestionsLimit: 0,
 };
-
 const PLUS_LIMITS: FeatureLimits = {
-  aiCallsLimit: 30,
-  quizzesLimit: 15,
-  flashcardsLimit: 50,
-  notesLimit: 15,
-  jobSearchesLimit: 10,
-  resumeTemplatesLimit: 7,
-  examQuestionsLimit: 30,
+  aiCallsLimit: 30, quizzesLimit: 15, flashcardsLimit: 50, notesLimit: 15,
+  jobSearchesLimit: 10, resumeTemplatesLimit: 7, examQuestionsLimit: 30,
 };
-
 const PRO_LIMITS: FeatureLimits = {
-  aiCallsLimit: Infinity,
-  quizzesLimit: Infinity,
-  flashcardsLimit: Infinity,
-  notesLimit: Infinity,
-  jobSearchesLimit: Infinity,
-  resumeTemplatesLimit: 10,
-  examQuestionsLimit: Infinity,
+  aiCallsLimit: Infinity, quizzesLimit: Infinity, flashcardsLimit: Infinity, notesLimit: Infinity,
+  jobSearchesLimit: Infinity, resumeTemplatesLimit: 10, examQuestionsLimit: Infinity,
 };
 
 const FREE_LIFETIME: LifetimeLimits = { totalNotes: 15, totalQuizzes: 20, totalFlashcardSets: 10, totalAIUses: 30 };
@@ -101,19 +85,22 @@ const FULL_ACCESS: SubscriptionData = {
   canUseChat: true, canUseGroupChat: true, canUseAdvancedTools: true, canUseMockExam: true, showAds: false,
 };
 
+const DEFAULT_FREE: SubscriptionData = {
+  tier: 'free', isPro: false, isPlus: false,
+  aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0, examQuestionsToday: 0,
+  jobSearchesThisMonth: 0, jobSearchesResetMonth: '',
+  limits: FREE_LIMITS, lifetimeLimits: FREE_LIFETIME,
+  totalNotesCount: 0, totalQuizzesCount: 0, totalFlashcardSetsCount: 0, totalAIUsesCount: 0,
+  canUseAI: true, canCreateQuiz: true, canCreateFlashcard: true, canCreateNote: true,
+  canUseChat: true, canUseGroupChat: false, canUseAdvancedTools: false, canUseMockExam: false, showAds: true,
+};
+
 export const useSubscription = () => {
-  const { user } = useAuth();
-  const [subscription, setSubscription] = useState<SubscriptionData>({
-    tier: 'free', isPro: false, isPlus: false,
-    aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0, examQuestionsToday: 0,
-    jobSearchesThisMonth: 0, jobSearchesResetMonth: '',
-    limits: FREE_LIMITS, lifetimeLimits: FREE_LIFETIME,
-    totalNotesCount: 0, totalQuizzesCount: 0, totalFlashcardSetsCount: 0, totalAIUsesCount: 0,
-    canUseAI: true, canCreateQuiz: true, canCreateFlashcard: true, canCreateNote: true,
-    canUseChat: true, canUseGroupChat: false, canUseAdvancedTools: false, canUseMockExam: false, showAds: true,
-  });
+  const { user, authReady } = useAuth();
+  const [subscription, setSubscription] = useState<SubscriptionData>(DEFAULT_FREE);
   const [loading, setLoading] = useState(true);
   const lastFetchRef = useRef<number>(0);
+  const hasFetchedRef = useRef(false);
 
   const fetchSubscription = useCallback(async () => {
     if (!user) {
@@ -140,23 +127,34 @@ export const useSubscription = () => {
           .gte('created_at', new Date().toISOString().split('T')[0]),
       ]);
 
-      if (profileRes.error) throw profileRes.error;
-      const data = profileRes.data;
-
-      const today = new Date().toISOString().split('T')[0];
-      if (data?.ai_calls_reset_at !== today) {
-        await supabase.from('profiles').update({
-          ai_calls_today: 0, quizzes_today: 0, flashcards_generated_today: 0, notes_today: 0, ai_calls_reset_at: today
-        }).eq('user_id', user.id);
+      if (profileRes.error) {
+        console.error('[Subscription] Profile fetch error:', profileRes.error);
+        // Don't overwrite last good state on transient errors
+        if (hasFetchedRef.current) {
+          setLoading(false);
+          return;
+        }
+        throw profileRes.error;
       }
 
-      const tierRaw = data?.subscription_tier || 'free';
+      const data = profileRes.data;
+      const today = new Date().toISOString().split('T')[0];
+
+      if (data?.ai_calls_reset_at !== today) {
+        // Fire-and-forget daily reset
+        supabase.from('profiles').update({
+          ai_calls_today: 0, quizzes_today: 0, flashcards_generated_today: 0, notes_today: 0, ai_calls_reset_at: today
+        }).eq('user_id', user.id).then(() => {});
+      }
+
+      // Normalize tier safely
+      const tierRaw = (data?.subscription_tier || 'free').trim().toLowerCase();
       const expiresAt = data?.subscription_expires_at;
       const isActive = !expiresAt || new Date(expiresAt) > new Date();
       const isPro = tierRaw === 'pro' && isActive;
       const isPlus = tierRaw === 'plus' && isActive;
       const tier: 'free' | 'plus' | 'pro' = isPro ? 'pro' : isPlus ? 'plus' : 'free';
-      
+
       console.log('[Subscription] Raw tier:', tierRaw, '| Expires:', expiresAt, '| isActive:', isActive, '| Resolved tier:', tier);
 
       const limits = isPro ? PRO_LIMITS : isPlus ? PLUS_LIMITS : FREE_LIMITS;
@@ -192,6 +190,7 @@ export const useSubscription = () => {
         canUseMockExam: isPro || isPlus,
         showAds: tier === 'free',
       });
+      hasFetchedRef.current = true;
       lastFetchRef.current = Date.now();
     } catch (error) {
       console.error('Error fetching subscription:', error);
@@ -200,27 +199,25 @@ export const useSubscription = () => {
     }
   }, [user]);
 
-  // Initial fetch when user changes
+  // Only fetch when authReady AND user exists
   useEffect(() => {
+    if (!authReady) return;
     if (user) {
       fetchSubscription();
     } else {
       setLoading(false);
     }
-  }, [user, fetchSubscription]);
+  }, [user, authReady, fetchSubscription]);
 
-  // Listen for subscription-updated events from payment flow
   useEffect(() => {
-    const handler = () => {
-      fetchSubscription();
-    };
+    const handler = () => { fetchSubscription(); };
     window.addEventListener('subscription-updated', handler);
     return () => window.removeEventListener('subscription-updated', handler);
   }, [fetchSubscription]);
 
-  // Auto-refresh if data is stale (>5 min) when component re-renders
+  // Auto-refresh if stale (>5 min)
   useEffect(() => {
-    if (!user || !SUBSCRIPTION_ENABLED) return;
+    if (!user || !SUBSCRIPTION_ENABLED || !authReady) return;
     const staleMs = 5 * 60 * 1000;
     if (lastFetchRef.current > 0 && Date.now() - lastFetchRef.current > staleMs) {
       fetchSubscription();
@@ -235,18 +232,14 @@ export const useSubscription = () => {
       const monthlyLimit = subscription.isPlus ? 10 : 2;
       const currentMonth = new Date().toISOString().slice(0, 7);
       const usage = subscription.jobSearchesResetMonth === currentMonth ? subscription.jobSearchesThisMonth : 0;
-      if (usage >= monthlyLimit) {
-        return { allowed: false, reason: 'daily', currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
-      }
+      if (usage >= monthlyLimit) return { allowed: false, reason: 'daily', currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
       return { allowed: true, reason: null, currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
     }
 
     if (type === 'examQuestion') {
       const limit = subscription.limits.examQuestionsLimit;
       const usage = subscription.examQuestionsToday;
-      if (usage >= limit) {
-        return { allowed: false, reason: 'daily', currentUsage: usage, limit, isLifetime: false, requiredTier: 'plus' };
-      }
+      if (usage >= limit) return { allowed: false, reason: 'daily', currentUsage: usage, limit, isLifetime: false, requiredTier: 'plus' };
       return { allowed: true, reason: null, currentUsage: usage, limit, isLifetime: false, requiredTier: 'plus' };
     }
 

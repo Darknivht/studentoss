@@ -19,7 +19,7 @@ const STUDY_PERSONAS = [
 ];
 
 const Profile = () => {
-  const { user, signOut } = useAuth();
+  const { user, authReady, signOut } = useAuth();
   const { toast } = useToast();
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
@@ -35,38 +35,50 @@ const Profile = () => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
+    if (authReady && user) {
       fetchProfile();
       fetchAchievementStats();
     }
-  }, [user]);
+  }, [user, authReady]);
 
   const fetchProfile = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', user?.id)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single();
 
-    if (data) {
-      setFullName(data.full_name || '');
-      setUsername(data.username || '');
-      setSchoolName(data.school_name || '');
-      setGradeLevel(data.grade_level || '');
-      setStudyPersona(data.study_persona || 'chill');
-      setTotalXP(data.total_xp || 0);
-      setSubscriptionTier(data.subscription_tier || 'free');
-      setAvatarUrl(data.avatar_url || null);
+      if (error) {
+        console.error('Profile fetch error:', error);
+        return;
+      }
+
+      if (data) {
+        setFullName(data.full_name || '');
+        setUsername(data.username || '');
+        setSchoolName(data.school_name || '');
+        setGradeLevel(data.grade_level || '');
+        setStudyPersona(data.study_persona || 'chill');
+        setTotalXP(data.total_xp || 0);
+        setSubscriptionTier((data.subscription_tier || 'free').trim().toLowerCase());
+        setAvatarUrl(data.avatar_url || null);
+      }
+    } catch (err) {
+      console.error('Profile fetch exception:', err);
     }
   };
 
   const fetchAchievementStats = async () => {
-    const { count } = await supabase
-      .from('user_achievements')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user?.id);
-    
-    setAchievementCount(count || 0);
+    try {
+      const { count } = await supabase
+        .from('user_achievements')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user?.id);
+      setAchievementCount(count || 0);
+    } catch {
+      // ignore
+    }
   };
 
   const checkUsernameAvailability = async (name: string) => {
@@ -74,31 +86,16 @@ const Profile = () => {
       setUsernameError('Username must be at least 3 characters');
       return false;
     }
-
     if (!/^[a-zA-Z0-9_]+$/.test(name)) {
       setUsernameError('Only letters, numbers, and underscores allowed');
       return false;
     }
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('username', name.toLowerCase())
-      .neq('user_id', user?.id || '')
-      .maybeSingle();
-
+    const { data } = await supabase.from('profiles').select('username').eq('username', name.toLowerCase()).neq('user_id', user?.id || '').maybeSingle();
     if (data) {
       setUsernameError('Username is taken');
-      // Generate suggestions
-      const suggestions = [
-        `${name}${Math.floor(Math.random() * 100)}`,
-        `${name}_${Math.floor(Math.random() * 100)}`,
-        `${name}${new Date().getFullYear() % 100}`,
-      ];
-      setUsernameSuggestions(suggestions);
+      setUsernameSuggestions([`${name}${Math.floor(Math.random() * 100)}`, `${name}_${Math.floor(Math.random() * 100)}`, `${name}${new Date().getFullYear() % 100}`]);
       return false;
     }
-
     setUsernameError('');
     setUsernameSuggestions([]);
     return true;
@@ -107,34 +104,14 @@ const Profile = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (username && !(await checkUsernameAvailability(username))) {
-        setSaving(false);
-        return;
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: fullName,
-          username: username.toLowerCase() || null,
-          school_name: schoolName,
-          grade_level: gradeLevel,
-          study_persona: studyPersona,
-        })
-        .eq('user_id', user?.id);
-
+      if (username && !(await checkUsernameAvailability(username))) { setSaving(false); return; }
+      const { error } = await supabase.from('profiles').update({
+        full_name: fullName, username: username.toLowerCase() || null, school_name: schoolName, grade_level: gradeLevel, study_persona: studyPersona,
+      }).eq('user_id', user?.id);
       if (error) throw error;
-
-      toast({
-        title: 'Profile updated!',
-        description: 'Your changes have been saved.',
-      });
+      toast({ title: 'Profile updated!', description: 'Your changes have been saved.' });
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update profile. Please try again.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to update profile. Please try again.', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -142,301 +119,122 @@ const Profile = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    toast({
-      title: 'Signed out',
-      description: 'See you next time!',
-    });
+    toast({ title: 'Signed out', description: 'See you next time!' });
   };
+
+  const tierLabel = subscriptionTier === 'pro' ? 'Pro Member' : subscriptionTier === 'plus' ? 'Plus Member' : 'Free Tier';
+  const tierDesc = subscriptionTier === 'pro' ? 'Unlimited access' : subscriptionTier === 'plus' ? 'Enhanced access' : 'Limited features';
+  const isPaid = subscriptionTier === 'pro' || subscriptionTier === 'plus';
 
   return (
     <div className="p-6 space-y-6">
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">Profile</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Customize your experience
-        </p>
+        <p className="text-muted-foreground text-sm mt-1">Customize your experience</p>
       </motion.header>
 
-      {/* Profile Avatar with Upload */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center"
-      >
-        {user && (
-          <AvatarUpload
-            userId={user.id}
-            currentUrl={avatarUrl}
-            fallback={fullName ? fullName.charAt(0).toUpperCase() : '👤'}
-            onUploaded={(url) => setAvatarUrl(url)}
-            size="lg"
-          />
-        )}
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center">
+        {user && <AvatarUpload userId={user.id} currentUrl={avatarUrl} fallback={fullName ? fullName.charAt(0).toUpperCase() : '👤'} onUploaded={(url) => setAvatarUrl(url)} size="lg" />}
         <p className="text-muted-foreground text-sm mt-3">{user?.email}</p>
         <p className="text-primary font-semibold">{totalXP} XP</p>
       </motion.div>
 
-      {/* Achievements Link */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Link to="/achievements">
           <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 flex items-center justify-between hover:bg-amber-500/20 transition-colors">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                <Trophy className="w-6 h-6 text-amber-500" />
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Achievements</p>
-                <p className="text-sm text-muted-foreground">{achievementCount} unlocked</p>
-              </div>
+              <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center"><Trophy className="w-6 h-6 text-amber-500" /></div>
+              <div><p className="font-semibold text-foreground">Achievements</p><p className="text-sm text-muted-foreground">{achievementCount} unlocked</p></div>
             </div>
             <ChevronRight className="w-5 h-5 text-muted-foreground" />
           </div>
         </Link>
       </motion.div>
 
-      {/* Subscription Badge */}
       <Link to="/upgrade">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`p-3 rounded-xl border cursor-pointer ${subscriptionTier === 'pro' ? 'bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-amber-500/30' : 'bg-muted border-border hover:bg-muted/80'}`}
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className={`p-3 rounded-xl border cursor-pointer ${isPaid ? 'bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-amber-500/30' : 'bg-muted border-border hover:bg-muted/80'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${subscriptionTier === 'pro' ? 'bg-amber-500/20' : 'bg-primary/10'}`}>
-                <Crown className={`w-5 h-5 ${subscriptionTier === 'pro' ? 'text-amber-500' : 'text-primary'}`} />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isPaid ? 'bg-amber-500/20' : 'bg-primary/10'}`}>
+                <Crown className={`w-5 h-5 ${isPaid ? 'text-amber-500' : 'text-primary'}`} />
               </div>
               <div>
-                <p className="font-medium text-foreground">{subscriptionTier === 'pro' ? 'Pro Member' : 'Free Tier'}</p>
-                <p className="text-xs text-muted-foreground">{subscriptionTier === 'pro' ? 'Unlimited access' : 'Limited features'}</p>
+                <p className="font-medium text-foreground">{tierLabel}</p>
+                <p className="text-xs text-muted-foreground">{tierDesc}</p>
               </div>
             </div>
-            {subscriptionTier !== 'pro' && (
-              <Button size="sm" className="gradient-primary text-primary-foreground">
-                Upgrade
-              </Button>
-            )}
+            {!isPaid && <Button size="sm" className="gradient-primary text-primary-foreground">Upgrade</Button>}
           </div>
         </motion.div>
       </Link>
 
-      {/* Install App */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Link to="/install">
           <div className="p-4 rounded-2xl bg-gradient-to-r from-primary/10 to-violet-500/10 border border-primary/30 flex items-center justify-between hover:bg-primary/20 transition-colors">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Smartphone className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Get the App</p>
-                <p className="text-sm text-muted-foreground">Install for offline access</p>
-              </div>
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center"><Smartphone className="w-6 h-6 text-primary" /></div>
+              <div><p className="font-semibold text-foreground">Get the App</p><p className="text-sm text-muted-foreground">Install for offline access</p></div>
             </div>
             <ChevronRight className="w-5 h-5 text-muted-foreground" />
           </div>
         </Link>
       </motion.div>
 
-      {/* Streak Calendar */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <StreakCalendar />
-      </motion.div>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}><StreakCalendar /></motion.div>
 
-      {/* Profile Form */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-4"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <div>
-          <Label htmlFor="username" className="flex items-center gap-2">
-            <AtSign size={14} />
-            Username
-          </Label>
-          <Input
-            id="username"
-            value={username}
-            onChange={(e) => {
-              setUsername(e.target.value);
-              setUsernameError('');
-              setUsernameSuggestions([]);
-            }}
-            onBlur={() => username && checkUsernameAvailability(username)}
-            placeholder="legend11"
-            className={`mt-1.5 ${usernameError ? 'border-destructive' : ''}`}
-          />
-          {usernameError && (
-            <div className="mt-1.5 text-xs text-destructive flex items-center gap-1">
-              <AlertCircle className="w-3 h-3" />
-              {usernameError}
-            </div>
-          )}
+          <Label htmlFor="username" className="flex items-center gap-2"><AtSign size={14} />Username</Label>
+          <Input id="username" value={username} onChange={(e) => { setUsername(e.target.value); setUsernameError(''); setUsernameSuggestions([]); }}
+            onBlur={() => username && checkUsernameAvailability(username)} placeholder="legend11" className={`mt-1.5 ${usernameError ? 'border-destructive' : ''}`} />
+          {usernameError && <div className="mt-1.5 text-xs text-destructive flex items-center gap-1"><AlertCircle className="w-3 h-3" />{usernameError}</div>}
           {usernameSuggestions.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span className="text-xs text-muted-foreground">Try:</span>
-              {usernameSuggestions.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => { setUsername(s); setUsernameError(''); setUsernameSuggestions([]); }}
-                  className="text-xs text-primary hover:underline"
-                >
-                  {s}
-                </button>
-              ))}
+            <div className="mt-2 flex flex-wrap gap-2"><span className="text-xs text-muted-foreground">Try:</span>
+              {usernameSuggestions.map((s) => (<button key={s} onClick={() => { setUsername(s); setUsernameError(''); setUsernameSuggestions([]); }} className="text-xs text-primary hover:underline">{s}</button>))}
             </div>
           )}
         </div>
-
+        <div><Label htmlFor="fullName" className="flex items-center gap-2"><User size={14} />Full Name</Label><Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Alex Johnson" className="mt-1.5" /></div>
+        <div><Label htmlFor="school" className="flex items-center gap-2"><School size={14} />School Name</Label><Input id="school" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} placeholder="Lincoln High School" className="mt-1.5" /></div>
         <div>
-          <Label htmlFor="fullName" className="flex items-center gap-2">
-            <User size={14} />
-            Full Name
-          </Label>
-          <Input
-            id="fullName"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Alex Johnson"
-            className="mt-1.5"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="school" className="flex items-center gap-2">
-            <School size={14} />
-            School Name
-          </Label>
-          <Input
-            id="school"
-            value={schoolName}
-            onChange={(e) => setSchoolName(e.target.value)}
-            placeholder="Lincoln High School"
-            className="mt-1.5"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="grade" className="flex items-center gap-2">
-            <GraduationCap size={14} />
-            Grade Level
-          </Label>
-          <select
-            id="grade"
-            value={gradeLevel}
-            onChange={(e) => setGradeLevel(e.target.value)}
-            className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          >
+          <Label htmlFor="grade" className="flex items-center gap-2"><GraduationCap size={14} />Grade Level</Label>
+          <select id="grade" value={gradeLevel} onChange={(e) => setGradeLevel(e.target.value)}
+            className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
             <option value="">Select grade level</option>
-            <option value="6th">6th Grade</option>
-            <option value="7th">7th Grade</option>
-            <option value="8th">8th Grade</option>
-            <option value="9th">9th Grade</option>
-            <option value="10th">10th Grade</option>
-            <option value="11th">11th Grade</option>
-            <option value="12th">12th Grade</option>
-            <option value="freshman">College Freshman</option>
-            <option value="sophomore">College Sophomore</option>
-            <option value="junior">College Junior</option>
-            <option value="senior">College Senior</option>
-            <option value="graduate">Graduate School</option>
+            <option value="6th">6th Grade</option><option value="7th">7th Grade</option><option value="8th">8th Grade</option>
+            <option value="9th">9th Grade</option><option value="10th">10th Grade</option><option value="11th">11th Grade</option><option value="12th">12th Grade</option>
+            <option value="freshman">College Freshman</option><option value="sophomore">College Sophomore</option><option value="junior">College Junior</option>
+            <option value="senior">College Senior</option><option value="graduate">Graduate School</option>
           </select>
           <p className="text-xs text-muted-foreground mt-1">This adjusts AI responses to match your level</p>
         </div>
       </motion.div>
 
-      {/* Study Persona */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <Label className="flex items-center gap-2 mb-3">
-          <Sparkles size={14} />
-          AI Study Persona
-        </Label>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Label className="flex items-center gap-2 mb-3"><Sparkles size={14} />AI Study Persona</Label>
         <div className="grid grid-cols-2 gap-3">
           {STUDY_PERSONAS.map((persona) => (
-            <motion.button
-              key={persona.id}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setStudyPersona(persona.id)}
-              className={`p-4 rounded-xl border text-left transition-all ${
-                studyPersona === persona.id
-                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                  : 'border-border bg-card hover:bg-muted/50'
-              }`}
-            >
-              <span className="text-2xl">{persona.emoji}</span>
-              <p className="font-medium mt-2">{persona.name}</p>
-              <p className="text-xs text-muted-foreground">{persona.description}</p>
+            <motion.button key={persona.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setStudyPersona(persona.id)}
+              className={`p-4 rounded-xl border text-left transition-all ${studyPersona === persona.id ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-border bg-card hover:bg-muted/50'}`}>
+              <span className="text-2xl">{persona.emoji}</span><p className="font-medium mt-2">{persona.name}</p><p className="text-xs text-muted-foreground">{persona.description}</p>
             </motion.button>
           ))}
         </div>
       </motion.div>
 
-      {/* Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="space-y-3 pt-4"
-      >
-        <Button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full gradient-primary text-primary-foreground"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          {saving ? 'Saving...' : 'Save Changes'}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={async () => {
-            toast({ title: 'Updating...', description: 'Clearing cache and reloading app.' });
-            try {
-              if ('serviceWorker' in navigator) {
-                const registrations = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(registrations.map(r => r.unregister()));
-              }
-              if ('caches' in window) {
-                const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
-              }
-              window.location.reload();
-            } catch {
-              window.location.reload();
-            }
-          }}
-          className="w-full"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Force Update App
-        </Button>
-        <p className="text-center text-xs text-muted-foreground/60">
-          App version: {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'latest'}
-        </p>
-        <Button
-          variant="outline"
-          onClick={handleSignOut}
-          className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign Out
-        </Button>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-3 pt-4">
+        <Button onClick={handleSave} disabled={saving} className="w-full gradient-primary text-primary-foreground"><Save className="w-4 h-4 mr-2" />{saving ? 'Saving...' : 'Save Changes'}</Button>
+        <Button variant="outline" onClick={async () => {
+          toast({ title: 'Updating...', description: 'Clearing cache and reloading app.' });
+          try {
+            if ('serviceWorker' in navigator) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); }
+            if ('caches' in window) { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); }
+            window.location.reload();
+          } catch { window.location.reload(); }
+        }} className="w-full"><RefreshCw className="w-4 h-4 mr-2" />Force Update App</Button>
+        <p className="text-center text-xs text-muted-foreground/60">App version: {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'latest'}</p>
+        <Button variant="outline" onClick={handleSignOut} className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"><LogOut className="w-4 h-4 mr-2" />Sign Out</Button>
       </motion.div>
     </div>
   );

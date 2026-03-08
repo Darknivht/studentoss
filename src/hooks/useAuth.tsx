@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  authReady: boolean;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -17,60 +18,72 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-
-        // Check if user is blocked
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('is_blocked')
-            .eq('user_id', session.user.id)
-            .single();
-          if (profile?.is_blocked) {
-            await supabase.auth.signOut();
-            setUser(null);
-            setSession(null);
-          }
-        }
-      }
-    );
-
+    // 1. Restore session FIRST
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      setAuthReady(true);
+
+      // Fire-and-forget blocked check
+      if (session?.user) {
+        checkBlocked(session.user.id);
+      }
     });
+
+    // 2. THEN subscribe to changes (no await inside!)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+        setAuthReady(true);
+
+        // Fire-and-forget blocked check
+        if (session?.user) {
+          checkBlocked(session.user.id);
+        }
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
 
+  // Fire-and-forget helper — never blocks auth state
+  const checkBlocked = (userId: string) => {
+    supabase
+      .from('profiles')
+      .select('is_blocked')
+      .eq('user_id', userId)
+      .single()
+      .then(({ data }) => {
+        if (data?.is_blocked) {
+          supabase.auth.signOut();
+          setUser(null);
+          setSession(null);
+        }
+      })
+      .catch(() => {/* ignore */});
+  };
+
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-        },
+        data: { full_name: fullName },
       },
     });
     return { error };
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
   };
 
@@ -79,7 +92,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, authReady, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
