@@ -151,10 +151,13 @@ export const useSubscription = () => {
       }
 
       const tierRaw = data?.subscription_tier || 'free';
-      const isActive = !data?.subscription_expires_at || new Date(data.subscription_expires_at) > new Date();
+      const expiresAt = data?.subscription_expires_at;
+      const isActive = !expiresAt || new Date(expiresAt) > new Date();
       const isPro = tierRaw === 'pro' && isActive;
       const isPlus = tierRaw === 'plus' && isActive;
       const tier: 'free' | 'plus' | 'pro' = isPro ? 'pro' : isPlus ? 'plus' : 'free';
+      
+      console.log('[Subscription] Raw tier:', tierRaw, '| Expires:', expiresAt, '| isActive:', isActive, '| Resolved tier:', tier);
 
       const limits = isPro ? PRO_LIMITS : isPlus ? PLUS_LIMITS : FREE_LIMITS;
       const lifetimeLimits = isPro ? PRO_LIFETIME : isPlus ? PLUS_LIFETIME : FREE_LIFETIME;
