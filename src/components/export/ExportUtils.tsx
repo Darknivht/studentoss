@@ -1,34 +1,27 @@
-import { markdownToHtml, stripMarkdown } from '@/lib/formatters';
-import html2pdf from 'html2pdf.js';
-import katexCssUrl from 'katex/dist/katex.min.css?url';
+import { markdownToHtml } from '@/lib/formatters';
 
 /**
  * Fetch and cache KaTeX CSS for inline injection into PDF exports.
- * html2pdf renders from a detached DOM element, so external <link> tags never load.
  */
 let katexCssCache: string | null = null;
 async function getKatexCss(): Promise<string> {
   if (katexCssCache) return katexCssCache;
   try {
-    const res = await fetch(katexCssUrl);
-    katexCssCache = await res.text();
+    // Try fetching from CDN as the most reliable source
+    const res = await fetch('https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css');
+    if (res.ok) {
+      katexCssCache = await res.text();
+      return katexCssCache;
+    }
   } catch {
-    // Fallback: minimal styles so math is at least readable
-    katexCssCache = `.katex { font-size: 1.1em; } .katex-display { text-align: center; margin: 12px 0; }`;
+    // ignore
   }
+  // Fallback: minimal styles so math is at least readable
+  katexCssCache = `.katex { font-size: 1.1em; } .katex-display { text-align: center; margin: 12px 0; }`;
   return katexCssCache;
 }
 
-function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: string): string {
-  const katexStyle = inlineKatexCss ? `<style>${inlineKatexCss}</style>` : '';
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
-${katexStyle}
-<style>
+const BASE_STYLES = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11pt; line-height: 1.5; padding: 24px; max-width: 800px; margin: 0 auto; color: #1a1a1a; }
   h1 { font-size: 18pt; margin: 16px 0 8px; border-bottom: 2px solid #333; padding-bottom: 4px; }
@@ -45,7 +38,6 @@ ${katexStyle}
   table { border-collapse: collapse; width: 100%; min-width: 400px; }
   th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 10pt; word-wrap: break-word; }
   th { background: #f0f0f0; font-weight: 600; }
-  td { word-wrap: break-word; }
   tr:nth-child(even) { background: #fafafa; }
   .katex-display { overflow-x: auto; max-width: 100%; margin: 12px 0; text-align: center; }
   .katex { font-size: 1.1em; }
@@ -54,7 +46,18 @@ ${katexStyle}
   hr { border: none; border-top: 1px solid #ddd; margin: 16px 0; }
   img { max-width: 100%; height: auto; }
   a { color: #1a73e8; text-decoration: underline; }
-</style>
+`;
+
+function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: string): string {
+  const katexStyle = inlineKatexCss ? `<style>${inlineKatexCss}</style>` : '';
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+${katexStyle}
+<style>${BASE_STYLES}</style>
 </head>
 <body>
 <h1>${title}</h1>
@@ -109,9 +112,6 @@ export const downloadAsText = (content: string, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-/**
- * Sanitize a title for use as a filename.
- */
 function sanitizeFilename(title: string): string {
   return title
     .replace(/[^a-zA-Z0-9\s\-_]/g, '')
@@ -120,8 +120,27 @@ function sanitizeFilename(title: string): string {
 }
 
 /**
- * Download markdown content as a real PDF file using html2pdf.js.
- * KaTeX CSS is injected inline so math renders correctly in the detached DOM.
+ * Download as HTML file (reliable fallback)
+ */
+function downloadHtmlBlob(fullHtml: string, filename: string) {
+  const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  // Delay cleanup for Safari
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 200);
+}
+
+/**
+ * Download markdown content as a PDF file.
+ * Falls back to HTML download if PDF generation fails.
  */
 export const downloadAsHTML = async (markdownContent: string, title: string, _filename?: string) => {
   const [htmlContent, katexCss] = await Promise.all([
@@ -133,60 +152,50 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   let baseName = _filename || sanitizeFilename(title);
   baseName = baseName.replace(/\.(html|pdf)$/i, '');
 
-  // Create a temporary container to render the HTML
-  const container = document.createElement('div');
-  container.innerHTML = fullHtml;
-  // Extract just the body content for html2pdf
-  const bodyContent = container.querySelector('body');
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = bodyContent ? bodyContent.innerHTML : htmlContent;
-  wrapper.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  wrapper.style.fontSize = '11pt';
-  wrapper.style.lineHeight = '1.5';
-  wrapper.style.color = '#1a1a1a';
-  wrapper.style.padding = '0';
-
-  // Inject KaTeX CSS as a <style> tag inside wrapper so html2pdf can use it
-  const styleEl = document.createElement('style');
-  styleEl.textContent = katexCss + `
-    .katex-error, .katex-fallback { color: #333 !important; font-family: 'Courier New', monospace; font-size: 10pt; background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }
-    .katex-display { overflow-x: auto; max-width: 100%; margin: 12px 0; text-align: center; }
-    .katex { font-size: 1.1em; }
-  `;
-  wrapper.prepend(styleEl);
-
-  // Append to DOM temporarily so html2pdf can measure dimensions
-  wrapper.style.position = 'absolute';
-  wrapper.style.left = '-9999px';
-  wrapper.style.top = '0';
-  document.body.appendChild(wrapper);
-
-  const opt = {
-    margin: [10, 10, 10, 10] as [number, number, number, number],
-    filename: `${baseName}.pdf`,
-    image: { type: 'jpeg' as const, quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-  };
-
+  // Try html2pdf first
   try {
+    const html2pdfModule = await import('html2pdf.js');
+    const html2pdf = html2pdfModule.default;
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`;
+    wrapper.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    wrapper.style.fontSize = '11pt';
+    wrapper.style.lineHeight = '1.5';
+    wrapper.style.color = '#1a1a1a';
+    wrapper.style.padding = '0';
+
+    // Inject KaTeX CSS + base styles
+    const styleEl = document.createElement('style');
+    styleEl.textContent = katexCss + BASE_STYLES;
+    wrapper.prepend(styleEl);
+
+    // Must be visible in DOM for html2canvas to measure
+    wrapper.style.position = 'fixed';
+    wrapper.style.left = '-9999px';
+    wrapper.style.top = '0';
+    wrapper.style.width = '800px';
+    wrapper.style.background = 'white';
+    document.body.appendChild(wrapper);
+
+    // Wait a tick for styles to apply
+    await new Promise(r => setTimeout(r, 100));
+
+    const opt = {
+      margin: [10, 10, 10, 10] as [number, number, number, number],
+      filename: `${baseName}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
+    };
+
     await html2pdf().set(opt).from(wrapper).save();
+
+    // Clean up
+    if (wrapper.parentNode) document.body.removeChild(wrapper);
   } catch (err) {
     console.error('PDF generation failed, falling back to HTML download:', err);
-    const blob = new Blob([fullHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${baseName}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  } finally {
-    // Clean up the temporary wrapper
-    if (wrapper.parentNode) {
-      document.body.removeChild(wrapper);
-    }
+    downloadHtmlBlob(fullHtml, `${baseName}.html`);
   }
 };
 
@@ -194,33 +203,50 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
  * Generate a PDF from raw HTML string (e.g. resume templates).
  */
 export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = htmlString;
-
-  const opt = {
-    margin: [5, 5, 5, 5] as [number, number, number, number],
-    filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`,
-    image: { type: 'jpeg' as const, quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-  };
-
   try {
+    const html2pdfModule = await import('html2pdf.js');
+    const html2pdf = html2pdfModule.default;
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = htmlString;
+    wrapper.style.position = 'fixed';
+    wrapper.style.left = '-9999px';
+    wrapper.style.top = '0';
+    wrapper.style.width = '800px';
+    wrapper.style.background = 'white';
+    document.body.appendChild(wrapper);
+
+    await new Promise(r => setTimeout(r, 100));
+
+    const opt = {
+      margin: [5, 5, 5, 5] as [number, number, number, number],
+      filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
+    };
+
     await html2pdf().set(opt).from(wrapper).save();
+
+    if (wrapper.parentNode) document.body.removeChild(wrapper);
   } catch (err) {
     console.error('PDF generation failed:', err);
-    // Fallback
-    const blob = new Blob([htmlString], { type: 'text/html' });
+    const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename.replace('.pdf', '.html');
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    }, 200);
   }
 };
 
 /**
- * One-click download of markdown content as PDF.
+ * Print/download markdown content as PDF.
  */
 export const printMarkdownContent = (markdownContent: string, title: string) => {
   downloadAsHTML(markdownContent, title);
@@ -239,7 +265,6 @@ export const shareContent = async (title: string, text: string): Promise<boolean
     }
   }
   
-  // Fallback to clipboard
   try {
     await navigator.clipboard.writeText(text);
     return true;
