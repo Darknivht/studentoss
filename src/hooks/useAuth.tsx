@@ -53,20 +53,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // Fire-and-forget helper — never blocks auth state
-  const checkBlocked = (userId: string) => {
-    supabase
-      .from('profiles')
-      .select('is_blocked')
-      .eq('user_id', userId)
-      .single()
-      .then(({ data }) => {
-        if (data?.is_blocked) {
-          supabase.auth.signOut();
-          setUser(null);
-          setSession(null);
-        }
-      })
-      .catch(() => {/* ignore */});
+  const checkBlocked = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('is_blocked')
+        .eq('user_id', userId)
+        .single();
+      if (data?.is_blocked) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
