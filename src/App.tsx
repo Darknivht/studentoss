@@ -89,6 +89,7 @@ const App = () => (
       <OfflineStatusBanner />
       <BrowserRouter>
         <AuthProvider>
+          <OfflineAIProvider>
             <MobileBackHandler />
             <Routes>
               <Route path="/auth" element={<Auth />} />
