@@ -224,32 +224,41 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
  */
 export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
   try {
-    const html2pdf = (await getHtml2Pdf()) as {
-      (): {
-        set: (opt: unknown) => { from: (el: HTMLElement) => { save: () => Promise<void> } }
-      }
-    };
+    const [{ jsPDF }, html2canvasModule] = await Promise.all([
+      import('jspdf'),
+      import('html2canvas'),
+    ]);
+    const html2canvas = (html2canvasModule as { default?: typeof html2canvasModule }).default ?? html2canvasModule;
 
     const wrapper = document.createElement('div');
     wrapper.innerHTML = htmlString;
-    wrapper.style.position = 'fixed';
-    wrapper.style.left = '-9999px';
-    wrapper.style.top = '0';
-    wrapper.style.width = '800px';
-    wrapper.style.background = 'white';
+    wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;background:white;';
     document.body.appendChild(wrapper);
 
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 150));
 
-    const opt = {
-      margin: [5, 5, 5, 5] as [number, number, number, number],
-      filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
-      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
-    };
+    const canvas = await (html2canvas as Function)(wrapper, {
+      scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff',
+    }) as HTMLCanvasElement;
 
-    await html2pdf().set(opt).from(wrapper).save();
+    const imgData = canvas.toDataURL('image/png');
+    const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth() - 10;
+    const pdfPageHeight = pdf.internal.pageSize.getHeight() - 10;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 5;
+    pdf.addImage(imgData, 'PNG', 5, position, pdfWidth, imgHeight);
+    heightLeft -= pdfPageHeight;
+    while (heightLeft > 0) {
+      pdf.addPage();
+      position = 5 - (imgHeight - heightLeft);
+      pdf.addImage(imgData, 'PNG', 5, position, pdfWidth, imgHeight);
+      heightLeft -= pdfPageHeight;
+    }
+    pdf.save(pdfFilename);
 
     if (wrapper.parentNode) document.body.removeChild(wrapper);
   } catch (err) {
@@ -261,10 +270,7 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(a.href);
-    }, 200);
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 200);
   }
 };
 
