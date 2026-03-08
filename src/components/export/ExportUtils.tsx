@@ -222,11 +222,9 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
  */
 export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
   try {
-    const [{ jsPDF }, html2canvasModule] = await Promise.all([
-      import('jspdf'),
-      import('html2canvas'),
-    ]);
-    const html2canvas = (html2canvasModule as { default?: typeof html2canvasModule }).default ?? html2canvasModule;
+    const { jsPDF } = await import('jspdf');
+    const html2canvasModule = await import('html2canvas');
+    const renderToCanvas = (html2canvasModule as unknown as { default: (el: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement> }).default ?? html2canvasModule;
 
     const wrapper = document.createElement('div');
     wrapper.innerHTML = htmlString;
@@ -235,9 +233,9 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
 
     await new Promise(r => setTimeout(r, 150));
 
-    const canvas = await (html2canvas as Function)(wrapper, {
+    const canvas = await renderToCanvas(wrapper, {
       scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff',
-    }) as HTMLCanvasElement;
+    });
 
     const imgData = canvas.toDataURL('image/png');
     const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
