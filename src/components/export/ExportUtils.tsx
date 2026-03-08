@@ -210,43 +210,37 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
  * Generate a PDF from raw HTML string (e.g. resume templates).
  */
 export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
+  const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+
+  const container = document.createElement('div');
+  container.innerHTML = `<div style="width:595px;background:white;">${htmlString}</div>`;
+  document.body.appendChild(container);
+
   try {
-    const { jsPDF } = await import('jspdf');
-    const html2canvasModule = await import('html2canvas');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const renderToCanvas = ((html2canvasModule as any).default ?? html2canvasModule) as (el: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement>;
+    await document.fonts.ready;
 
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = htmlString;
-    wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;background:white;';
-    document.body.appendChild(wrapper);
-
-    await new Promise(r => setTimeout(r, 150));
-
-    const canvas = await renderToCanvas(wrapper, {
-      scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff',
-    });
-
-    const imgData = canvas.toDataURL('image/png');
-    const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth() - 10;
-    const pdfPageHeight = pdf.internal.pageSize.getHeight() - 10;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-    let heightLeft = imgHeight;
-    let position = 5;
-    pdf.addImage(imgData, 'PNG', 5, position, pdfWidth, imgHeight);
-    heightLeft -= pdfPageHeight;
-    while (heightLeft > 0) {
-      pdf.addPage();
-      position = 5 - (imgHeight - heightLeft);
-      pdf.addImage(imgData, 'PNG', 5, position, pdfWidth, imgHeight);
-      heightLeft -= pdfPageHeight;
-    }
-    pdf.save(pdfFilename);
-
-    if (wrapper.parentNode) document.body.removeChild(wrapper);
+    const html2pdf = (await import('html2pdf.js')).default;
+    await html2pdf()
+      .set({
+        margin: [0, 0, 0, 0],
+        filename: pdfFilename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 3,
+          useCORS: true,
+          letterRendering: true,
+          logging: false,
+          width: 595,
+          windowWidth: 595,
+        },
+        jsPDF: {
+          unit: 'pt',
+          format: 'a4',
+          orientation: 'portrait',
+        },
+      })
+      .from(container.firstElementChild)
+      .save();
   } catch (err) {
     console.error('PDF generation failed:', err);
     const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
@@ -257,6 +251,8 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 200);
+  } finally {
+    if (container.parentNode) document.body.removeChild(container);
   }
 };
 
