@@ -150,15 +150,7 @@ function downloadHtmlBlob(fullHtml: string, filename: string) {
 }
 
 /**
- * Resolve html2pdf regardless of default/named export shape.
- */
-async function getHtml2Pdf() {
-  const html2pdfModule = await import('html2pdf.js');
-  return (html2pdfModule as { default?: unknown }).default ?? html2pdfModule;
-}
-
-/**
- * Download markdown content as a PDF file.
+ * Download markdown content as a PDF file using jsPDF + html2canvas.
  * Falls back to HTML download if PDF generation fails.
  */
 export const downloadAsHTML = async (markdownContent: string, title: string, _filename?: string) => {
@@ -174,45 +166,50 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   let wrapper: HTMLDivElement | null = null;
 
   try {
-    const html2pdf = (await getHtml2Pdf()) as {
-      (): {
-        set: (opt: unknown) => { from: (el: HTMLElement) => { save: () => Promise<void> } }
-      }
-    };
+    const [{ jsPDF }, html2canvas] = await Promise.all([
+      import('jspdf'),
+      import('html2canvas').then(m => m.default ?? m),
+    ]);
 
     wrapper = document.createElement('div');
     wrapper.innerHTML = `<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`;
-    wrapper.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-    wrapper.style.fontSize = '11pt';
-    wrapper.style.lineHeight = '1.5';
-    wrapper.style.color = '#1a1a1a';
-    wrapper.style.padding = '0';
 
     const styleEl = document.createElement('style');
     styleEl.textContent = katexCss + BASE_STYLES;
     wrapper.prepend(styleEl);
 
-    wrapper.style.position = 'fixed';
-    wrapper.style.left = '-9999px';
-    wrapper.style.top = '0';
-    wrapper.style.width = '800px';
-    wrapper.style.background = 'white';
+    wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;background:white;padding:24px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:11pt;line-height:1.5;color:#1a1a1a;';
     document.body.appendChild(wrapper);
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise(r => setTimeout(r, 150));
 
-    const opt = {
-      margin: [10, 10, 10, 10] as [number, number, number, number],
-      filename: `${baseName}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
-      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
-    };
+    const canvas = await html2canvas(wrapper, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+    });
 
-    await Promise.race([
-      html2pdf().set(opt).from(wrapper).save(),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('PDF export timed out')), 12000)),
-    ]);
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth() - 20; // 10mm margins
+    const pdfPageHeight = pdf.internal.pageSize.getHeight() - 20;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 10;
+
+    pdf.addImage(imgData, 'PNG', 10, position, pdfWidth, imgHeight);
+    heightLeft -= pdfPageHeight;
+
+    while (heightLeft > 0) {
+      pdf.addPage();
+      position = 10 - (imgHeight - heightLeft);
+      pdf.addImage(imgData, 'PNG', 10, position, pdfWidth, imgHeight);
+      heightLeft -= pdfPageHeight;
+    }
+
+    pdf.save(`${baseName}.pdf`);
   } catch (err) {
     console.error('PDF generation failed, falling back to HTML download:', err);
     downloadHtmlBlob(fullHtml, `${baseName}.html`);
