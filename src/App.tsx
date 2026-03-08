@@ -8,6 +8,7 @@ import { useMobileBackNavigation } from "@/hooks/useMobileBackNavigation";
 import PWAUpdateBanner from "@/components/pwa/PWAUpdateBanner";
 import OfflineStatusBanner from "@/components/pwa/OfflineStatusBanner";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { OfflineAIProvider } from "@/context/OfflineAIContext";
 
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -88,6 +89,7 @@ const App = () => (
       <OfflineStatusBanner />
       <BrowserRouter>
         <AuthProvider>
+          <OfflineAIProvider>
             <MobileBackHandler />
             <Routes>
               <Route path="/auth" element={<Auth />} />
@@ -127,6 +129,7 @@ const App = () => (
               <Route path="/privacy" element={<Privacy />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+          </OfflineAIProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
