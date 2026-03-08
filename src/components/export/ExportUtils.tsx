@@ -225,7 +225,8 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
   try {
     const { jsPDF } = await import('jspdf');
     const html2canvasModule = await import('html2canvas');
-    const renderToCanvas = (html2canvasModule as unknown as { default: (el: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement> }).default ?? html2canvasModule;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderToCanvas = ((html2canvasModule as any).default ?? html2canvasModule) as (el: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement>;
 
     const wrapper = document.createElement('div');
     wrapper.innerHTML = htmlString;
