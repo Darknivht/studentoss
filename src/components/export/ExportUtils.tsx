@@ -1,6 +1,7 @@
 import { markdownToHtml } from '@/lib/formatters';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { toast } from 'sonner';
 
 /**
  * Fetch and cache KaTeX CSS for inline injection into PDF exports.
