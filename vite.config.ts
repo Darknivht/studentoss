@@ -49,7 +49,7 @@ export default defineConfig(({ mode }) => ({
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         navigateFallbackDenylist: [/^\/~oauth/],
-        skipWaiting: false, // Let users control when to update
+        skipWaiting: true, // Auto-activate new service workers immediately
         clientsClaim: true,
         runtimeCaching: [
           {
@@ -73,15 +73,7 @@ export default defineConfig(({ mode }) => ({
           },
           {
             urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/functions\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "supabase-functions-cache",
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60, // 1 hour
-              },
-              networkTimeoutSeconds: 10,
-            },
+            handler: "NetworkOnly", // Never cache edge function responses
           },
           {
             urlPattern: /^https:\/\/aubastwqendcpwwbusgs\.supabase\.co\/storage\/.*/i,
