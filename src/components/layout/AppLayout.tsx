@@ -7,6 +7,7 @@ import { Loader2, User, Settings, Bell, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import AdBanner from '@/components/ads/AdBanner';
+import ThemeToggle from '@/components/ThemeToggle';
 
 interface AppLayoutProps {
   children: ReactNode;
