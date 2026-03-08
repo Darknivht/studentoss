@@ -90,7 +90,7 @@ export function useStudyTimeTracker(): StudyTimeTrackerResult {
     } catch {
       // No session for today yet, that's fine
     }
-  }, [user]);
+  }, [user, authReady]);
 
   useEffect(() => {
     refreshStats();
