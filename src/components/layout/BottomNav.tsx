@@ -32,7 +32,8 @@ const BottomNav = () => {
               className="relative flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors"
             >
               <motion.div
-                whileTap={{ scale: 0.9 }}
+                whileTap={{ scale: 0.85 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                 className={`relative p-2 rounded-xl transition-colors ${
                   isActive 
                     ? 'text-primary' 
@@ -53,6 +54,14 @@ const BottomNav = () => {
               }`}>
                 {item.label}
               </span>
+              {/* Active dot indicator */}
+              {isActive && (
+                <motion.div
+                  layoutId="activeNavDot"
+                  className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-primary"
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                />
+              )}
             </NavLink>
           );
         })}

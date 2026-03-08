@@ -39,7 +39,7 @@ export function useStudyTimeTracker(): StudyTimeTrackerResult {
 
   // Load today's study time from localStorage and DB
   const refreshStats = useCallback(async () => {
-    if (!user) return;
+    if (!user || !authReady) return;
 
     const today = new Date().toISOString().split('T')[0];
     

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,7 +10,7 @@ import StreakCard from '@/components/dashboard/StreakCard';
 import StudyProgressWidget from '@/components/dashboard/StudyProgressWidget';
 import StudyTimeWidget from '@/components/dashboard/StudyTimeWidget';
 import DailyQuizChallenge from '@/components/gamification/DailyQuizChallenge';
-import { Settings, WifiOff } from 'lucide-react';
+import { Settings, WifiOff, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { checkAndResetStreak } from '@/lib/streak';
 import { useOfflineData, cacheDataLocally, getCachedData } from '@/hooks/useOfflineData';
@@ -18,8 +18,10 @@ import AdBanner from '@/components/ads/AdBanner';
 import { updateAllCoursesProgress } from '@/hooks/useCourseProgress';
 import AnnouncementBanner from '@/components/dashboard/AnnouncementBanner';
 import { Target, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const OFFLINE_PROFILE_KEY = 'offline_profile_cache';
+const FETCH_TIMEOUT_MS = 10000;
 
 interface Course {
   id: string;
@@ -44,6 +46,7 @@ const Dashboard = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     if (authReady && user) {
@@ -53,47 +56,66 @@ const Dashboard = () => {
     }
   }, [user, authReady]);
 
+  const loadCachedFallback = async () => {
+    const cachedProfile = getCachedData<Profile>(OFFLINE_PROFILE_KEY);
+    if (cachedProfile) setProfile(cachedProfile);
+    const cachedCourses = await offlineData.fetchCourses();
+    if (cachedCourses) setCourses(cachedCourses);
+  };
+
   const fetchData = async () => {
-    try {
-      if (offlineData.isOnline) {
-        const streakResult = await checkAndResetStreak(user!.id);
-        
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('full_name, total_xp, current_streak, longest_streak')
-          .eq('user_id', user?.id)
-          .single();
+    setFetchError(false);
 
-        if (profileData) {
-          const updatedProfile = {
-            ...profileData,
-            current_streak: streakResult.currentStreak,
-            longest_streak: streakResult.longestStreak,
-          };
-          setProfile(updatedProfile);
-          cacheDataLocally(OFFLINE_PROFILE_KEY, updatedProfile);
+    // Race against a timeout
+    const timeout = new Promise<'timeout'>((resolve) =>
+      setTimeout(() => resolve('timeout'), FETCH_TIMEOUT_MS)
+    );
+
+    const work = async () => {
+      try {
+        if (offlineData.isOnline) {
+          const streakResult = await checkAndResetStreak(user!.id);
+
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name, total_xp, current_streak, longest_streak')
+            .eq('user_id', user?.id)
+            .single();
+
+          if (profileData) {
+            const updatedProfile = {
+              ...profileData,
+              current_streak: streakResult.currentStreak,
+              longest_streak: streakResult.longestStreak,
+            };
+            setProfile(updatedProfile);
+            cacheDataLocally(OFFLINE_PROFILE_KEY, updatedProfile);
+          }
+
+          updateAllCoursesProgress(user!.id).catch(() => {});
+
+          const coursesData = await offlineData.fetchCourses();
+          if (coursesData) setCourses(coursesData);
+        } else {
+          await loadCachedFallback();
         }
-
-        // Fire-and-forget course progress update
-        updateAllCoursesProgress(user!.id).catch(() => {});
-
-        const coursesData = await offlineData.fetchCourses();
-        if (coursesData) setCourses(coursesData);
-      } else {
-        const cachedProfile = getCachedData<Profile>(OFFLINE_PROFILE_KEY);
-        if (cachedProfile) setProfile(cachedProfile);
-        const cachedCourses = await offlineData.fetchCourses();
-        if (cachedCourses) setCourses(cachedCourses);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        await loadCachedFallback();
+        setFetchError(true);
       }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      const cachedProfile = getCachedData<Profile>(OFFLINE_PROFILE_KEY);
-      if (cachedProfile) setProfile(cachedProfile);
-      const cachedCourses = await offlineData.fetchCourses();
-      if (cachedCourses) setCourses(cachedCourses);
-    } finally {
-      setLoading(false);
+      return 'done' as const;
+    };
+
+    const result = await Promise.race([work(), timeout]);
+
+    if (result === 'timeout') {
+      console.warn('Dashboard fetch timed out, falling back to cache');
+      await loadCachedFallback();
+      setFetchError(true);
     }
+
+    setLoading(false);
   };
 
   const handleAddCourse = async (name: string, color: string, icon: string) => {
@@ -151,6 +173,15 @@ const Dashboard = () => {
           <Settings size={20} className="text-muted-foreground" />
         </Link>
       </motion.header>
+
+      {fetchError && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between p-3 rounded-xl bg-destructive/10 border border-destructive/20">
+          <span className="text-sm text-foreground">Couldn't load latest data</span>
+          <Button variant="ghost" size="sm" onClick={fetchData} className="text-xs gap-1">
+            <RefreshCw className="w-3 h-3" /> Retry
+          </Button>
+        </motion.div>
+      )}
 
       <AnnouncementBanner />
       <StreakCard currentStreak={profile?.current_streak || 0} longestStreak={profile?.longest_streak || 0} totalXP={profile?.total_xp || 0} />

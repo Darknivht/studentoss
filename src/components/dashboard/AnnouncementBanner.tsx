@@ -22,13 +22,17 @@ const AnnouncementBanner = () => {
 
   useEffect(() => {
     const fetchAnnouncements = async () => {
-      const { data } = await supabase
-        .from('announcements' as any)
-        .select('id, title, content, type')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(3);
-      if (data) setAnnouncements(data as any[]);
+      try {
+        const { data } = await supabase
+          .from('announcements' as any)
+          .select('id, title, content, type')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(3);
+        if (data) setAnnouncements(data as any[]);
+      } catch {
+        // Silently fail — announcements are non-critical
+      }
     };
     fetchAnnouncements();
   }, []);
