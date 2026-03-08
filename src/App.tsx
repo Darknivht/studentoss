@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { useMobileBackNavigation } from "@/hooks/useMobileBackNavigation";
 import PWAUpdateBanner from "@/components/pwa/PWAUpdateBanner";
 import OfflineStatusBanner from "@/components/pwa/OfflineStatusBanner";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -78,6 +79,7 @@ const MobileBackHandler = () => {
 };
 
 const App = () => (
+  <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -129,6 +131,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

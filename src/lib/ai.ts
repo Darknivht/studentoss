@@ -1,4 +1,5 @@
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-study`;
+const AI_TIMEOUT_MS = 30_000; // 30 seconds
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -51,6 +52,9 @@ export async function streamAIChat({
   onDone,
   onError,
 }: StreamChatOptions) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
   try {
     const resp = await fetch(CHAT_URL, {
       method: "POST",
@@ -59,6 +63,7 @@ export async function streamAIChat({
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
       body: JSON.stringify({ messages, mode, content, imageBase64 }),
+      signal: controller.signal,
     });
 
     if (!resp.ok) {
@@ -81,6 +86,8 @@ export async function streamAIChat({
     while (!streamDone) {
       const { done, value } = await reader.read();
       if (done) break;
+      // Reset timeout on each chunk received
+      clearTimeout(timeout);
       textBuffer += decoder.decode(value, { stream: true });
 
       let newlineIndex: number;
@@ -130,67 +137,88 @@ export async function streamAIChat({
 
     onDone();
   } catch (error) {
-    console.error("Stream error:", error);
-    onError(error instanceof Error ? error.message : "Connection failed");
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      console.error("AI request timed out after", AI_TIMEOUT_MS / 1000, "seconds");
+      onError("Request timed out. Please try again.");
+    } else {
+      console.error("Stream error:", error);
+      onError(error instanceof Error ? error.message : "Connection failed. Check your internet and try again.");
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 // Non-streaming version for quick operations
 export async function callAI(mode: AIMode, content: string, imageBase64?: string): Promise<string> {
-  const resp = await fetch(CHAT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-    },
-    body: JSON.stringify({ 
-      messages: [], 
-      mode, 
-      content,
-      imageBase64 
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
 
-  if (!resp.ok) {
-    const errorData = await resp.json().catch(() => ({}));
-    throw new Error(errorData.error || `Request failed`);
-  }
+  try {
+    const resp = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ 
+        messages: [], 
+        mode, 
+        content,
+        imageBase64 
+      }),
+      signal: controller.signal,
+    });
 
-  // Read full stream
-  const reader = resp.body?.getReader();
-  if (!reader) throw new Error("No response body");
+    if (!resp.ok) {
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(errorData.error || `Request failed`);
+    }
 
-  const decoder = new TextDecoder();
-  let result = "";
-  let textBuffer = "";
+    // Read full stream
+    const reader = resp.body?.getReader();
+    if (!reader) throw new Error("No response body");
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    textBuffer += decoder.decode(value, { stream: true });
+    const decoder = new TextDecoder();
+    let result = "";
+    let textBuffer = "";
 
-    let newlineIndex: number;
-    while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-      let line = textBuffer.slice(0, newlineIndex);
-      textBuffer = textBuffer.slice(newlineIndex + 1);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      clearTimeout(timeout); // Reset on each chunk
+      textBuffer += decoder.decode(value, { stream: true });
 
-      if (line.endsWith("\r")) line = line.slice(0, -1);
-      if (!line.startsWith("data: ")) continue;
+      let newlineIndex: number;
+      while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+        let line = textBuffer.slice(0, newlineIndex);
+        textBuffer = textBuffer.slice(newlineIndex + 1);
 
-      const jsonStr = line.slice(6).trim();
-      if (jsonStr === "[DONE]") continue;
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (!line.startsWith("data: ")) continue;
 
-      try {
-        const parsed = JSON.parse(jsonStr);
-        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-        if (content) result += content;
-      } catch {
-        /* ignore */
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+          if (content) result += content;
+        } catch {
+          /* ignore */
+        }
       }
     }
-  }
 
-  return result;
+    return result;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error("Request timed out. Please try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // Helper to convert file to base64

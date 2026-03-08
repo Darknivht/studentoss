@@ -426,6 +426,9 @@ const Profile = () => {
           <RefreshCw className="w-4 h-4 mr-2" />
           Force Update App
         </Button>
+        <p className="text-center text-xs text-muted-foreground/60">
+          App version: {__APP_VERSION__}
+        </p>
         <Button
           variant="outline"
           onClick={handleSignOut}
