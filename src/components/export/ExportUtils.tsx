@@ -168,7 +168,8 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   try {
     const { jsPDF } = await import('jspdf');
     const html2canvasModule = await import('html2canvas');
-    const renderToCanvas = (html2canvasModule as unknown as { default: (el: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement> }).default ?? html2canvasModule;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderToCanvas = ((html2canvasModule as any).default ?? html2canvasModule) as (el: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLCanvasElement>;
 
     wrapper = document.createElement('div');
     wrapper.innerHTML = `<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`;
