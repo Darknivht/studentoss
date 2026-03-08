@@ -19,7 +19,7 @@ const STORAGE_KEY = 'study_time_tracker';
 const DAILY_GOAL_KEY = 'daily_study_goal';
 
 export function useStudyTimeTracker(): StudyTimeTrackerResult {
-  const { user } = useAuth();
+  const { user, authReady } = useAuth();
   const [todayMinutes, setTodayMinutes] = useState(0);
   const [dailyGoalMinutes, setDailyGoalMinutes] = useState(60); // Default 60 minutes
   const [isTracking, setIsTracking] = useState(false);
