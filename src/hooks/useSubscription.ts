@@ -116,7 +116,10 @@ export const useSubscription = () => {
   const lastFetchRef = useRef<number>(0);
 
   const fetchSubscription = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     if (!SUBSCRIPTION_ENABLED) {
       setSubscription(FULL_ACCESS);
       setLoading(false);
