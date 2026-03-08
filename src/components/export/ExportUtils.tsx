@@ -6,18 +6,29 @@ import { markdownToHtml } from '@/lib/formatters';
 let katexCssCache: string | null = null;
 async function getKatexCss(): Promise<string> {
   if (katexCssCache) return katexCssCache;
+
+  const fallbackCss = `.katex { font-size: 1.1em; } .katex-display { text-align: center; margin: 12px 0; }`;
+
   try {
-    // Try fetching from CDN as the most reliable source
-    const res = await fetch('https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css');
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 1800);
+
+    const res = await fetch('https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css', {
+      signal: controller.signal,
+      cache: 'force-cache',
+    });
+
+    window.clearTimeout(timeoutId);
+
     if (res.ok) {
       katexCssCache = await res.text();
       return katexCssCache;
     }
   } catch {
-    // ignore
+    // fall back quickly when CDN is blocked/unreachable
   }
-  // Fallback: minimal styles so math is at least readable
-  katexCssCache = `.katex { font-size: 1.1em; } .katex-display { text-align: center; margin: 12px 0; }`;
+
+  katexCssCache = fallbackCss;
   return katexCssCache;
 }
 
@@ -139,6 +150,14 @@ function downloadHtmlBlob(fullHtml: string, filename: string) {
 }
 
 /**
+ * Resolve html2pdf regardless of default/named export shape.
+ */
+async function getHtml2Pdf() {
+  const html2pdfModule = await import('html2pdf.js');
+  return (html2pdfModule as { default?: unknown }).default ?? html2pdfModule;
+}
+
+/**
  * Download markdown content as a PDF file.
  * Falls back to HTML download if PDF generation fails.
  */
@@ -152,12 +171,16 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   let baseName = _filename || sanitizeFilename(title);
   baseName = baseName.replace(/\.(html|pdf)$/i, '');
 
-  // Try html2pdf first
-  try {
-    const html2pdfModule = await import('html2pdf.js');
-    const html2pdf = html2pdfModule.default;
+  let wrapper: HTMLDivElement | null = null;
 
-    const wrapper = document.createElement('div');
+  try {
+    const html2pdf = (await getHtml2Pdf()) as {
+      (): {
+        set: (opt: unknown) => { from: (el: HTMLElement) => { save: () => Promise<void> } }
+      }
+    };
+
+    wrapper = document.createElement('div');
     wrapper.innerHTML = `<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`;
     wrapper.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     wrapper.style.fontSize = '11pt';
@@ -165,12 +188,10 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
     wrapper.style.color = '#1a1a1a';
     wrapper.style.padding = '0';
 
-    // Inject KaTeX CSS + base styles
     const styleEl = document.createElement('style');
     styleEl.textContent = katexCss + BASE_STYLES;
     wrapper.prepend(styleEl);
 
-    // Must be visible in DOM for html2canvas to measure
     wrapper.style.position = 'fixed';
     wrapper.style.left = '-9999px';
     wrapper.style.top = '0';
@@ -178,8 +199,7 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
     wrapper.style.background = 'white';
     document.body.appendChild(wrapper);
 
-    // Wait a tick for styles to apply
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const opt = {
       margin: [10, 10, 10, 10] as [number, number, number, number],
@@ -189,13 +209,15 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
       jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
     };
 
-    await html2pdf().set(opt).from(wrapper).save();
-
-    // Clean up
-    if (wrapper.parentNode) document.body.removeChild(wrapper);
+    await Promise.race([
+      html2pdf().set(opt).from(wrapper).save(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('PDF export timed out')), 12000)),
+    ]);
   } catch (err) {
     console.error('PDF generation failed, falling back to HTML download:', err);
     downloadHtmlBlob(fullHtml, `${baseName}.html`);
+  } finally {
+    if (wrapper?.parentNode) document.body.removeChild(wrapper);
   }
 };
 
@@ -204,8 +226,11 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
  */
 export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
   try {
-    const html2pdfModule = await import('html2pdf.js');
-    const html2pdf = html2pdfModule.default;
+    const html2pdf = (await getHtml2Pdf()) as {
+      (): {
+        set: (opt: unknown) => { from: (el: HTMLElement) => { save: () => Promise<void> } }
+      }
+    };
 
     const wrapper = document.createElement('div');
     wrapper.innerHTML = htmlString;
@@ -216,7 +241,7 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
     wrapper.style.background = 'white';
     document.body.appendChild(wrapper);
 
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 100));
 
     const opt = {
       margin: [5, 5, 5, 5] as [number, number, number, number],
@@ -246,10 +271,46 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
 };
 
 /**
- * Print/download markdown content as PDF.
+ * Open a print dialog for markdown content.
  */
-export const printMarkdownContent = (markdownContent: string, title: string) => {
-  downloadAsHTML(markdownContent, title);
+export const printMarkdownContent = async (markdownContent: string, title: string) => {
+  const printWindow = window.open('', '_blank');
+
+  if (!printWindow) {
+    await downloadAsHTML(markdownContent, title);
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write('<!doctype html><html><head><title>Preparing print…</title></head><body>Preparing print…</body></html>');
+  printWindow.document.close();
+
+  try {
+    const [htmlContent, katexCss] = await Promise.all([
+      Promise.resolve(markdownToHtml(markdownContent)),
+      getKatexCss(),
+    ]);
+    const fullHtml = buildHtmlDoc(title, htmlContent, katexCss);
+
+    printWindow.document.open();
+    printWindow.document.write(fullHtml);
+    printWindow.document.close();
+
+    const triggerPrint = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+
+    if (printWindow.document.readyState === 'complete') {
+      window.setTimeout(triggerPrint, 150);
+    } else {
+      printWindow.onload = () => window.setTimeout(triggerPrint, 150);
+    }
+  } catch (err) {
+    console.error('Print preparation failed:', err);
+    printWindow.close();
+    await downloadAsHTML(markdownContent, title);
+  }
 };
 
 export const shareContent = async (title: string, text: string): Promise<boolean> => {
