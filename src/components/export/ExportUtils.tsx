@@ -287,7 +287,7 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
 
     toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
 
-    await generateSectionPDF(container, `${baseName}.pdf`);
+    await generateFastPDF(container, `${baseName}.pdf`);
 
     toast.success('PDF downloaded!', { id: toastId, description: `${baseName}.pdf`, duration: 3000 });
   } catch (err) {
