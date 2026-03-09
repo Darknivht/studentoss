@@ -15,6 +15,7 @@ import { templates, TemplateInfo, ResumeData, emptyResumeData, renderResumeHTML 
 import ResumePreview from './ResumePreview';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 import { downloadHtmlAsPdf } from '@/components/export/ExportUtils';
+import DownloadDropdown from '@/components/export/DownloadDropdown';
 
 // Moved OUTSIDE ResumeBuilder to prevent re-creation on every render
 const InputRow = ({ label, value, onChange, placeholder, type }: { label: string; value: string; onChange: (v: string) => void; placeholder: string; type?: string }) => (
