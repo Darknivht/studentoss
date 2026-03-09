@@ -193,12 +193,17 @@ const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
  * HQ PDF generation: single html2canvas capture then slice into A4 pages.
  */
 async function generateCanvasPDF(container: HTMLElement, filename: string): Promise<void> {
+  // Wait for any KaTeX fonts loaded via <link> tag
+  try { await document.fonts.ready; } catch { /* ignore */ }
+  await new Promise(r => setTimeout(r, 500));
+
   const canvas = await html2canvas(container, {
-    scale: 1.5,
+    scale: 2,
     useCORS: true,
     backgroundColor: '#ffffff',
     logging: false,
-    windowWidth: 595,
+    windowWidth: 794,
+    allowTaint: false,
   });
 
   const imgWidth = canvas.width;
