@@ -198,7 +198,7 @@ const ResumeBuilder = () => {
         <div className="space-y-3">
           <ResumePreview data={data} templateId={selectedTemplate} />
           <div className="flex gap-2">
-            <Button onClick={exportPDF} className="flex-1"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
+            <DownloadDropdown onFast={() => exportPDF('fast')} onHQ={() => exportPDF('hq')} size="default" variant="default" className="flex-1" iconOnly={false} />
             <Button onClick={exportHTML} variant="outline" className="flex-1"><FileCode className="w-4 h-4 mr-1" />HTML</Button>
             <Button onClick={exportText} variant="outline" className="flex-1"><FileDown className="w-4 h-4 mr-1" />Text</Button>
           </div>

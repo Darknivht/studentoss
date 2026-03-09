@@ -130,9 +130,7 @@ const CheatSheetCreator = ({ onBack }: CheatSheetCreatorProps) => {
                 <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7 text-xs px-2">
                   {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={handleDownload} className="h-7 text-xs px-2">
-                  <Download className="w-3 h-3" />
-                </Button>
+                <DownloadDropdown onFast={() => handleDownload('fast')} onHQ={() => handleDownload('hq')} />
                 <Button size="sm" variant="outline" onClick={handlePrint} className="h-7 text-xs">
                   <Printer className="w-3 h-3 mr-1" />
                   Print

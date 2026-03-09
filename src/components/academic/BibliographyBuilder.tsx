@@ -196,7 +196,7 @@ const BibliographyBuilder = ({ onBack }: BibliographyBuilderProps) => {
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
               <h3 className="font-medium text-sm">Bibliography ({style.toUpperCase()})</h3>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(bibliography, `Bibliography (${style.toUpperCase()})`, `bibliography-${style}.html`)} className="h-7"><Download className="w-3 h-3" /></Button>
+                <DownloadDropdown onFast={() => downloadAsHTML(bibliography, `Bibliography (${style.toUpperCase()})`, `bibliography-${style}.pdf`, 'fast')} onHQ={() => downloadAsHTML(bibliography, `Bibliography (${style.toUpperCase()})`, `bibliography-${style}.pdf`, 'hq')} />
                 <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(bibliography, `Bibliography (${style.toUpperCase()})`)} className="h-7"><Printer className="w-3 h-3" /></Button>
                 <Button size="sm" variant="ghost" onClick={copyToClipboard} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
               </div>

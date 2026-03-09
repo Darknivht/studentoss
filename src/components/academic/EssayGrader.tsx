@@ -192,7 +192,7 @@ const EssayGrader = ({ onBack }: EssayGraderProps) => {
                 <div className="flex items-center gap-1">
                   {feedback && (
                     <>
-                      <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(feedback, 'Essay Feedback', 'essay-feedback.html')} className="h-7"><Download className="w-3 h-3" /></Button>
+                      <DownloadDropdown onFast={() => downloadAsHTML(feedback, 'Essay Feedback', 'essay-feedback.pdf', 'fast')} onHQ={() => downloadAsHTML(feedback, 'Essay Feedback', 'essay-feedback.pdf', 'hq')} />
                       <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(feedback, 'Essay Feedback')} className="h-7"><Printer className="w-3 h-3" /></Button>
                       <Button size="sm" variant="ghost" onClick={copyFeedback} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
                     </>
