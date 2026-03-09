@@ -85,15 +85,18 @@ const PRINT_STYLES = `
   }
 `;
 
-function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: string): string {
-  const katexStyle = inlineKatexCss ? `<style>${inlineKatexCss}</style>` : '';
+function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: string, useLink = false): string {
+  // Use CDN link for iframe/print so fonts load correctly; inline CSS for canvas mode
+  const katexBlock = useLink
+    ? `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css" crossorigin="anonymous">`
+    : (inlineKatexCss ? `<style>${inlineKatexCss}</style>` : '');
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
-${katexStyle}
+${katexBlock}
 <style>${BASE_STYLES}${PRINT_STYLES}</style>
 </head>
 <body>
