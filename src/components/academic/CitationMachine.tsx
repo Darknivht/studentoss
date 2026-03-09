@@ -14,6 +14,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
+import DownloadDropdown from '@/components/export/DownloadDropdown';
 
 interface CitationMachineProps {
   onBack: () => void;
@@ -170,7 +171,7 @@ const CitationMachine = ({ onBack }: CitationMachineProps) => {
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
               <h3 className="font-medium text-sm">Generated Citation ({style.toUpperCase()})</h3>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(citation, `Citation (${style.toUpperCase()})`, `citation-${style}.html`)} className="h-7"><Download className="w-3 h-3" /></Button>
+                <DownloadDropdown onFast={() => downloadAsHTML(citation, `Citation (${style.toUpperCase()})`, `citation-${style}.pdf`, 'fast')} onHQ={() => downloadAsHTML(citation, `Citation (${style.toUpperCase()})`, `citation-${style}.pdf`, 'hq')} />
                 <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(citation, `Citation (${style.toUpperCase()})`)} className="h-7"><Printer className="w-3 h-3" /></Button>
                 <Button size="sm" variant="ghost" onClick={copyToClipboard} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
               </div>

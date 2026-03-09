@@ -3,6 +3,8 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 
+export type PdfMode = 'fast' | 'hq';
+
 /**
  * Fetch and cache KaTeX CSS for inline injection into PDF exports.
  */
@@ -73,6 +75,16 @@ const BASE_STYLES = `
   [data-pdf-section] { page-break-inside: avoid; }
 `;
 
+const PRINT_STYLES = `
+  @page { size: A4; margin: 15mm; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    h1, h2, h3, h4 { page-break-after: avoid; }
+    p, li, blockquote, pre, table, .katex-display { page-break-inside: avoid; }
+    img { page-break-inside: avoid; max-width: 100%; }
+  }
+`;
+
 function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: string): string {
   const katexStyle = inlineKatexCss ? `<style>${inlineKatexCss}</style>` : '';
   return `<!DOCTYPE html>
@@ -82,7 +94,7 @@ function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: strin
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
 ${katexStyle}
-<style>${BASE_STYLES}</style>
+<style>${BASE_STYLES}${PRINT_STYLES}</style>
 </head>
 <body>
 <h1>${title}</h1>
@@ -92,8 +104,41 @@ ${htmlContent}
 }
 
 /**
+ * Fast PDF: uses browser's native print engine via a hidden iframe.
+ * Instant, handles page breaks natively, no canvas overhead.
+ */
+async function generatePrintPDF(fullHtml: string): Promise<void> {
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument!;
+  doc.open();
+  doc.write(fullHtml);
+  doc.close();
+
+  await new Promise<void>((resolve) => {
+    if (doc.readyState === 'complete') {
+      resolve();
+    } else {
+      iframe.onload = () => resolve();
+    }
+  });
+
+  // Small delay for fonts/KaTeX rendering
+  await new Promise(r => setTimeout(r, 300));
+
+  iframe.contentWindow!.focus();
+  iframe.contentWindow!.print();
+
+  // Clean up after print dialog closes
+  setTimeout(() => {
+    if (iframe.parentNode) document.body.removeChild(iframe);
+  }, 2000);
+}
+
+/**
  * Wrap top-level HTML elements with data-pdf-section attributes
- * so the section-based PDF renderer can capture them individually.
  */
 function wrapSections(htmlContent: string): string {
   const temp = document.createElement('div');
@@ -104,7 +149,6 @@ function wrapSections(htmlContent: string): string {
     (child as HTMLElement).setAttribute('data-pdf-section', 'true');
   }
 
-  // If there are text nodes not wrapped, wrap them
   const nodes = Array.from(temp.childNodes);
   const result = document.createElement('div');
   let currentGroup: HTMLElement | null = null;
@@ -134,17 +178,15 @@ function wrapSections(htmlContent: string): string {
 }
 
 // A4 dimensions in mm
-const A4_WIDTH_MM = 210;
 const A4_HEIGHT_MM = 297;
 const MARGIN_MM = 15;
+const A4_WIDTH_MM = 210;
 const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
-const SECTION_GAP_MM = 2;
 
 /**
- * Fast PDF generation: single html2canvas capture of the entire container,
- * then slice the resulting image into A4 pages. ~1-3 seconds total.
+ * HQ PDF generation: single html2canvas capture then slice into A4 pages.
  */
-async function generateFastPDF(container: HTMLElement, filename: string): Promise<void> {
+async function generateCanvasPDF(container: HTMLElement, filename: string): Promise<void> {
   const canvas = await html2canvas(container, {
     scale: 1.5,
     useCORS: true,
@@ -256,13 +298,11 @@ function downloadHtmlBlob(fullHtml: string, filename: string) {
 }
 
 /**
- * Download markdown content as a PDF file using section-based jsPDF + html2canvas.
- * Each block element is captured individually to prevent text slicing across pages.
- * Falls back to HTML download if PDF generation fails.
+ * Download markdown content as PDF.
+ * mode='fast' (default): uses browser print dialog — instant.
+ * mode='hq': uses canvas-based rendering — slower but pixel-perfect.
  */
-export const downloadAsHTML = async (markdownContent: string, title: string, _filename?: string) => {
-  const toastId = toast.loading('Preparing your PDF…', { description: 'Rendering content for download' });
-
+export const downloadAsHTML = async (markdownContent: string, title: string, _filename?: string, mode: PdfMode = 'fast') => {
   const [htmlContent, katexCss] = await Promise.all([
     Promise.resolve(markdownToHtml(markdownContent)),
     getKatexCss(),
@@ -271,7 +311,15 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   let baseName = _filename || sanitizeFilename(title);
   baseName = baseName.replace(/\.(html|pdf)$/i, '');
 
-  // Wrap top-level elements as sections for page-break-safe rendering
+  if (mode === 'fast') {
+    const fullHtml = buildHtmlDoc(title, htmlContent, katexCss);
+    await generatePrintPDF(fullHtml);
+    return;
+  }
+
+  // HQ mode: canvas-based
+  const toastId = toast.loading('Generating HD PDF…', { description: 'Rendering content at high quality' });
+
   const sectionedHtml = wrapSections(`<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`);
 
   const container = document.createElement('div');
@@ -280,16 +328,12 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   document.body.appendChild(container);
 
   try {
-    // Wait for KaTeX fonts and any other web fonts to load
     await document.fonts.ready;
-    // Small delay to ensure KaTeX SVGs/spans are fully laid out
     await new Promise(r => setTimeout(r, 200));
 
-    toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
+    await generateCanvasPDF(container, `${baseName}.pdf`);
 
-    await generateFastPDF(container, `${baseName}.pdf`);
-
-    toast.success('PDF downloaded!', { id: toastId, description: `${baseName}.pdf`, duration: 3000 });
+    toast.success('HD PDF downloaded!', { id: toastId, description: `${baseName}.pdf`, duration: 3000 });
   } catch (err) {
     console.error('PDF generation failed, falling back to HTML:', err);
     const fullHtml = buildHtmlDoc(title, htmlContent, katexCss);
@@ -302,10 +346,25 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
 
 /**
  * Generate a PDF from raw HTML string (e.g. resume templates).
+ * mode='fast': browser print dialog. mode='hq': canvas pipeline.
  */
-export const downloadHtmlAsPdf = async (htmlString: string, filename: string) => {
+export const downloadHtmlAsPdf = async (htmlString: string, filename: string, mode: PdfMode = 'fast') => {
   const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-  const toastId = toast.loading('Preparing your PDF…', { description: 'Rendering content for download' });
+
+  if (mode === 'fast') {
+    // Wrap in a full HTML doc with print styles
+    const fullHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${pdfFilename}</title>
+<style>${PRINT_STYLES}
+body { margin: 0; padding: 0; }
+</style></head>
+<body>${htmlString}</body></html>`;
+    await generatePrintPDF(fullHtml);
+    return;
+  }
+
+  // HQ mode
+  const toastId = toast.loading('Generating HD PDF…', { description: 'Rendering content at high quality' });
 
   const sectionedHtml = wrapSections(htmlString);
 
@@ -318,11 +377,9 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string) =>
     await document.fonts.ready;
     await new Promise(r => setTimeout(r, 200));
 
-    toast.loading('Generating PDF pages…', { id: toastId, description: 'This may take a moment' });
+    await generateCanvasPDF(container, pdfFilename);
 
-    await generateFastPDF(container, pdfFilename);
-
-    toast.success('PDF downloaded!', { id: toastId, description: pdfFilename, duration: 3000 });
+    toast.success('HD PDF downloaded!', { id: toastId, description: pdfFilename, duration: 3000 });
   } catch (err) {
     console.error('PDF generation failed:', err);
     const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });

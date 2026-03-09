@@ -15,6 +15,7 @@ import { templates, TemplateInfo, ResumeData, emptyResumeData, renderResumeHTML 
 import ResumePreview from './ResumePreview';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 import { downloadHtmlAsPdf } from '@/components/export/ExportUtils';
+import DownloadDropdown from '@/components/export/DownloadDropdown';
 
 // Moved OUTSIDE ResumeBuilder to prevent re-creation on every render
 const InputRow = ({ label, value, onChange, placeholder, type }: { label: string; value: string; onChange: (v: string) => void; placeholder: string; type?: string }) => (
@@ -104,9 +105,9 @@ const ResumeBuilder = () => {
     } catch { setGenerating(false); }
   };
 
-  const exportPDF = async () => {
+  const exportPDF = async (mode: 'fast' | 'hq' = 'fast') => {
     const html = renderResumeHTML(data, selectedTemplate);
-    await downloadHtmlAsPdf(html, `${data.name || 'resume'}.pdf`);
+    await downloadHtmlAsPdf(html, `${data.name || 'resume'}.pdf`, mode);
     toast({ title: '📄 PDF downloaded!' });
   };
 
@@ -197,7 +198,7 @@ const ResumeBuilder = () => {
         <div className="space-y-3">
           <ResumePreview data={data} templateId={selectedTemplate} />
           <div className="flex gap-2">
-            <Button onClick={exportPDF} className="flex-1"><Download className="w-4 h-4 mr-1" />Download PDF</Button>
+            <DownloadDropdown onFast={() => exportPDF('fast')} onHQ={() => exportPDF('hq')} size="default" variant="default" className="flex-1" iconOnly={false} />
             <Button onClick={exportHTML} variant="outline" className="flex-1"><FileCode className="w-4 h-4 mr-1" />HTML</Button>
             <Button onClick={exportText} variant="outline" className="flex-1"><FileDown className="w-4 h-4 mr-1" />Text</Button>
           </div>
@@ -354,7 +355,7 @@ const ResumeBuilder = () => {
       {/* Export buttons when in edit mode */}
       {!showPreview && (
         <div className="flex gap-2">
-          <Button onClick={exportPDF} className="flex-1 gradient-primary text-primary-foreground"><Printer className="w-4 h-4 mr-1" />Print PDF</Button>
+          <Button onClick={() => exportPDF('fast')} className="flex-1 gradient-primary text-primary-foreground"><Printer className="w-4 h-4 mr-1" />Print PDF</Button>
           <Button onClick={exportHTML} variant="outline"><FileCode className="w-4 h-4" /></Button>
           <Button onClick={exportText} variant="outline"><FileDown className="w-4 h-4" /></Button>
         </div>

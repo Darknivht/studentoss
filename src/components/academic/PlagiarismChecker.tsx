@@ -13,6 +13,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
+import DownloadDropdown from '@/components/export/DownloadDropdown';
 
 interface PlagiarismCheckerProps {
   onBack: () => void;
@@ -151,7 +152,7 @@ const PlagiarismChecker = ({ onBack }: PlagiarismCheckerProps) => {
               <div className="flex items-center gap-1">
                 {analysis && (
                   <>
-                    <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(analysis, 'Plagiarism Analysis', 'plagiarism-analysis.html')} className="h-7"><Download className="w-3 h-3" /></Button>
+                    <DownloadDropdown onFast={() => downloadAsHTML(analysis, 'Plagiarism Analysis', 'plagiarism-analysis.pdf', 'fast')} onHQ={() => downloadAsHTML(analysis, 'Plagiarism Analysis', 'plagiarism-analysis.pdf', 'hq')} />
                     <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(analysis, 'Plagiarism Analysis')} className="h-7"><Printer className="w-3 h-3" /></Button>
                     <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
                   </>

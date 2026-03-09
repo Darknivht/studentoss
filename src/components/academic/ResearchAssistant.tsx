@@ -14,6 +14,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
+import DownloadDropdown from '@/components/export/DownloadDropdown';
 
 interface ResearchAssistantProps {
   onBack: () => void;
@@ -181,7 +182,7 @@ const ResearchAssistant = ({ onBack }: ResearchAssistantProps) => {
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
               <h3 className="font-medium text-sm">{mode === 'full_research' ? 'Research Findings' : 'Research Guide'}</h3>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(results, `Research: ${topic}`, `research-${topic.slice(0,20).replace(/\s+/g,'-')}.html`)} className="h-7"><Download className="w-3 h-3" /></Button>
+                <DownloadDropdown onFast={() => downloadAsHTML(results, `Research: ${topic}`, `research-${topic.slice(0,20).replace(/\s+/g,'-')}.pdf`, 'fast')} onHQ={() => downloadAsHTML(results, `Research: ${topic}`, `research-${topic.slice(0,20).replace(/\s+/g,'-')}.pdf`, 'hq')} />
                 <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(results, `Research: ${topic}`)} className="h-7"><Printer className="w-3 h-3" /></Button>
                 <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
               </div>

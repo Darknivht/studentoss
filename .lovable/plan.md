@@ -1,74 +1,44 @@
 
 
-# Plan: Dual-Mode PDF Export (Fast + High-Quality)
+# Fix PDF Formatting, Math Rendering, and Achievement Dropdown
 
-## Problem
-The current `html2canvas`-based PDF generation is too slow. Users wait 10+ minutes for large documents.
+## Problems Found
 
-## Solution
-Offer two export modes:
-1. **Fast PDF** (default) — Uses the browser's native print-to-PDF via an iframe + `window.print()`. Instant, no canvas rendering. Outputs via the browser's "Save as PDF" print dialog.
-2. **High-Quality PDF** — Uses the existing `html2canvas` + `jsPDF` pipeline with optimizations (scale 1.5, JPEG compression). For users who want pixel-perfect output.
+1. **PDF shows raw asterisks and bad formatting**: The `markdownToHtml()` function in `formatters.ts` uses fragile regex that fails on multi-line bold, nested formatting, and doesn't strip `**` properly in many cases. The bold regex `\*\*(.+?)\*\*` is non-greedy single-line only and runs after headers, causing conflicts.
 
-## Architecture
+2. **Math equations not rendered in PDFs**: The HTML doc includes KaTeX CSS but the `markdownToHtml()` never converts `$...$` or `$$...$$` to KaTeX HTML. The `katex` package is already installed and has a `renderToString()` API we can use directly.
 
-```text
-User clicks Download
-    ├── Fast PDF (default)
-    │     → Build HTML string with inline styles + KaTeX CSS
-    │     → Open hidden iframe, write HTML
-    │     → iframe.contentWindow.print()  (browser print dialog → Save as PDF)
-    │     → Remove iframe
-    │     └── ~instant, 0-2 seconds
-    │
-    └── High-Quality PDF (optional)
-          → Current html2canvas + jsPDF pipeline
-          → Single-capture, slice into pages
-          └── ~5-15 seconds depending on content
-```
+3. **Achievement requirement_type is a free text Input**: Admin can type anything, but only 12 specific keys from `UserStats` are valid (`notes_count`, `quizzes_count`, `flashcards_reviewed`, `streak`, `focus_sessions`, `total_xp`, `groups_joined`, `messages_sent`, `challenges_sent`, `perfect_quizzes`, `study_minutes`, `subjects_with_notes`).
 
-## Changes
+---
 
-### 1. `src/components/export/ExportUtils.tsx`
-- Add `generatePrintPDF(htmlDoc: string, title: string)` — creates a hidden iframe, writes the full HTML document (with `@media print` styles and `@page` rules for A4), calls `print()`, then removes iframe
-- Update `downloadAsHTML` to accept an optional `mode: 'fast' | 'hq'` parameter (default `'fast'`)
-  - `'fast'` → calls `generatePrintPDF`
-  - `'hq'` → calls existing `generateFastPDF` (the canvas pipeline)
-- Same for `downloadHtmlAsPdf`
-- Add print-specific CSS: `@page { size: A4; margin: 15mm; }`, page-break rules
+## Plan
 
-### 2. Caller components (AIToolLayout, ResumeBuilder, academic tools, etc.)
-- Replace single Download button with a small dropdown or two buttons:
-  - **Download PDF** (fast, default) — triggers print dialog
-  - **HD PDF** — triggers canvas-based generation with loading toast
-- Minimal UI change: use a DropdownMenu on the existing Download button
+### A. Fix `markdownToHtml()` in `src/lib/formatters.ts`
 
-### 3. Components to update
-- `src/components/ai-tools/AIToolLayout.tsx` — Download button gets dropdown
-- `src/components/career/ResumeBuilder.tsx` — PDF export button gets dropdown
-- `src/components/academic/ResearchAssistant.tsx`, `PlagiarismChecker.tsx`, `EssayGrader.tsx`, `BibliographyBuilder.tsx`, `ThesisGenerator.tsx` — same pattern
-- `src/components/study/CheatSheetCreator.tsx` — same
+- Rewrite the conversion pipeline with correct ordering: code blocks first (escape them), then math, then tables, then headers, then bold/italic, then lists, then paragraphs
+- Add math rendering: use `katex.renderToString()` for `$$...$$` (display) and `$...$` (inline) blocks before other processing
+- Fix bold/italic regex to handle multi-line and nested cases properly
+- Add blockquote support (`>` lines)
+- Handle numbered lists properly (wrap in `<ol>` not just `<li>`)
 
-## Technical Details
+### B. Achievement Requirement Type Dropdown in `src/pages/AdminResources.tsx`
 
-**Fast PDF (print-based)**:
-```typescript
-async function generatePrintPDF(fullHtml: string): Promise<void> {
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-9999px;width:0;height:0;border:none;';
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument!;
-  doc.open();
-  doc.write(fullHtml); // includes @page CSS, KaTeX styles, inline styles
-  doc.close();
-  await new Promise(r => iframe.contentWindow!.onload = r);
-  await document.fonts.ready;
-  iframe.contentWindow!.print();
-  setTimeout(() => document.body.removeChild(iframe), 1000);
-}
-```
+- Replace the `<Input>` on line 606 with a `<Select>` dropdown
+- Options: all 12 keys from UserStats with human-readable labels (e.g., `notes_count` → "Notes Count", `study_minutes` → "Study Minutes", `perfect_quizzes` → "Perfect Quizzes")
 
-The `@page` and `@media print` CSS handles pagination natively — no canvas, no slicing, no text cutting. The browser's print engine handles page breaks correctly with `page-break-inside: avoid` on sections.
+### C. Minor Improvements
 
-**High-Quality PDF**: Keep existing `generateFastPDF` as-is (canvas approach) but rename for clarity.
+- In the PDF `buildHtmlDoc` styles (`ExportUtils.tsx`), add `.katex-display` margin and `.katex` inline styling for better math presentation
+- Ensure `downloadAsHTML` appends the wrapper to `document.body` temporarily so html2pdf can measure it (fixes blank PDFs on some browsers)
+
+---
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `src/lib/formatters.ts` | Rewrite `markdownToHtml` with KaTeX math rendering, fix bold/italic/list conversion |
+| `src/components/export/ExportUtils.tsx` | Add KaTeX CSS styles to `buildHtmlDoc`, fix wrapper visibility for html2pdf |
+| `src/pages/AdminResources.tsx` | Replace requirement_type Input with Select dropdown (12 options) |
 

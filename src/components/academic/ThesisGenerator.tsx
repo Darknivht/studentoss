@@ -13,6 +13,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { formatAIResponse } from '@/lib/formatters';
 import { downloadAsHTML, printMarkdownContent } from '@/components/export/ExportUtils';
+import DownloadDropdown from '@/components/export/DownloadDropdown';
 
 interface ThesisGeneratorProps {
   onBack: () => void;
@@ -103,7 +104,7 @@ const ThesisGenerator = ({ onBack }: ThesisGeneratorProps) => {
             <div className="p-3 bg-muted border-b border-border flex items-center justify-between">
               <h3 className="font-medium text-sm flex items-center gap-2"><Lightbulb className="w-4 h-4 text-primary" />Thesis Options</h3>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(thesis, 'Thesis Statements', 'thesis-statements.html')} className="h-7"><Download className="w-3 h-3" /></Button>
+                <DownloadDropdown onFast={() => downloadAsHTML(thesis, 'Thesis Statements', 'thesis-statements.pdf', 'fast')} onHQ={() => downloadAsHTML(thesis, 'Thesis Statements', 'thesis-statements.pdf', 'hq')} />
                 <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(thesis, 'Thesis Statements')} className="h-7"><Printer className="w-3 h-3" /></Button>
                 <Button size="sm" variant="ghost" onClick={copyToClipboard} className="h-7">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}</Button>
               </div>

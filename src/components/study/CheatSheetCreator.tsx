@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, FileText, Printer, Download, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, FileText, Printer, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import { formatAIResponse } from '@/lib/formatters';
 import { printMarkdownContent, downloadAsHTML } from '@/components/export/ExportUtils';
+import DownloadDropdown from '@/components/export/DownloadDropdown';
 import { useSubscription } from '@/hooks/useSubscription';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 import type { GateResult } from '@/hooks/useSubscription';
@@ -78,9 +79,8 @@ const CheatSheetCreator = ({ onBack }: CheatSheetCreatorProps) => {
     printMarkdownContent(cheatSheet, `Cheat Sheet: ${selectedTitle}`);
   };
 
-  const handleDownload = () => {
-    downloadAsHTML(cheatSheet, `Cheat Sheet: ${selectedTitle}`, `cheatsheet-${selectedTitle.replace(/\s+/g, '-').toLowerCase()}.html`);
-    toast({ title: 'Downloaded!', description: 'Open the file in your browser and print to PDF.' });
+  const handleDownload = (mode: 'fast' | 'hq' = 'fast') => {
+    downloadAsHTML(cheatSheet, `Cheat Sheet: ${selectedTitle}`, `cheatsheet-${selectedTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`, mode);
   };
 
   const handleCopy = async () => {
@@ -130,9 +130,7 @@ const CheatSheetCreator = ({ onBack }: CheatSheetCreatorProps) => {
                 <Button size="sm" variant="ghost" onClick={handleCopy} className="h-7 text-xs px-2">
                   {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={handleDownload} className="h-7 text-xs px-2">
-                  <Download className="w-3 h-3" />
-                </Button>
+                <DownloadDropdown onFast={() => handleDownload('fast')} onHQ={() => handleDownload('hq')} />
                 <Button size="sm" variant="outline" onClick={handlePrint} className="h-7 text-xs">
                   <Printer className="w-3 h-3 mr-1" />
                   Print
