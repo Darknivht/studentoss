@@ -85,15 +85,18 @@ const PRINT_STYLES = `
   }
 `;
 
-function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: string): string {
-  const katexStyle = inlineKatexCss ? `<style>${inlineKatexCss}</style>` : '';
+function buildHtmlDoc(title: string, htmlContent: string, inlineKatexCss?: string, useLink = false): string {
+  // Use CDN link for iframe/print so fonts load correctly; inline CSS for canvas mode
+  const katexBlock = useLink
+    ? `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css" crossorigin="anonymous">`
+    : (inlineKatexCss ? `<style>${inlineKatexCss}</style>` : '');
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
-${katexStyle}
+${katexBlock}
 <style>${BASE_STYLES}${PRINT_STYLES}</style>
 </head>
 <body>
@@ -125,13 +128,16 @@ async function generatePrintPDF(fullHtml: string): Promise<void> {
     }
   });
 
-  // Small delay for fonts/KaTeX rendering
-  await new Promise(r => setTimeout(r, 300));
+  // Wait for KaTeX fonts to load from CDN
+  try {
+    await iframe.contentDocument!.fonts.ready;
+  } catch { /* ignore */ }
+  // Extra buffer for complex equations
+  await new Promise(r => setTimeout(r, 800));
 
   iframe.contentWindow!.focus();
   iframe.contentWindow!.print();
 
-  // Clean up after print dialog closes
   setTimeout(() => {
     if (iframe.parentNode) document.body.removeChild(iframe);
   }, 2000);
@@ -187,12 +193,17 @@ const CONTENT_WIDTH_MM = A4_WIDTH_MM - (MARGIN_MM * 2);
  * HQ PDF generation: single html2canvas capture then slice into A4 pages.
  */
 async function generateCanvasPDF(container: HTMLElement, filename: string): Promise<void> {
+  // Wait for any KaTeX fonts loaded via <link> tag
+  try { await document.fonts.ready; } catch { /* ignore */ }
+  await new Promise(r => setTimeout(r, 500));
+
   const canvas = await html2canvas(container, {
-    scale: 1.5,
+    scale: 2,
     useCORS: true,
     backgroundColor: '#ffffff',
     logging: false,
-    windowWidth: 595,
+    windowWidth: 794,
+    allowTaint: false,
   });
 
   const imgWidth = canvas.width;
@@ -312,18 +323,25 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   baseName = baseName.replace(/\.(html|pdf)$/i, '');
 
   if (mode === 'fast') {
-    const fullHtml = buildHtmlDoc(title, htmlContent, katexCss);
+    // Use CDN link so KaTeX fonts load properly in the iframe
+    const fullHtml = buildHtmlDoc(title, htmlContent, undefined, true);
     await generatePrintPDF(fullHtml);
     return;
   }
 
-  // HQ mode: canvas-based
+  // HQ mode: canvas-based — use link tag for KaTeX fonts
   const toastId = toast.loading('Generating HD PDF…', { description: 'Rendering content at high quality' });
 
   const sectionedHtml = wrapSections(`<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`);
 
   const container = document.createElement('div');
-  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:595px;padding:24px;font-family:"Helvetica Neue",Arial,sans-serif;font-size:11pt;line-height:1.6;color:#1a1a1a;background:white;';
+  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;padding:24px;font-family:"Helvetica Neue",Arial,sans-serif;font-size:11pt;line-height:1.6;color:#1a1a1a;background:white;';
+  // Use link tag for KaTeX so fonts render for html2canvas
+  const katexLink = document.createElement('link');
+  katexLink.rel = 'stylesheet';
+  katexLink.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css';
+  katexLink.crossOrigin = 'anonymous';
+  document.head.appendChild(katexLink);
   container.innerHTML = `<style>${katexCss}${BASE_STYLES}</style>${sectionedHtml}`;
   document.body.appendChild(container);
 
@@ -341,6 +359,7 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
     toast.warning('Downloaded as HTML instead', { id: toastId, description: 'PDF generation encountered an issue', duration: 3000 });
   } finally {
     document.body.removeChild(container);
+    try { document.head.removeChild(katexLink); } catch { /* ignore */ }
   }
 };
 
@@ -352,9 +371,9 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string, mo
   const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
 
   if (mode === 'fast') {
-    // Wrap in a full HTML doc with print styles
     const fullHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${pdfFilename}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css" crossorigin="anonymous">
 <style>${PRINT_STYLES}
 body { margin: 0; padding: 0; }
 </style></head>
@@ -369,7 +388,7 @@ body { margin: 0; padding: 0; }
   const sectionedHtml = wrapSections(htmlString);
 
   const container = document.createElement('div');
-  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:595px;background:white;';
+  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:white;';
   container.innerHTML = sectionedHtml;
   document.body.appendChild(container);
 
