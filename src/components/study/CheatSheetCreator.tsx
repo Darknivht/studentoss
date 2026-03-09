@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import { formatAIResponse } from '@/lib/formatters';
 import { printMarkdownContent, downloadAsHTML } from '@/components/export/ExportUtils';
+import DownloadDropdown from '@/components/export/DownloadDropdown';
 import { useSubscription } from '@/hooks/useSubscription';
 import FeatureGateDialog from '@/components/subscription/FeatureGateDialog';
 import type { GateResult } from '@/hooks/useSubscription';
