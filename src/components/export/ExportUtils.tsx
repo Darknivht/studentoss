@@ -323,18 +323,25 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
   baseName = baseName.replace(/\.(html|pdf)$/i, '');
 
   if (mode === 'fast') {
-    const fullHtml = buildHtmlDoc(title, htmlContent, katexCss);
+    // Use CDN link so KaTeX fonts load properly in the iframe
+    const fullHtml = buildHtmlDoc(title, htmlContent, undefined, true);
     await generatePrintPDF(fullHtml);
     return;
   }
 
-  // HQ mode: canvas-based
+  // HQ mode: canvas-based — use link tag for KaTeX fonts
   const toastId = toast.loading('Generating HD PDF…', { description: 'Rendering content at high quality' });
 
   const sectionedHtml = wrapSections(`<h1 style="font-size:18pt;margin:0 0 8px;border-bottom:2px solid #333;padding-bottom:4px;">${title}</h1>${htmlContent}`);
 
   const container = document.createElement('div');
-  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:595px;padding:24px;font-family:"Helvetica Neue",Arial,sans-serif;font-size:11pt;line-height:1.6;color:#1a1a1a;background:white;';
+  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;padding:24px;font-family:"Helvetica Neue",Arial,sans-serif;font-size:11pt;line-height:1.6;color:#1a1a1a;background:white;';
+  // Use link tag for KaTeX so fonts render for html2canvas
+  const katexLink = document.createElement('link');
+  katexLink.rel = 'stylesheet';
+  katexLink.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css';
+  katexLink.crossOrigin = 'anonymous';
+  document.head.appendChild(katexLink);
   container.innerHTML = `<style>${katexCss}${BASE_STYLES}</style>${sectionedHtml}`;
   document.body.appendChild(container);
 
