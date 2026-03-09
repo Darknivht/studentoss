@@ -157,9 +157,10 @@ const AIToolLayout = ({
             <h3 className="font-medium text-sm truncate">{loading ? 'Analyzing...' : 'Result'}</h3>
             {result && !loading && (
               <div className="flex items-center gap-1 shrink-0">
-                <Button size="sm" variant="ghost" onClick={() => downloadAsHTML(result, extractContentTitle(result, title), `${extractContentTitle(result, title).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`)} className="h-7">
-                  <Download className="w-3 h-3" />
-                </Button>
+                <DownloadDropdown
+                  onFast={() => downloadAsHTML(result, extractContentTitle(result, title), `${extractContentTitle(result, title).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`, 'fast')}
+                  onHQ={() => downloadAsHTML(result, extractContentTitle(result, title), `${extractContentTitle(result, title).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`, 'hq')}
+                />
                 <Button size="sm" variant="ghost" onClick={() => printMarkdownContent(result, extractContentTitle(result, title))} className="h-7">
                   <Printer className="w-3 h-3" />
                 </Button>
