@@ -128,13 +128,16 @@ async function generatePrintPDF(fullHtml: string): Promise<void> {
     }
   });
 
-  // Small delay for fonts/KaTeX rendering
-  await new Promise(r => setTimeout(r, 300));
+  // Wait for KaTeX fonts to load from CDN
+  try {
+    await iframe.contentDocument!.fonts.ready;
+  } catch { /* ignore */ }
+  // Extra buffer for complex equations
+  await new Promise(r => setTimeout(r, 800));
 
   iframe.contentWindow!.focus();
   iframe.contentWindow!.print();
 
-  // Clean up after print dialog closes
   setTimeout(() => {
     if (iframe.parentNode) document.body.removeChild(iframe);
   }, 2000);
