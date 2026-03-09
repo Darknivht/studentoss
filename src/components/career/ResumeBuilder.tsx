@@ -105,9 +105,9 @@ const ResumeBuilder = () => {
     } catch { setGenerating(false); }
   };
 
-  const exportPDF = async () => {
+  const exportPDF = async (mode: 'fast' | 'hq' = 'fast') => {
     const html = renderResumeHTML(data, selectedTemplate);
-    await downloadHtmlAsPdf(html, `${data.name || 'resume'}.pdf`);
+    await downloadHtmlAsPdf(html, `${data.name || 'resume'}.pdf`, mode);
     toast({ title: '📄 PDF downloaded!' });
   };
 
