@@ -355,7 +355,7 @@ const ResumeBuilder = () => {
       {/* Export buttons when in edit mode */}
       {!showPreview && (
         <div className="flex gap-2">
-          <Button onClick={exportPDF} className="flex-1 gradient-primary text-primary-foreground"><Printer className="w-4 h-4 mr-1" />Print PDF</Button>
+          <Button onClick={() => exportPDF('fast')} className="flex-1 gradient-primary text-primary-foreground"><Printer className="w-4 h-4 mr-1" />Print PDF</Button>
           <Button onClick={exportHTML} variant="outline"><FileCode className="w-4 h-4" /></Button>
           <Button onClick={exportText} variant="outline"><FileDown className="w-4 h-4" /></Button>
         </div>
