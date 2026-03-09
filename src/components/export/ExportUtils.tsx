@@ -359,6 +359,7 @@ export const downloadAsHTML = async (markdownContent: string, title: string, _fi
     toast.warning('Downloaded as HTML instead', { id: toastId, description: 'PDF generation encountered an issue', duration: 3000 });
   } finally {
     document.body.removeChild(container);
+    try { document.head.removeChild(katexLink); } catch { /* ignore */ }
   }
 };
 
