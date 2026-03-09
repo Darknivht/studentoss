@@ -79,9 +79,8 @@ const CheatSheetCreator = ({ onBack }: CheatSheetCreatorProps) => {
     printMarkdownContent(cheatSheet, `Cheat Sheet: ${selectedTitle}`);
   };
 
-  const handleDownload = () => {
-    downloadAsHTML(cheatSheet, `Cheat Sheet: ${selectedTitle}`, `cheatsheet-${selectedTitle.replace(/\s+/g, '-').toLowerCase()}.html`);
-    toast({ title: 'Downloaded!', description: 'Open the file in your browser and print to PDF.' });
+  const handleDownload = (mode: 'fast' | 'hq' = 'fast') => {
+    downloadAsHTML(cheatSheet, `Cheat Sheet: ${selectedTitle}`, `cheatsheet-${selectedTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`, mode);
   };
 
   const handleCopy = async () => {
