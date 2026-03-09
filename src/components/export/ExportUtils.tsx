@@ -371,9 +371,9 @@ export const downloadHtmlAsPdf = async (htmlString: string, filename: string, mo
   const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
 
   if (mode === 'fast') {
-    // Wrap in a full HTML doc with print styles
     const fullHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${pdfFilename}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.28/dist/katex.min.css" crossorigin="anonymous">
 <style>${PRINT_STYLES}
 body { margin: 0; padding: 0; }
 </style></head>
@@ -388,7 +388,7 @@ body { margin: 0; padding: 0; }
   const sectionedHtml = wrapSections(htmlString);
 
   const container = document.createElement('div');
-  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:595px;background:white;';
+  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:white;';
   container.innerHTML = sectionedHtml;
   document.body.appendChild(container);
 
