@@ -31,7 +31,7 @@ export interface GateResult {
 }
 
 interface SubscriptionData {
-  tier: 'free' | 'plus' | 'pro';
+  tier: 'free' | 'plus' | 'pro' | 'lifetime';
   isPro: boolean;
   isPlus: boolean;
   aiCallsToday: number;
@@ -151,11 +151,12 @@ export const useSubscription = () => {
       const tierRaw = (data?.subscription_tier || 'free').trim().toLowerCase();
       const expiresAt = data?.subscription_expires_at;
       const isActive = !expiresAt || new Date(expiresAt) > new Date();
-      const isPro = tierRaw === 'pro' && isActive;
+      const isLifetime = tierRaw === 'lifetime' && isActive;
+      const isPro = (tierRaw === 'pro' || isLifetime) && isActive;
       const isPlus = tierRaw === 'plus' && isActive;
       const tier: 'free' | 'plus' | 'pro' = isPro ? 'pro' : isPlus ? 'plus' : 'free';
 
-      console.log('[Subscription] Raw tier:', tierRaw, '| Expires:', expiresAt, '| isActive:', isActive, '| Resolved tier:', tier);
+      console.log('[Subscription] Raw tier:', tierRaw, '| Expires:', expiresAt, '| isActive:', isActive, '| isLifetime:', isLifetime, '| Resolved tier:', tier);
 
       const limits = isPro ? PRO_LIMITS : isPlus ? PLUS_LIMITS : FREE_LIMITS;
       const lifetimeLimits = isPro ? PRO_LIFETIME : isPlus ? PLUS_LIFETIME : FREE_LIFETIME;

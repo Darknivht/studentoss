@@ -883,7 +883,11 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
     try {
       const duration = durations[userId] || 'monthly';
       let expiresAt: string | null = null;
-      if (tier !== 'free') {
+      
+      // Handle lifetime specially - it has no expiry
+      if (tier === 'lifetime') {
+        expiresAt = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString(); // 100 years
+      } else if (tier !== 'free') {
         if (duration === 'yearly') {
           expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
         } else {
@@ -893,7 +897,7 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
       await supabase.functions.invoke('admin-resources', {
         body: { password: adminPassword, action: 'update-subscription', userId, subscription_tier: tier, subscription_expires_at: expiresAt },
       });
-      toast({ title: `Updated to ${tier} (${tier === 'free' ? 'no expiry' : duration})` });
+      toast({ title: tier === 'lifetime' ? 'Upgraded to Lifetime!' : `Updated to ${tier} (${tier === 'free' ? 'no expiry' : duration})` });
       fetchUsers();
     } catch (err: any) { toast({ title: "Failed", description: err.message, variant: "destructive" }); }
     finally { setUpdating(null); }
@@ -929,7 +933,7 @@ const PaymentsTab = ({ adminPassword }: { adminPassword: string }) => {
                         <SelectItem value="yearly">Yearly (365d)</SelectItem>
                       </SelectContent>
                     </Select>
-                    {['free', 'plus', 'pro'].map(tier => (
+                    {['free', 'plus', 'pro', 'lifetime'].map(tier => (
                       <Button key={tier} size="sm" variant={u.subscription_tier === tier ? "default" : "outline"} className="text-xs capitalize" disabled={updating === u.user_id} onClick={() => updateSub(u.user_id, tier)}>
                         {updating === u.user_id ? <Loader2 className="w-3 h-3 animate-spin" /> : tier}
                       </Button>
