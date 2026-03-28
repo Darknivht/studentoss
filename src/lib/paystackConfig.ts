@@ -12,6 +12,9 @@ export const PLAN_PRICING = {
     monthly: 500000, // ₦5,000
     yearly: 4800000, // ₦48,000 (20% off yearly)
   },
+  lifetime: {
+    oneTime: 5000000, // ₦50,000 one-time
+  },
 } as const;
 
 export const formatNaira = (kobo: number) => {

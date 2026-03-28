@@ -92,10 +92,100 @@ const Upgrade = () => {
       cta: 'Upgrade to Pro',
       highlight: false,
     },
+    {
+      id: 'lifetime',
+      name: 'Lifetime',
+      monthlyPrice: 0,
+      yearlyPrice: PLAN_PRICING.lifetime.oneTime,
+      description: 'Pay once, own forever',
+      features: [
+        'Everything in Pro',
+        'Lifetime access, no monthly fees',
+        'All future features included',
+        'Priority support',
+        'Exclusive lifetime-only perks',
+        'No ads, ever',
+      ],
+      cta: 'Get Lifetime',
+      highlight: false,
+    },
   ];
 
   const handleUpgrade = async (tierId: string) => {
     if (!user || tierId === 'free') return;
+
+    // Handle lifetime plan specially (one-time payment)
+    if (tierId === 'lifetime') {
+      setLoading(true);
+      try {
+        // @ts-ignore - Paystack inline script
+        const handler = window.PaystackPop?.setup({
+          key: PAYSTACK_PUBLIC_KEY,
+          email: user.email,
+          amount: PLAN_PRICING.lifetime.oneTime,
+          currency: 'NGN',
+          ref: `lifetime_onetime_${user.id}_${Date.now()}`,
+          metadata: {
+            user_id: user.id,
+            plan: 'lifetime',
+            billing_period: 'one_time',
+          },
+          callback: async function(response: any) {
+            try {
+              const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-payment`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                },
+                body: JSON.stringify({
+                  reference: response.reference,
+                  user_id: user.id,
+                  plan: 'lifetime',
+                }),
+              });
+
+              const result = await resp.json();
+              if (result.success) {
+                toast({
+                  title: 'Payment successful! 🎉',
+                  description: 'Welcome to Lifetime! You own StudentOS forever.',
+                });
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                await refetch();
+                window.dispatchEvent(new Event('subscription-updated'));
+              }
+            } catch {
+              toast({
+                title: 'Payment received',
+                description: 'Your lifetime access will be activated shortly.',
+              });
+              await new Promise(resolve => setTimeout(resolve, 1500));
+              await refetch();
+              window.dispatchEvent(new Event('subscription-updated'));
+            }
+          },
+          onClose: function() {
+            toast({ title: 'Payment cancelled' });
+          },
+        });
+
+        if (handler) {
+          handler.openIframe();
+        } else {
+          toast({
+            title: 'Payment system loading...',
+            description: 'Please try again in a moment.',
+          });
+        }
+      } catch (error) {
+        console.error('Payment error:', error);
+        toast({ title: 'Payment failed', variant: 'destructive' });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     setLoading(true);
     try {
