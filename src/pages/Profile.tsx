@@ -122,9 +122,9 @@ const Profile = () => {
     toast({ title: 'Signed out', description: 'See you next time!' });
   };
 
-  const tierLabel = subscriptionTier === 'pro' ? 'Pro Member' : subscriptionTier === 'plus' ? 'Plus Member' : 'Free Tier';
-  const tierDesc = subscriptionTier === 'pro' ? 'Unlimited access' : subscriptionTier === 'plus' ? 'Enhanced access' : 'Limited features';
-  const isPaid = subscriptionTier === 'pro' || subscriptionTier === 'plus';
+  const tierLabel = subscriptionTier === 'lifetime' ? 'Lifetime Member' : subscriptionTier === 'pro' ? 'Pro Member' : subscriptionTier === 'plus' ? 'Plus Member' : 'Free Tier';
+  const tierDesc = subscriptionTier === 'lifetime' ? 'Forever access, no monthly fees' : subscriptionTier === 'pro' ? 'Unlimited access' : subscriptionTier === 'plus' ? 'Enhanced access' : 'Limited features';
+  const isPaid = subscriptionTier === 'pro' || subscriptionTier === 'plus' || subscriptionTier === 'lifetime';
 
   return (
     <div className="p-6 space-y-6">
