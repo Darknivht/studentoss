@@ -126,6 +126,7 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
     { label: "Quiz Attempts", value: stats.total_quizzes, icon: "📝" },
     { label: "Plus Subscribers", value: stats.plus_subscribers, icon: "⭐" },
     { label: "Pro Subscribers", value: stats.pro_subscribers, icon: "💎" },
+    { label: "Lifetime Members", value: stats.lifetime_subscribers, icon: "👑" },
     { label: "Exam Attempts", value: stats.total_exam_attempts, icon: "🎯" },
     { label: "Total Notes", value: stats.total_notes, icon: "📒" },
     { label: "Study Hours", value: stats.total_study_hours, icon: "⏱️" },
@@ -134,9 +135,11 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
     { label: "Pomodoro Sessions", value: stats.total_pomodoro_sessions, icon: "🍅" },
   ] : [];
 
-  const PIE_COLORS = ['#22c55e', '#3b82f6', '#a855f7']; // Green Free, Blue Plus, Purple Pro
+  const PIE_COLORS = ['#22c55e', '#3b82f6', '#a855f7', '#f59e0b']; // Green Free, Blue Plus, Purple Pro, Amber Lifetime
 
+  // Revenue: plus/pro are monthly, lifetime is one-time
   const estimatedRevenue = stats ? ((stats.plus_subscribers || 0) * 2000) + ((stats.pro_subscribers || 0) * 5000) : 0;
+  const lifetimeRevenue = stats ? (stats.lifetime_subscribers || 0) * 50000 : 0;
 
   const exportCSV = () => {
     if (!stats) return;
@@ -144,6 +147,7 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
       ['Metric', 'Value'],
       ...summaryItems.map(i => [i.label, String(i.value ?? 0)]),
       ['Est. Monthly Revenue (₦)', String(estimatedRevenue)],
+      ['Lifetime Revenue (₦)', String(lifetimeRevenue)],
       ['Weekly Retention (%)', String(stats.retention_rate ?? 0)],
     ];
     const csv = rows.map(r => r.join(',')).join('\n');
@@ -173,12 +177,21 @@ const AnalyticsTab = ({ adminPassword }: { adminPassword: string }) => {
 
           {/* Revenue & Retention Row */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Revenue Estimator */}
+            {/* Monthly Revenue Estimator */}
             <Card className="border-primary/30 bg-primary/5">
               <CardHeader className="pb-1"><CardTitle className="text-sm">Est. Monthly Revenue</CardTitle></CardHeader>
               <CardContent className="text-center">
                 <p className="text-3xl font-bold text-primary">₦{estimatedRevenue.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground mt-1">{stats.plus_subscribers || 0} Plus × ₦2k + {stats.pro_subscribers || 0} Pro × ₦5k</p>
+              </CardContent>
+            </Card>
+
+            {/* Lifetime Revenue */}
+            <Card className="border-amber-500/30 bg-amber-500/5">
+              <CardHeader className="pb-1"><CardTitle className="text-sm">Lifetime Revenue</CardTitle></CardHeader>
+              <CardContent className="text-center">
+                <p className="text-3xl font-bold text-amber-600">₦{lifetimeRevenue.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.lifetime_subscribers || 0} × ₦50k one-time</p>
               </CardContent>
             </Card>
 
