@@ -1,17 +1,55 @@
-# D — Troubleshooting
+# Appendix D — Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| Reanimated babel error | plugin not last in `babel.config.js` | move `react-native-reanimated/plugin` to end |
-| Nativewind classes not applied | `metro.config.js` not wrapped or `global.css` not imported | re-check both |
-| Supabase auth not persisting | wrong storage adapter | verify `AsyncStorage` passed to createClient |
-| OAuth opens browser but never returns | scheme mismatch | check `app.config.ts` `scheme` and Linking redirect |
-| Push notification token undefined | permission not granted | call `Notifications.requestPermissionsAsync()` first |
-| Focus mode permission dialog never appears | not using dev client | rebuild with `eas build --profile development` (Expo Go can't load custom plugins) |
-| App crashes on Android cold start | largeHeap missing | set `largeHeap: true` in `app.config.ts` android section |
-| KaTeX symbols missing | font not loaded in math-view | `react-native-math-view` bundles MathJax fonts; rebuild dev client |
-| White flash on launch | splash misconfigured | set `SplashScreen.preventAutoHideAsync()` in App.tsx until fonts loaded |
-| Hardware back exits app | back handler not registered or canGoBack=false | mount `useMobileBackNavigation` near root |
-| Realtime channel doesn't fire | RLS blocks SELECT | check policies; channel needs SELECT permission to receive |
-| EAS build fails: "missing google-services.json" | not needed unless using FCM directly; using Expo push | remove FCM config or add file |
-| Slow FlatList | not using `keyExtractor` or fixed `getItemLayout` | provide both for long lists |
+## Build fails: "Could not find a build script"
+Run `eas build:configure`. Make sure `app.config.ts` exports a function or object.
+
+## Reanimated: "Failed to create a worklet"
+Babel plugin missing. Add `react-native-reanimated/plugin` as LAST in `babel.config.js` plugins.
+
+## Nativewind classes have no effect
+Ensure `import './global.css'` is at top of `App.tsx`. Restart Metro with `--clear`.
+
+## Supabase: "TypeError: Network request failed"
+RN doesn't trust self-signed certs. Check URL is HTTPS. Ensure `setAuthSession` not called before SecureStore loaded.
+
+## Push notifications never arrive on iOS
+- APNs key uploaded in EAS credentials?
+- Built with `production` profile (development profile uses sandbox APNs)?
+- Notification permission granted?
+- Token saved to DB?
+
+## Focus mode blocking doesn't work
+- AccessibilityService enabled in system settings?
+- Foreground service notification visible?
+- `usesPermissionFlags` in AndroidManifest set to `neverForLocation` where needed?
+- Check `adb logcat | grep FocusService`
+
+## OTA update doesn't apply
+- Runtime version matches between build and update?
+- User restarted app (or `Updates.reloadAsync()` called)?
+- Branch correct? `eas update:list --branch production`
+
+## App rejected by Apple for "uses 3rd-party payment"
+You must use IAP for digital subscriptions. Move Paystack flow behind Android-only flag.
+
+## Crash: "Native module RNFocusMode is null"
+Forgot to rebuild dev client after adding native code. Run `eas build --profile development`.
+
+## TextInput keyboard covers input
+Wrap screen in `KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'}`. Or use `react-native-keyboard-controller`.
+
+## FlashList warning "estimatedItemSize"
+Always provide `estimatedItemSize` prop with average item height in pixels.
+
+## Splash screen never hides
+Call `SplashScreen.hideAsync()` after first frame ready (in root useEffect).
+
+## Deep link doesn't open app
+Check `scheme` in `app.config.ts` matches the URL. iOS needs `applinks:` for universal links; Android needs `intent-filter` with `autoVerify`.
+
+## "Cannot read property 'X' of undefined" only on release builds
+Hermes optimizations. Check that you're not destructuring from null. Test with `EXPO_PUBLIC_USE_HERMES=false` to confirm.
+
+## Dark mode flicker on launch
+Read theme from MMKV synchronously BEFORE first render (MMKV is sync; AsyncStorage isn't).
+

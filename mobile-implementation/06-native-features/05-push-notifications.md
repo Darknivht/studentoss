@@ -1,16 +1,47 @@
-# 05-push-notifications — Push Notifications
+# push-notifications — Push Notifications
 
-expo-notifications. Request permission. Get Expo push token. Save to profiles.expo_push_token (add column via migration in web repo). Edge function admin-broadcast can send via Expo Push API. Channels (Android): default, streaks, daily-quiz, focus.
+## Provider
+`expo-notifications` with Expo Push Service (FCM under the hood for Android, APNs for iOS).
 
-## Permissions to declare (app.config.ts)
+## Setup
+1. `eas build:configure`
+2. iOS: enable Push capability in EAS credentials
+3. Android: FCM project + `google-services.json` configured via Expo
 
-See the relevant Android permissions in 00-foundation/02-project-init.md.
+## Permission
+```ts
+import * as Notifications from 'expo-notifications';
+const { status } = await Notifications.requestPermissionsAsync();
+const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+// upsert token into supabase.from('push_tokens') keyed by user_id + device_id
+```
 
-## Fallback
+## Sending
+From edge functions, POST to `https://exp.host/--/api/v2/push/send` with `to`, `title`, `body`, `data`.
 
-Always check `Platform.OS` and feature-detect. If unavailable, hide the UI or show a graceful "Available on Android" message. Never crash.
+Triggers:
+- Friend request received
+- Group message received
+- Achievement unlocked
+- Daily question challenge
+- Streak about to break (8pm local)
+- Subscription expires soon
+
+## Handling
+
+```ts
+Notifications.addNotificationResponseReceivedListener(response => {
+  const data = response.notification.request.content.data;
+  if (data.route) navigation.navigate(data.route, data.params);
+});
+```
+
+## Categories with actions (iOS)
+Reply inline to chat, mark notification as read, snooze streak reminder.
 
 ## Acceptance
-- [ ] Permission flow runs first time
-- [ ] Feature works on real device (not just emulator where applicable)
-- [ ] Denial path is graceful
+- [ ] Tokens persisted per device
+- [ ] Notifications deliver < 5s on both platforms
+- [ ] Tapping notification deep-links to right screen
+- [ ] Inline reply for chat works (iOS)
+

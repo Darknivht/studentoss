@@ -1,32 +1,78 @@
-# 19-Achievements — Achievements
+# 19 — Achievements
 
-**Web reference:** `src/pages/Achievements.tsx`
+> **Web source of truth:** `src/pages/Achievements.tsx`
+> **RN target:** `src/screens/AchievementsScreen.tsx`
+> **Route name:** `Achievements`
+> **Auth:** Required
+> **Bottom nav visible:** No (header back)
 
-## Summary
-Grid of 50+ badges with locked/unlocked states. Use useAchievements hook. Tap badge to see requirement. Confetti on new unlock.
+---
 
-## Build steps
+## 1. Purpose
 
-1. Read the web reference file end-to-end. Identify all hooks, state, JSX structure.
-2. Replicate the JSX as RN: `<div>`→`<View>`, `<button>`→`<Pressable>`, scrollable→`<ScrollView>` or `<FlatList>`, lists→`<FlatList>`.
-3. Convert all framer-motion to Moti (see [`01-design-system/05-animations.md`](../01-design-system/05-animations.md)).
-4. Keep className strings — Nativewind handles them. Replace `hover:`, `backdrop-blur`, etc per [`_APPENDIX/C-css-to-style-map.md`](../_APPENDIX/C-css-to-style-map.md).
-5. Reuse all hooks verbatim (they're in [`00-foundation/03-files-to-copy.md`](../00-foundation/03-files-to-copy.md)).
-6. Wrap subscription-gated actions in `<FeatureGate tier="...">`.
-7. Add haptic feedback on every primary tap.
-8. Test in both light and dark mode.
+Show all 50+ achievements with progress bars, locked/unlocked states, categories, and unlock animations.
 
-## Visual parity checklist
+## 2. Data dependencies
 
-- [ ] Header / title typography matches web
-- [ ] All cards use same radius (`rounded-3xl` = 24px)
-- [ ] Spacing matches web grid (`gap-3`, `p-4`)
-- [ ] Empty states have same illustration + copy
-- [ ] Loading states use same skeleton pattern
-- [ ] Error toasts identical (use `sonner-native` or our `<Toast>`)
+Open the web file and copy **every hook call** into the RN screen unchanged. The data layer does not change.
 
-## Acceptance
+- `useAchievements()` returns all definitions + user progress
+- `supabase.from('user_achievements').select()`
 
-- [ ] Side-by-side screenshot of mobile vs web is visually indistinguishable
-- [ ] All hooks fetch real data from Supabase
-- [ ] Navigation in/out works including hardware back
+## 3. Layout (top → bottom)
+
+1. Header + filter chips (All / Unlocked / Locked / by category)
+2. Stats: X/Y unlocked + total XP from achievements
+3. Grid of achievement cards (2 cols)
+
+## 4. Component tree mapping
+
+| Web element | RN replacement | Notes |
+|---|---|---|
+| achievement card | icon + name + description + progress bar + tier badge | locked = greyscale + padlock |
+| unlock toast | full-screen Lottie animation when newly unlocked | trigger from anywhere in app via context |
+
+## 5. Animations
+
+- Locked → unlocked: greyscale fade + bounce + confetti
+- Progress bar fills on mount
+- Card press: scale + lift
+
+## 6. Interactions & navigation
+
+- Tap card → detail bottom sheet with claim button (if reward unclaimed)
+- 'Share' → share sheet with image
+
+## 7. Edge cases (MUST handle)
+
+- New achievement unlocked while elsewhere in app → queue toasts, show when tab focused
+- Tier-locked achievements show 'Plus only' badge
+
+## 8. Native enhancements (mobile-only wins)
+
+- Haptic notification success on unlock
+- Share as image (`react-native-view-shot`)
+
+## 9. Performance
+
+- Wrap large lists in `FlashList` (Shopify) instead of `FlatList` when item count > 50.
+- Memoize cards with `React.memo` and stable keys.
+- Hoist `renderItem` out of render; never inline arrow inside `FlatList`.
+- Use `removeClippedSubviews` on long scroll views.
+- Defer offscreen image loads with `expo-image` `priority="low"`.
+
+## 10. Acceptance checklist
+
+- [ ] All achievements listed with correct progress
+- [ ] Unlock animation fires reliably
+- [ ] Share works
+
+## 11. Implementation order (for the agent)
+
+1. Create the screen file with hooks copied verbatim from the web page.
+2. Render a bare `<View>` with a `<Text>` of the title — verify route works.
+3. Port the header / hero section.
+4. Port each section top-to-bottom, one commit per section.
+5. Wire animations LAST (only after layout is correct).
+6. Test offline, slow 3G, and dark mode before marking done.
+

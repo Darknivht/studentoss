@@ -1,32 +1,82 @@
-# 21-Settings — Settings
+# 21 — Settings
 
-**Web reference:** `(within Profile or own screen)`
+> **Web source of truth:** `src/pages/Profile (settings drawer) or dedicated.tsx`
+> **RN target:** `src/screens/SettingsScreen.tsx`
+> **Route name:** `Settings`
+> **Auth:** Required
+> **Bottom nav visible:** No
 
-## Summary
-Theme toggle, notification prefs (streak reminders, daily quiz push), app blocker setup link, force update button (expo-updates checkForUpdateAsync), about, version, sign out.
+---
 
-## Build steps
+## 1. Purpose
 
-1. Read the web reference file end-to-end. Identify all hooks, state, JSX structure.
-2. Replicate the JSX as RN: `<div>`→`<View>`, `<button>`→`<Pressable>`, scrollable→`<ScrollView>` or `<FlatList>`, lists→`<FlatList>`.
-3. Convert all framer-motion to Moti (see [`01-design-system/05-animations.md`](../01-design-system/05-animations.md)).
-4. Keep className strings — Nativewind handles them. Replace `hover:`, `backdrop-blur`, etc per [`_APPENDIX/C-css-to-style-map.md`](../_APPENDIX/C-css-to-style-map.md).
-5. Reuse all hooks verbatim (they're in [`00-foundation/03-files-to-copy.md`](../00-foundation/03-files-to-copy.md)).
-6. Wrap subscription-gated actions in `<FeatureGate tier="...">`.
-7. Add haptic feedback on every primary tap.
-8. Test in both light and dark mode.
+Theme, notifications, language, account, privacy, data export, delete account, app version, force update.
 
-## Visual parity checklist
+## 2. Data dependencies
 
-- [ ] Header / title typography matches web
-- [ ] All cards use same radius (`rounded-3xl` = 24px)
-- [ ] Spacing matches web grid (`gap-3`, `p-4`)
-- [ ] Empty states have same illustration + copy
-- [ ] Loading states use same skeleton pattern
-- [ ] Error toasts identical (use `sonner-native` or our `<Toast>`)
+Open the web file and copy **every hook call** into the RN screen unchanged. The data layer does not change.
 
-## Acceptance
+- `useTheme()` from `next-themes` equivalent (custom theme context backed by MMKV)
+- `useNotifications()` for permission state
+- `supabase.from('profiles').update({...})`
 
-- [ ] Side-by-side screenshot of mobile vs web is visually indistinguishable
-- [ ] All hooks fetch real data from Supabase
-- [ ] Navigation in/out works including hardware back
+## 3. Layout (top → bottom)
+
+Sectioned list: Account | Appearance | Notifications | Study | Privacy | Data | About. Each section has list rows.
+
+## 4. Component tree mapping
+
+| Web element | RN replacement | Notes |
+|---|---|---|
+| list row | label + value + chevron or switch | |
+| theme picker | radio: System / Light / Dark | |
+| notifications row | switch + 'Schedule' link if enabled | |
+
+## 5. Animations
+
+- Section reorder fade
+- Switch flip
+- Force-update button shows spinner then success check
+
+## 6. Interactions & navigation
+
+- Theme change applies instantly app-wide
+- Notification schedule → modal with time picker
+- 'Force update' clears Workbox SW + reloads (RN: clears Expo Updates cache + restarts)
+- 'Delete account' → 3-step confirm + reason → call edge function
+
+## 7. Edge cases (MUST handle)
+
+- OS-level notif permission revoked → row shows 'Enable in Settings' + opens system
+- Theme: respect system change in 'System' mode
+- Language: store in MMKV + i18n
+
+## 8. Native enhancements (mobile-only wins)
+
+- `expo-linking.openSettings()`
+- `expo-updates.reloadAsync()` for force update
+- `expo-localization` for default language
+
+## 9. Performance
+
+- Wrap large lists in `FlashList` (Shopify) instead of `FlatList` when item count > 50.
+- Memoize cards with `React.memo` and stable keys.
+- Hoist `renderItem` out of render; never inline arrow inside `FlatList`.
+- Use `removeClippedSubviews` on long scroll views.
+- Defer offscreen image loads with `expo-image` `priority="low"`.
+
+## 10. Acceptance checklist
+
+- [ ] Every setting persists
+- [ ] Theme applies app-wide
+- [ ] Delete account fully removes data
+
+## 11. Implementation order (for the agent)
+
+1. Create the screen file with hooks copied verbatim from the web page.
+2. Render a bare `<View>` with a `<Text>` of the title — verify route works.
+3. Port the header / hero section.
+4. Port each section top-to-bottom, one commit per section.
+5. Wire animations LAST (only after layout is correct).
+6. Test offline, slow 3G, and dark mode before marking done.
+

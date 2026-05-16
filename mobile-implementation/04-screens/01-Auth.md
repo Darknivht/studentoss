@@ -1,67 +1,94 @@
-# 01 — Auth Screen
+# 01 — Auth
 
-**Web reference:** `src/pages/Auth.tsx`
+> **Web source of truth:** `src/pages/Auth.tsx`
+> **RN target:** `src/screens/AuthScreen.tsx`
+> **Route name:** `Auth`
+> **Auth:** Public (redirects to Dashboard if session exists)
+> **Bottom nav visible:** No
 
-## Visual spec
+---
 
-- Full-screen `<Gradient preset="primary-accent">` background
-- Centered card: white in light mode, `bg-card` in dark — `rounded-3xl` (24), `p-6`, `shadow-glow`
-- Big bold logo "StudentOS" — `font-display text-4xl text-foreground`
-- Tagline: Inter `text-base text-muted-foreground`
-- Tabs: "Sign in" / "Sign up" — pill style, animated active state
-- Inputs: `rounded-2xl bg-input p-4` (use the `<Input>` primitive from `05-shared-components/01-ui-primitives.md`)
-- Primary button: full-width, `bg-primary text-primary-foreground rounded-2xl py-4 font-sans-semibold`
-- "Continue with Google" button: outline + Google icon
-- Footer: "Forgot password?" link
+## 1. Purpose
 
-## Component tree
+Sign in / sign up with email+password and Google OAuth. Includes password reset request, education-level + grade selection on signup, and a hero illustration.
 
-```tsx
-<SafeAreaView className="flex-1">
-  <Gradient preset="primary-accent" className="flex-1 justify-center px-6">
-    <MotiView from={{opacity:0, translateY:20}} animate={{opacity:1, translateY:0}}>
-      <View className="bg-card rounded-3xl p-6" style={shadow('glow')}>
-        <Text className="font-display text-4xl text-foreground">StudentOS</Text>
-        <Text className="font-sans text-base text-muted-foreground mb-6">
-          Your AI-powered study companion
-        </Text>
-        <Tabs value={mode} onChange={setMode}>
-          <TabPanel value="signin"><SignInForm /></TabPanel>
-          <TabPanel value="signup"><SignUpForm /></TabPanel>
-        </Tabs>
-        <Divider label="or" className="my-4" />
-        <GoogleButton onPress={signInWithGoogle} />
-        {Platform.OS === 'ios' && <AppleButton onPress={signInWithApple} />}
-      </View>
-    </MotiView>
-  </Gradient>
-</SafeAreaView>
-```
+## 2. Data dependencies
 
-## Hooks used
+Open the web file and copy **every hook call** into the RN screen unchanged. The data layer does not change.
 
-- `useAuth()` — `signIn`, `signUp` methods (from ported hook)
-- Local `useState` for form fields, loading, error
+- `useAuth()` → `signIn`, `signUp`, `signInWithGoogle`, `resetPassword`, `user`, `loading`
+- `useNavigation()` (RN) replaces `useNavigate()`
+- `useEducationConfig()` for grade-level options
 
-## Validation
+## 3. Layout (top → bottom)
 
-Same Zod rules as web:
-- email regex
-- password min 8 chars
+1. Animated gradient background (Moti `LinearGradient` rotating hue)
+2. Logo + tagline 'Your Academic OS'
+3. Tab switcher: `Sign In | Sign Up`
+4. Form fields (email, password, confirm, full name on signup, education level + grade on signup)
+5. Primary button (gradient, 56dp tall)
+6. 'Continue with Google' outlined button with Google G icon
+7. Footer: terms + privacy links
 
-## Forgot password
+## 4. Component tree mapping
 
-Modal sheet with email input → calls `supabase.auth.resetPasswordForEmail(email, { redirectTo: 'studentos://reset-password' })`.
+| Web element | RN replacement | Notes |
+|---|---|---|
+| `<form>` | `<KeyboardAvoidingView>` + `<ScrollView>` | behavior='padding' on iOS |
+| `<Input>` | `<TextInput>` (RN primitive in `components/ui/Input.tsx`) | autoCapitalize='none' for email |
+| `<Button>` | `<Pressable>` with haptic | impact 'Medium' |
+| `<Tabs>` | custom segmented control | animated indicator using Reanimated `useSharedValue` |
 
-## Animations
+## 5. Animations
 
-- Card fade-in on mount (200ms ease-out)
-- Tab indicator springs (Moti)
-- Button scale 0.98 on press (Reanimated)
+- Form slides up on mount (Moti `from={{opacity:0,translateY:40}} animate={{opacity:1,translateY:0}}`)
+- Tab indicator slides between Sign In / Sign Up using `withSpring`
+- Submit button scale 0.96 on press (Reanimated)
+- Error shake: translateX [-8, 8, -6, 6, 0] over 300ms
 
-## Acceptance
+## 6. Interactions & navigation
 
-- [ ] Side-by-side with web `/auth` matches at all breakpoints
-- [ ] Email signup → confirmation deep link works
-- [ ] Google OAuth completes successfully
-- [ ] Apple sign-in shown on iOS only
+- On successful sign-in → `navigation.reset({routes:[{name:'Main'}]})`
+- 'Forgot password?' → opens modal with email input, calls `resetPassword`
+- Google → `WebBrowser.openAuthSessionAsync` with `studentos://auth/callback`
+- Toast on every error (use `react-native-toast-message` or `burnt`)
+
+## 7. Edge cases (MUST handle)
+
+- User already authenticated → auto-redirect on mount
+- Network offline → show inline banner 'You are offline — sign in unavailable'
+- Email unconfirmed → show 'Check your inbox' state with 'Resend' button
+- OAuth cancellation → no error toast, just return to form
+- iOS keyboard covering submit button → scroll into view via `ref.measureInWindow`
+
+## 8. Native enhancements (mobile-only wins)
+
+- Autofill: `textContentType='emailAddress'` / `'newPassword'`
+- Biometric login after first successful sign-in (expo-local-authentication) — store refresh token in `expo-secure-store`
+- Haptic success on sign-in
+
+## 9. Performance
+
+- Wrap large lists in `FlashList` (Shopify) instead of `FlatList` when item count > 50.
+- Memoize cards with `React.memo` and stable keys.
+- Hoist `renderItem` out of render; never inline arrow inside `FlatList`.
+- Use `removeClippedSubviews` on long scroll views.
+- Defer offscreen image loads with `expo-image` `priority="low"`.
+
+## 10. Acceptance checklist
+
+- [ ] Sign up + sign in + Google all work end-to-end
+- [ ] Password reset email arrives via deep link
+- [ ] Keyboard never covers active field
+- [ ] Works in light & dark mode
+- [ ] Biometric prompt offered on second launch
+
+## 11. Implementation order (for the agent)
+
+1. Create the screen file with hooks copied verbatim from the web page.
+2. Render a bare `<View>` with a `<Text>` of the title — verify route works.
+3. Port the header / hero section.
+4. Port each section top-to-bottom, one commit per section.
+5. Wire animations LAST (only after layout is correct).
+6. Test offline, slow 3G, and dark mode before marking done.
+

@@ -1,16 +1,58 @@
-# 04-background-services — Background Tasks
+# background-services — Background Services & Tasks
 
-expo-task-manager + expo-background-fetch. Tasks: streakReminderTask (checks if user studied today, fires local notif at 7pm if not), syncOfflineNotesTask (every 15min when online). Define tasks at module top-level.
+## Use cases
+- Daily streak reminder check
+- Lofi audio playback
+- Focus session foreground service
+- Offline sync drain
+- Push notification handlers
+- Usage stats sync
 
-## Permissions to declare (app.config.ts)
+## Tools
+- **`expo-background-fetch`** + **`expo-task-manager`** — periodic short tasks (iOS limits ~15min apart, Android more flexible)
+- **`expo-background-task`** (new API)
+- **`expo-av` staysActiveInBackground** — audio
+- **Foreground service** (Android, custom native) for focus mode
 
-See the relevant Android permissions in 00-foundation/02-project-init.md.
+## Setup
 
-## Fallback
+```ts
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
 
-Always check `Platform.OS` and feature-detect. If unavailable, hide the UI or show a graceful "Available on Android" message. Never crash.
+const STREAK_TASK = 'streak-check';
+
+TaskManager.defineTask(STREAK_TASK, async () => {
+  await checkAndNotifyStreak();
+  return BackgroundFetch.BackgroundFetchResult.NewData;
+});
+
+await BackgroundFetch.registerTaskAsync(STREAK_TASK, {
+  minimumInterval: 60 * 60 * 8, // 8h
+  stopOnTerminate: false,
+  startOnBoot: true,
+});
+```
+
+## Offline sync drain on connectivity restore
+Listen via `@react-native-community/netinfo`:
+```ts
+NetInfo.addEventListener(state => {
+  if (state.isConnected && state.isInternetReachable) drainOfflineQueue();
+});
+```
+
+## Audio in background
+```ts
+await Audio.setAudioModeAsync({
+  staysActiveInBackground: true,
+  playsInSilentModeIOS: true,
+  shouldDuckAndroid: true,
+});
+```
 
 ## Acceptance
-- [ ] Permission flow runs first time
-- [ ] Feature works on real device (not just emulator where applicable)
-- [ ] Denial path is graceful
+- [ ] Streak reminder fires when overdue
+- [ ] Lofi continues playing when screen off
+- [ ] Focus foreground service survives swipe-away (Android)
+

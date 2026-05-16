@@ -1,16 +1,34 @@
-# 07-haptics-and-audio — Haptics & Audio
+# haptics-and-audio — Haptics & Audio Feedback
 
-expo-haptics: Light/Medium/Heavy + selectionAsync for tab switches + notificationAsync(Success/Warning/Error). expo-av for Lofi radio: stream from URL list, background playback enabled, lock-screen controls. Pro tier removes ads between tracks.
+## Haptics
 
-## Permissions to declare (app.config.ts)
+`expo-haptics`:
+- `selectionAsync()` — tab change, toggle
+- `impactAsync(Light)` — button press
+- `impactAsync(Medium)` — card press / important confirm
+- `impactAsync(Heavy)` — destructive confirm
+- `notificationAsync(Success | Warning | Error)` — quiz result, save, error
 
-See the relevant Android permissions in 00-foundation/02-project-init.md.
+Wrap in a helper to no-op when user disables haptics in Settings.
 
-## Fallback
+## Audio cues
 
-Always check `Platform.OS` and feature-detect. If unavailable, hide the UI or show a graceful "Available on Android" message. Never crash.
+`expo-av` Sound:
+- `correct.mp3` (quiz correct answer)
+- `wrong.mp3` (quiz wrong)
+- `pomodoro-ding.mp3`
+- `level-up.mp3`
+- `achievement-unlock.mp3`
+
+Preload in app start:
+```ts
+const sounds = await Promise.all([Audio.Sound.createAsync(require('./assets/sfx/correct.mp3')), ...]);
+```
+
+Respect device silent mode UNLESS user explicitly enabled 'always-on sound'.
 
 ## Acceptance
-- [ ] Permission flow runs first time
-- [ ] Feature works on real device (not just emulator where applicable)
-- [ ] Denial path is graceful
+- [ ] Haptic on every interactive surface
+- [ ] Sounds preload and play with < 50ms latency
+- [ ] User can disable both globally
+

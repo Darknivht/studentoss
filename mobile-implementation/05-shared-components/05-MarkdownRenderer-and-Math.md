@@ -1,15 +1,52 @@
-# 05-MarkdownRenderer-and-Math — Markdown + Math
+# MarkdownRenderer-and-Math — MarkdownRenderer + LaTeX/Math
 
-react-native-markdown-display with custom rule for fence \`\`\`math and inline $...$ / block $$...$$. Use react-native-math-view to render. Pre-process via parseAIResponse.ts (already copied) to normalize delimiters.
+> **Web source:** various places using ReactMarkdown + KaTeX
+> **RN target:** `src/components/MarkdownRenderer.tsx`
 
-## Implementation guidance
+## Stack
 
-1. Mirror the export names from web `src/components/ui/*.tsx` and `src/components/**`.
-2. Match props exactly so screen code that uses these components ports without changes.
-3. Style with Nativewind classes mirroring web variants (cva-style).
-4. Add haptics on press where it makes sense (buttons, switches, slider snap).
-5. Test in light + dark mode.
+- **Markdown:** `react-native-marked` (preferred — themable + fast) OR `react-native-markdown-display`
+- **Math:** `react-native-math-view` (uses MathJax/KaTeX bridge) OR WebView-based fallback
+
+## API
+
+```ts
+<MarkdownRenderer content={text} theme='dark' />
+```
+
+## Preprocessing
+
+Must mirror web preprocessing (see memory `formatting-and-math-specs`):
+
+1. Convert inline `\(...\)` and `\[...\]` to `$...$` and `$$...$$`
+2. Trim hidden chars: `\u200b`, `\ufeff`
+3. Escape lone `$` not in math context
+4. Fix common AI mistakes: `frac{a}{b}` (missing backslash) → `\frac{a}{b}` when inside math delimiters
+
+```ts
+function preprocessMath(s: string): string {
+  return s
+    .replace(/\\\((.+?)\\\)/g, '$$$1$$')
+    .replace(/\\\[(.+?)\\\]/gs, '$$$$$$1$$$$$$')
+    .replace(/[\u200b\ufeff]/g, '');
+}
+```
+
+## Rendering math
+
+Split content by `$$...$$` and `$...$` boundaries; render text via marked, math via `<MathView />`.
+Block math is centered, full-width; inline math sits in line with text (`baseline` alignment).
+
+## Code blocks
+
+Use `react-native-syntax-highlighter` with Prism. Allow horizontal scroll. Copy button via long-press.
+
+## Performance
+
+For long messages, memoize render. For very long (>10k chars), virtualize paragraphs with FlashList.
 
 ## Acceptance
-- [ ] Web component and RN component share the same prop API
-- [ ] Visual diff <5%
+- [ ] All web math examples render identically
+- [ ] Code blocks scroll horizontally
+- [ ] No jank on long messages
+

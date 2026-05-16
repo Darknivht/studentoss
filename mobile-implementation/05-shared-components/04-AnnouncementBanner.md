@@ -1,15 +1,40 @@
-# 04-AnnouncementBanner — AnnouncementBanner
+# AnnouncementBanner — AnnouncementBanner
 
-Fetch active rows from announcements table. Variants: info(blue), warning(amber), promo(gradient). Dismissible with MMKV remembering dismissed IDs.
+> **Web source:** `src/components/dashboard/AnnouncementBanner.tsx`
+> **RN target:** same
 
-## Implementation guidance
+## Purpose
+Show admin-broadcast announcements at top of Dashboard.
 
-1. Mirror the export names from web `src/components/ui/*.tsx` and `src/components/**`.
-2. Match props exactly so screen code that uses these components ports without changes.
-3. Style with Nativewind classes mirroring web variants (cva-style).
-4. Add haptics on press where it makes sense (buttons, switches, slider snap).
-5. Test in light + dark mode.
+## Data
+```ts
+supabase.from('announcements')
+  .select('*')
+  .eq('active', true)
+  .lte('start_at', new Date().toISOString())
+  .gte('end_at', new Date().toISOString())
+  .order('priority', { ascending: false });
+```
+
+## Variants
+- `info` — blue card with Info icon
+- `warning` — amber card with AlertTriangle icon
+- `promo` — gradient (primary → accent) with Sparkles icon
+
+## Dismissal
+Store dismissed IDs in MMKV under key `dismissed_announcements`. Filter them out from query result.
+Swipe-right to dismiss (Reanimated `Swipeable`), or X button top-right.
+
+## Animations
+- Mount: slide-down from top with spring
+- Dismiss: slide-right + fade out (300ms)
+- Promo variant has subtle shimmer (Moti looped gradient translateX)
+
+## Deep link action
+If announcement has `action_url`, primary button opens it: in-app route (`studentos://...`) or external (`Linking.openURL`).
 
 ## Acceptance
-- [ ] Web component and RN component share the same prop API
-- [ ] Visual diff <5%
+- [ ] Only active announcements show
+- [ ] Dismissals persist across launches
+- [ ] Swipe + button dismiss both work
+

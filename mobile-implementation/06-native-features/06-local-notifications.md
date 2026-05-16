@@ -1,16 +1,37 @@
-# 06-local-notifications — Local Notifications
+# local-notifications — Local Notifications
 
-Notifications.scheduleNotificationAsync with calendar trigger. Streak reminder daily 7pm. Daily quiz teaser 7am. Pomodoro session-end. User can toggle each in Settings.
+## Use cases
+- Pomodoro timer end
+- Daily streak reminder at 8pm
+- Daily question challenge at 7am
+- Scheduled study session reminders
 
-## Permissions to declare (app.config.ts)
+## API
+```ts
+await Notifications.scheduleNotificationAsync({
+  content: { title: '🔥 Don't break your streak!', body: 'Study for 5 minutes today.' },
+  trigger: { hour: 20, minute: 0, repeats: true },
+});
+```
 
-See the relevant Android permissions in 00-foundation/02-project-init.md.
+## Cancel + reschedule
+Track scheduled identifiers in MMKV so you can `cancelScheduledNotificationAsync(id)` when user disables.
 
-## Fallback
+## Channel setup (Android)
+```ts
+Notifications.setNotificationChannelAsync('study', {
+  name: 'Study reminders',
+  importance: Notifications.AndroidImportance.HIGH,
+  sound: 'default',
+  vibrationPattern: [0, 250, 250, 250],
+});
+```
 
-Always check `Platform.OS` and feature-detect. If unavailable, hide the UI or show a graceful "Available on Android" message. Never crash.
+## Quiet hours
+Respect user's parental controls / quiet-hours config: skip scheduling between configured times.
 
 ## Acceptance
-- [ ] Permission flow runs first time
-- [ ] Feature works on real device (not just emulator where applicable)
-- [ ] Denial path is graceful
+- [ ] All scheduled notifications fire at the right time
+- [ ] Disabling in settings cancels them
+- [ ] Quiet hours respected
+
