@@ -1,81 +1,90 @@
-# 07 — AI Tutor (Full-screen chat)
+# 07 — AITutor
 
-**Web reference:** `src/pages/AITutor.tsx`, components in `src/components/study/*`
+> **Web source of truth:** `src/pages/AITutor.tsx`
+> **RN target:** `src/screens/AITutorScreen.tsx`
+> **Route name:** `AITutor (params: { noteId? })`
+> **Auth:** Required
+> **Bottom nav visible:** No (chat full-screen)
 
-This is **the** flagship feature. Pixel parity is critical.
+---
 
-## Layout
+## 1. Purpose
 
-```
-┌─────────────────────────────┐
-│ ←  AI Tutor    🎙 ⚙        │  header
-├─────────────────────────────┤
-│                             │
-│   chat bubbles (FlatList,   │
-│   inverted)                 │
-│                             │
-├─────────────────────────────┤
-│ context chip(s)             │  e.g. "Note: Photosynthesis"
-├─────────────────────────────┤
-│ [+] Type a message...   ➤  │  input bar
-└─────────────────────────────┘
-```
+Conversational AI tutor. Uses note context if provided. Streams responses. Supports voice input & TTS playback.
 
-## Bubbles
+## 2. Data dependencies
 
-- User: right-aligned, `bg-primary text-primary-foreground rounded-3xl rounded-br-md p-3 max-w-[80%]`
-- AI: left-aligned, `bg-muted text-foreground rounded-3xl rounded-bl-md p-3 max-w-[85%]`
-- Markdown content via `react-native-markdown-display`
-- Math: rule that detects `$$ ... $$` and renders via `react-native-math-view`
-- Code: `<View className="bg-foreground/5 p-2 rounded-xl">` with monospace
-- Each AI bubble has a footer with tap-to-copy + 👍 / 👎
+Open the web file and copy **every hook call** into the RN screen unchanged. The data layer does not change.
 
-## Input bar
+- `supabase.functions.invoke('ai-study', { body: { mode:'tutor', messages, noteId } })`
+- `useSubscription()` for daily quota (5/30/100)
+- `useNoteContext(noteId)` if noteId param exists
 
-- `+` button opens action sheet: attach note context / take photo / record voice
-- Multi-line auto-grow input (max 6 lines)
-- Send button has gradient when input non-empty
-- Shows typing indicator while waiting
+## 3. Layout (top → bottom)
 
-## Streaming
+1. Header: 'AI Tutor' + note pill (if context) + menu (clear chat / export)
+2. Messages list (inverted FlatList — newest at bottom)
+3. Typing indicator (3 dots Moti)
+4. Input bar (sticky bottom): mic button | text input | send button
+5. Quick prompts horizontal scroll above input ('Explain', 'Quiz me', 'Simplify')
 
-The `ai-study` edge function streams tokens. Use `EventSource` polyfill or a simple `fetch` with `ReadableStream` reader (RN supports it on Hermes).
+## 4. Component tree mapping
 
-```ts
-const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-study`, {
-  method: 'POST',
-  headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify({ mode: 'chat', messages, noteContext }),
-});
-const reader = res.body!.getReader();
-const dec = new TextDecoder();
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  const chunk = dec.decode(value);
-  // parse SSE / JSON chunks → append to last AI message
-}
-```
+| Web element | RN replacement | Notes |
+|---|---|---|
+| messages | `FlatList inverted` | `keyboardShouldPersistTaps='handled'` |
+| message bubble | custom; user=primary bg, ai=card bg | render markdown + LaTeX via `react-native-marked` + `react-native-mathjax` |
+| input | `<TextInput multiline maxHeight={120}>` | auto-grows |
+| mic | hold-to-record (expo-av) | sends to STT |
 
-## Persona-aware prompts
+## 5. Animations
 
-`useAuth().profile.study_persona` is passed to the edge function (same as web).
+- New message slide-up + fade
+- Typing dots loop
+- Send button fly-up arc on tap
+- Voice waveform during recording (Reanimated bars)
 
-## Voice mode entry
+## 6. Interactions & navigation
 
-Mic icon in header opens `VoiceMode` modal. See [`06-native-features/09-voice-mode.md`](../06-native-features/09-voice-mode.md).
+- Long-press message → copy / regenerate / read aloud (TTS)
+- Mic: hold to talk → on release, transcribe → send
+- Pull-down on header → clear chat (with confirm)
 
-## Quotas
+## 7. Edge cases (MUST handle)
 
-`useSubscription` provides `aiCallsRemaining`. Show count above input bar in red when ≤ 1. Hard-block on 0 → open Upgrade modal.
+- Quota hit mid-stream → cut response, show FeatureGateDialog
+- Network drop mid-stream → mark message 'incomplete' with retry button
+- Empty message → disable send
+- Very long context (>8192 tokens) → trim oldest user messages, warn
 
-## LaTeX delimiters
+## 8. Native enhancements (mobile-only wins)
 
-Pre-process AI text: collapse `\\(`, `\\[`, `\(` to `$`/`$$` consistent with web `parseAIResponse.ts`. The lib already does this — call it.
+- `expo-speech` for TTS
+- `expo-speech-recognition` for STT
+- `react-native-keyboard-controller` for smooth keyboard handling
+- Hardware back button = exit chat with autosave
 
-## Acceptance
+## 9. Performance
 
-- [ ] Streaming text appears character-by-character
-- [ ] LaTeX renders correctly (no distortion like in PDF export issue)
-- [ ] Code blocks have horizontal scroll
-- [ ] Quota gate shows Upgrade modal when exceeded
+- Wrap large lists in `FlashList` (Shopify) instead of `FlatList` when item count > 50.
+- Memoize cards with `React.memo` and stable keys.
+- Hoist `renderItem` out of render; never inline arrow inside `FlatList`.
+- Use `removeClippedSubviews` on long scroll views.
+- Defer offscreen image loads with `expo-image` `priority="low"`.
+
+## 10. Acceptance checklist
+
+- [ ] Streaming works
+- [ ] LaTeX renders correctly (e.g. `$$\frac{a}{b}$$`)
+- [ ] Voice in & out work
+- [ ] Quota enforced
+
+## 11. Implementation order (for the agent)
+
+1. Create the screen file with hooks copied verbatim from the web page.
+2. Render a bare `<View>` with a `<Text>` of the title — verify route works.
+3. Port the header / hero section.
+4. Port each section top-to-bottom, one commit per section.
+5. Wire animations LAST (only after layout is correct).
+6. Test offline, slow 3G, and dark mode before marking done.
+

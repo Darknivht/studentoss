@@ -1,69 +1,94 @@
 # 03 — Dashboard
 
-**Web reference:** `src/pages/Dashboard.tsx`
+> **Web source of truth:** `src/pages/Dashboard.tsx`
+> **RN target:** `src/screens/DashboardScreen.tsx`
+> **Route name:** `Dashboard`
+> **Auth:** Required
+> **Bottom nav visible:** Yes
 
-The home screen — the most important visual port. Every existing user sees this first.
+---
 
-## Sections (top→bottom, matches web)
+## 1. Purpose
 
-1. **Header** — Avatar (top-left, push to Profile) + greeting "Hi, {name} 👋" + dark-mode toggle (top-right)
-2. **Announcement banner** (if active) — `AnnouncementBanner` component
-3. **Streak card** — flame icon, current streak number, longest streak subtitle, gradient background
-4. **Stats grid** (2×2) — Notes, Quizzes, Flashcards, Focus minutes (today)
-5. **Continue learning** — horizontal scroll of recent courses
-6. **Quick actions** — 3-up grid: AI Tutor, Smart Notes, Flashcards
-7. **Today's challenge** — DailyQuizChallenge card
-8. **Weekly XP progress** — bar graph
-9. **Achievements preview** — 3 most-recent unlocked
+Home tab. Shows greeting, streak, daily challenge, study time widget, courses, progress, announcements banner.
 
-## Layout
+## 2. Data dependencies
 
-```tsx
-<ScrollView refreshControl={<RefreshControl ... />} className="flex-1 bg-background">
-  <View className="p-4 gap-4">
-    <Header />
-    <AnnouncementBanner />
-    <StreakCard streak={profile.current_streak} longest={profile.longest_streak} />
-    <View className="flex-row flex-wrap gap-3">
-      <StatsCard label="Notes today"      value={notesToday}      Icon={FileText} />
-      <StatsCard label="Quizzes today"    value={quizzesToday}    Icon={Brain} />
-      <StatsCard label="Cards reviewed"   value={cardsToday}      Icon={Layers} />
-      <StatsCard label="Focus minutes"    value={focusToday}      Icon={Timer} />
-    </View>
-    <ContinueLearning courses={recentCourses} />
-    <QuickActions />
-    <DailyChallenges />
-    <WeeklyXPWidget />
-    <AchievementsPreview />
-  </View>
-</ScrollView>
-```
+Open the web file and copy **every hook call** into the RN screen unchanged. The data layer does not change.
 
-`StatsCard` width: `w-[48%]` to fit 2 per row.
+- `useAuth()`, `useSubscription()`, `useAchievements()`
+- `useStudyTimeTracker()` for weekly minutes
+- `useStreak()` (from lib/streak.ts)
+- `supabase.from('courses').select('*').eq('user_id', user.id)`
+- `supabase.from('announcements').select('*').eq('active', true)`
 
-## StreakCard visual
+## 3. Layout (top → bottom)
 
-Same as web: `<Gradient preset="warning">`, `rounded-3xl p-5`, big flame `🔥` 48px, streak number `font-display text-5xl text-white`.
+1. AnnouncementBanner (conditional)
+2. Header: 'Good {morning/afternoon}, {name}' + avatar (tap → Profile)
+3. StreakCard (flame icon, current/best, weekly grid)
+4. DailyQuizChallenge widget
+5. StatsCards row: XP, Level, Rank
+6. StudyTimeWidget (this week chart)
+7. StudyProgressWidget
+8. 'My Courses' header + 'Add' button → CourseCard grid (2 cols on phone, 3 on tablet)
+9. Pull-to-refresh wraps everything
 
-## Hooks used (verbatim ports)
+## 4. Component tree mapping
 
-- `useAuth` — profile data
-- `useStudyTimeTracker` — focus minutes today
-- `useWeeklyXP` — graph data
-- `useAchievements` — recent unlocks
-- `useCourseProgress` — recent courses
+| Web element | RN replacement | Notes |
+|---|---|---|
+| outer | `<ScrollView refreshControl={<RefreshControl/>}>` | |
+| course grid | `<View flexDirection='row' flexWrap='wrap'>` or `FlashList numColumns={2}` | |
+| StreakCard | port from `src/components/dashboard/StreakCard.tsx` | replace SVG flame with `lucide-react-native` Flame |
+| AnnouncementBanner | port | swipeable to dismiss (Reanimated PanGesture) |
 
-## Pull-to-refresh
+## 5. Animations
 
-Refreshes profile, streaks, weekly XP via React Query `invalidateQueries`.
+- Streak flame pulse (Moti loop scale 1 → 1.08)
+- Stats cards stagger on mount (delay 100ms each)
+- Pull-to-refresh uses native RefreshControl tinted with primary
 
-## Animations
+## 6. Interactions & navigation
 
-- Each card fades+rises on first mount (Moti staggered, 60ms delay each)
-- Streak number animates up with `Animated.spring` when it changes
+- Tap CourseCard → navigate to `CoursePage` with `courseId`
+- Tap StudyTimeWidget → opens stats modal
+- Long-press CourseCard → context menu (Edit / Delete) via `@react-native-menu/menu`
 
-## Acceptance
+## 7. Edge cases (MUST handle)
 
-- [ ] Pixel-match with web Dashboard
-- [ ] Pull-to-refresh works
-- [ ] Tapping a course pushes CoursePage with correct id
+- No courses → empty state with 'Add your first course' CTA
+- Offline → render cached data from MMKV, banner 'Showing offline data'
+- New user (no streak) → show '0 day streak — start today!'
+- Subscription free + ads enabled → show `AdBanner` between sections 5 and 6
+
+## 8. Native enhancements (mobile-only wins)
+
+- App-icon badge with unread chat count
+- Background fetch refreshes streak before user opens app
+- Quick action (long-press app icon): 'Continue studying'
+
+## 9. Performance
+
+- Wrap large lists in `FlashList` (Shopify) instead of `FlatList` when item count > 50.
+- Memoize cards with `React.memo` and stable keys.
+- Hoist `renderItem` out of render; never inline arrow inside `FlatList`.
+- Use `removeClippedSubviews` on long scroll views.
+- Defer offscreen image loads with `expo-image` `priority="low"`.
+
+## 10. Acceptance checklist
+
+- [ ] All widgets render with real data
+- [ ] Pull-to-refresh re-fetches
+- [ ] Empty state when no courses
+- [ ] Offline shows cached snapshot
+
+## 11. Implementation order (for the agent)
+
+1. Create the screen file with hooks copied verbatim from the web page.
+2. Render a bare `<View>` with a `<Text>` of the title — verify route works.
+3. Port the header / hero section.
+4. Port each section top-to-bottom, one commit per section.
+5. Wire animations LAST (only after layout is correct).
+6. Test offline, slow 3G, and dark mode before marking done.
+

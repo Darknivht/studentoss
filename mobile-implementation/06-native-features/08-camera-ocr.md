@@ -1,16 +1,38 @@
-# 08-camera-ocr — Camera & OCR
+# camera-ocr — Camera OCR
 
-expo-camera for capture. Upload image to extract-pdf-text-ocr edge function (Tesseract or Google Vision). Used by BookScanner and OCRToLatex tools.
+## Use case
+Scan handwritten notes, textbook pages, whiteboards → extract text → create note.
 
-## Permissions to declare (app.config.ts)
+## Flow
+1. `expo-camera` preview with capture button + multi-page mode
+2. On capture: crop with `expo-image-manipulator` (or detect document edges via `react-native-document-scanner-plugin`)
+3. Upload page(s) to Supabase Storage
+4. Invoke `extract-pdf-text-ocr` edge function (which uses Tesseract / Google Vision)
+5. Receive text → create note with original images attached
 
-See the relevant Android permissions in 00-foundation/02-project-init.md.
+## UI
 
-## Fallback
+Camera screen:
+- Live preview full-bleed
+- Edge detection overlay (green border when document detected)
+- Capture button (bottom center)
+- Flash toggle, flip camera, page count indicator
+- 'Done' button when ≥1 page captured
 
-Always check `Platform.OS` and feature-detect. If unavailable, hide the UI or show a graceful "Available on Android" message. Never crash.
+Review screen:
+- Carousel of captured pages
+- Reorder via drag
+- Delete page
+- 'Process' button
+
+## Permissions
+`expo-camera` requests `CAMERA` runtime perm. Provide rationale.
+
+## Performance
+Compress to 1600px max width before upload (`expo-image-manipulator`).
 
 ## Acceptance
-- [ ] Permission flow runs first time
-- [ ] Feature works on real device (not just emulator where applicable)
-- [ ] Denial path is graceful
+- [ ] Multi-page scan works
+- [ ] Edge detection visible
+- [ ] OCR returns text within 10s for 3 pages
+

@@ -1,32 +1,83 @@
-# 16-Focus — Focus
+# 16 — Focus
 
-**Web reference:** `src/pages/Focus.tsx,src/pages/FocusSession.tsx`
+> **Web source of truth:** `src/pages/Focus.tsx`
+> **RN target:** `src/screens/FocusScreen + FocusSessionScreen.tsx`
+> **Route name:** `Focus + FocusSession`
+> **Auth:** Required
+> **Bottom nav visible:** Yes (only Focus, not session)
 
-## Summary
-Setup screen → AppSelector (lists installed apps via native module) → Active session full-screen overlay with timer + foreground service notification. See 06-native-features/01-app-blocking-android.md.
+---
 
-## Build steps
+## 1. Purpose
 
-1. Read the web reference file end-to-end. Identify all hooks, state, JSX structure.
-2. Replicate the JSX as RN: `<div>`→`<View>`, `<button>`→`<Pressable>`, scrollable→`<ScrollView>` or `<FlatList>`, lists→`<FlatList>`.
-3. Convert all framer-motion to Moti (see [`01-design-system/05-animations.md`](../01-design-system/05-animations.md)).
-4. Keep className strings — Nativewind handles them. Replace `hover:`, `backdrop-blur`, etc per [`_APPENDIX/C-css-to-style-map.md`](../_APPENDIX/C-css-to-style-map.md).
-5. Reuse all hooks verbatim (they're in [`00-foundation/03-files-to-copy.md`](../00-foundation/03-files-to-copy.md)).
-6. Wrap subscription-gated actions in `<FeatureGate tier="...">`.
-7. Add haptic feedback on every primary tap.
-8. Test in both light and dark mode.
+Focus mode (app blocker). List of focus profiles, pick apps to block, start session with timer. Native deep integration on Android.
 
-## Visual parity checklist
+## 2. Data dependencies
 
-- [ ] Header / title typography matches web
-- [ ] All cards use same radius (`rounded-3xl` = 24px)
-- [ ] Spacing matches web grid (`gap-3`, `p-4`)
-- [ ] Empty states have same illustration + copy
-- [ ] Loading states use same skeleton pattern
-- [ ] Error toasts identical (use `sonner-native` or our `<Toast>`)
+Open the web file and copy **every hook call** into the RN screen unchanged. The data layer does not change.
 
-## Acceptance
+- `supabase.from('focus_profiles').select()`
+- `supabase.from('focus_sessions').select()` (history)
+- Native module: `FocusModePlugin` (Expo config plugin wrapping AccessibilityService)
 
-- [ ] Side-by-side screenshot of mobile vs web is visually indistinguishable
-- [ ] All hooks fetch real data from Supabase
-- [ ] Navigation in/out works including hardware back
+## 3. Layout (top → bottom)
+
+**Focus:** profiles list + 'New profile' + history + stats. **FocusSession:** big timer + currently blocking N apps + Stop button + breakdown.
+
+## 4. Component tree mapping
+
+| Web element | RN replacement | Notes |
+|---|---|---|
+| AppSelector | bottom sheet listing installed apps (native module `expo-installed-apps` or custom) | search filter |
+| BlockingOverlay | system overlay drawn by AccessibilityService; not RN | configured by plugin |
+| timer | huge MM:SS, Reanimated digit transitions | |
+
+## 5. Animations
+
+- Timer digit flip
+- Pulse ring around timer
+- Session start: zoom into timer screen
+
+## 6. Interactions & navigation
+
+- Start session → request all permissions (USAGE_STATS, SYSTEM_ALERT_WINDOW, ACCESSIBILITY) → start foreground service
+- Stop session early → confirm + reason prompt
+- Profile tap → edit
+
+## 7. Edge cases (MUST handle)
+
+- Permission denied → show PermissionsSetup screen
+- iOS: use FamilyControls API (Screen Time) — different flow
+- App force-closed during session → restart via foreground service
+- Session > 24h → cap at 8h with warning
+
+## 8. Native enhancements (mobile-only wins)
+
+- **Android:** AccessibilityService + UsageStatsManager + ForegroundService notification + SYSTEM_ALERT_WINDOW overlay
+- **iOS:** FamilyControls + DeviceActivity (requires Apple entitlement)
+- See `06-native-features/01-app-blocking-android.md` and `02-app-blocking-ios.md`
+
+## 9. Performance
+
+- Wrap large lists in `FlashList` (Shopify) instead of `FlatList` when item count > 50.
+- Memoize cards with `React.memo` and stable keys.
+- Hoist `renderItem` out of render; never inline arrow inside `FlatList`.
+- Use `removeClippedSubviews` on long scroll views.
+- Defer offscreen image loads with `expo-image` `priority="low"`.
+
+## 10. Acceptance checklist
+
+- [ ] Permissions flow completes
+- [ ] Blocking actually prevents app launches (Android)
+- [ ] Session survives app kill
+- [ ] Stats logged correctly
+
+## 11. Implementation order (for the agent)
+
+1. Create the screen file with hooks copied verbatim from the web page.
+2. Render a bare `<View>` with a `<Text>` of the title — verify route works.
+3. Port the header / hero section.
+4. Port each section top-to-bottom, one commit per section.
+5. Wire animations LAST (only after layout is correct).
+6. Test offline, slow 3G, and dark mode before marking done.
+

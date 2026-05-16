@@ -1,15 +1,46 @@
-# 09-Toasts-and-Modals — Toasts & Modals
+# Toasts-and-Modals — Toasts & Modals
 
-sonner-native (drop-in for sonner). Modals: react-native-modal for centered, @gorhom/bottom-sheet for slide-up. Match web rounded-3xl + shadow-glow styling.
+> **Web source:** shadcn `useToast`, Dialog
+> **RN target:** `src/components/ui/Toast.tsx`, `Dialog.tsx`
 
-## Implementation guidance
+## Toasts
 
-1. Mirror the export names from web `src/components/ui/*.tsx` and `src/components/**`.
-2. Match props exactly so screen code that uses these components ports without changes.
-3. Style with Nativewind classes mirroring web variants (cva-style).
-4. Add haptics on press where it makes sense (buttons, switches, slider snap).
-5. Test in light + dark mode.
+Use **`burnt`** (native iOS UIView/Android Snackbar wrappers — feel native) OR **`react-native-toast-message`** (more customizable).
+
+API matches web:
+```ts
+const { toast } = useToast();
+toast({ title: 'Saved', description: '...', variant: 'default' | 'destructive' });
+```
+
+Position: top on iOS (under safe area), bottom on Android (above bottom nav).
+Auto-dismiss after 3s. Swipe to dismiss.
+
+## Modals / Dialogs
+
+Use RN `Modal` with custom animated overlay (Moti).
+
+```tsx
+<Modal transparent animationType='none' visible={open} onRequestClose={onClose}>
+  <MotiView from={{opacity:0}} animate={{opacity:1}} className='absolute inset-0 bg-black/60' />
+  <MotiView from={{translateY:300, opacity:0}} animate={{translateY:0, opacity:1}}
+            transition={{type:'spring', damping:18}}
+            className='absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl p-6'>
+    {children}
+  </MotiView>
+</Modal>
+```
+
+## Bottom sheets
+
+Use `@gorhom/bottom-sheet` for anything with snap points or drag-to-dismiss.
+
+## Hardware back button
+
+Always handle: register `BackHandler.addEventListener('hardwareBackPress', ...)` to close on Android.
 
 ## Acceptance
-- [ ] Web component and RN component share the same prop API
-- [ ] Visual diff <5%
+- [ ] Toasts appear correctly on both platforms
+- [ ] Dialogs trap focus and dismiss on backdrop
+- [ ] Android back closes top-most modal
+
