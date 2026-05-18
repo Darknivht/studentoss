@@ -1,14 +1,14 @@
-# 17 — Safety
+# 16b — FocusSession
 
-> **Web source:** `src/pages/Safety.tsx`  
-> **RN target:** `src/screens/SafetyScreen.tsx`  
-> **Route name:** `Safety`  
-> **Nav type:** Stack  
+> **Web source:** `src/pages/FocusSession.tsx`  
+> **RN target:** `src/screens/FocusSessionScreen.tsx`  
+> **Route name:** `FocusSession`  
+> **Nav type:** Modal full-screen kiosk  
 > **Auth required:** Yes
 
 ## 0. One-liner
 
-Parental controls, focus lock, offline mode toggle.
+Active focus session timer with blocking overlay.
 
 ## 1. Web imports → mobile equivalents
 
@@ -16,29 +16,29 @@ Copy the data layer **verbatim** where possible. Swap UI imports per the table.
 
 | Web import | Type | Mobile equivalent |
 |---|---|---|
-| `Tabs, TabsContent, TabsList, TabsTrigger` from `@/components/ui/tabs` | component | react-native-tab-view or custom segmented control |
-| `ParentalControls` from `@/components/safety/ParentalControls` | component | port to `src/components/safety/ParentalControls.tsx` (RN) |
-| `ParentDashboard` from `@/components/safety/ParentDashboard` | component | port to `src/components/safety/ParentDashboard.tsx` (RN) |
-| `AppBlockerSettings` from `@/components/settings/AppBlockerSettings` | component | port to `src/components/settings/AppBlockerSettings.tsx` (RN) |
+| `useFocusLock` from `@/hooks/useFocusLock` | hook | **keep as-is** (data hooks are platform-agnostic) |
+| `useToast` from `@/hooks/use-toast` | hook | **keep as-is** (data hooks are platform-agnostic) |
 | `Button` from `@/components/ui/button` | component | src/components/ui/Button.tsx (RN port — see 05-shared-components/01-ui-primitives.md) |
-| `Shield, Eye, User, Lock` (lucide) | icons | swap import to `lucide-react-native` |
+| `Progress` from `@/components/ui/progress` | component | react-native-progress |
+| `Card, CardContent, CardHeader, CardTitle` from `@/components/ui/card` | component | src/components/ui/Card.tsx (RN View + NativeWind) |
+| `Slider` from `@/components/ui/slider` | component | port to `src/components/ui/slider.tsx` (RN) |
+| `Badge` from `@/components/ui/badge` | component | port to `src/components/ui/badge.tsx` (RN) |
+| `Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger` from `@/components/ui/dialog` | component | react-native-modal or @gorhom/bottom-sheet |
+| `AppSelector` from `@/components/focus/AppSelector` | component | port to `src/components/focus/AppSelector.tsx` (RN) |
+| `PermissionsSetup` from `@/components/focus/PermissionsSetup` | component | port to `src/components/focus/PermissionsSetup.tsx` (RN) |
+| `Play, Pause, StopCircle, Lock, Shield, Clock, Settings, ChevronRight, Zap, Target` (lucide) | icons | swap import to `lucide-react-native` |
 | `motion` (framer-motion) | animation | rewrite with `moti` + `react-native-reanimated` |
-| `Link` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
 
 ## 2. Connected sub-components (port these too)
 
 This screen consumes components from the directories below. Every file listed must be ported to the mobile codebase under the same path (`src/components/<dir>/<Name>.tsx`) using RN primitives + NativeWind.
 
-### `src/components/safety/`
+### `src/components/focus/`
 
-- `OfflineMode.tsx`
-- `OfflineSyncIndicator.tsx`
-- `ParentDashboard.tsx`
-- `ParentalControls.tsx`
-
-### `src/components/settings/`
-
-- `AppBlockerSettings.tsx`
+- `AppSelector.tsx`
+- `BlockingOverlay.tsx`
+- `FocusModeOverlay.tsx`
+- `PermissionsSetup.tsx`
 
 ### `src/components/ui/`
 
@@ -98,21 +98,45 @@ These exact class strings appear in the web page. **Re-use them verbatim** in th
 
 ```text
 p-6 space-y-6 pb-24
-flex items-center justify-between
 text-2xl font-display font-bold text-foreground
 text-muted-foreground text-sm mt-1
-w-5 h-5
-w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center gap-3
-w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center
-w-5 h-5 text-amber-500
-flex-1 text-left
-font-semibold text-foreground
-text-xs text-muted-foreground
-w-full
-grid w-full grid-cols-2 mb-4
-flex items-center gap-1 text-xs
+border-primary/50 bg-primary/5
+pb-2
+flex items-center justify-between
+flex items-center gap-2
+w-5 h-5 text-primary
+text-lg
+space-y-4
+text-center py-4
+text-5xl font-display font-bold text-foreground mb-2
+text-sm text-muted-foreground
+space-y-2
+h-3
+flex justify-between text-xs text-muted-foreground
+flex items-center justify-center gap-2 text-sm text-muted-foreground
 w-4 h-4
-space-y-6
+flex gap-3
+flex-1
+w-4 h-4 mr-2
+text-lg flex items-center gap-2
+text-center
+text-4xl font-display font-bold text-foreground
+text-lg text-muted-foreground ml-2
+py-4
+flex gap-2
+cursor-pointer hover:border-primary/50 transition-colors
+flex items-center justify-between p-4
+flex items-center gap-3
+w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center
+font-medium
+w-5 h-5 text-muted-foreground
+max-h-[80vh] overflow-y-auto
+cursor-pointer border-amber-500/50 bg-amber-500/5
+w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center
+w-5 h-5 text-amber-500
+w-full h-14 text-lg gradient-primary text-primary-foreground
+w-5 h-5 mr-2
+p-4 rounded-2xl bg-muted
 ```
 
 ## 4. Layout (top → bottom)
@@ -179,8 +203,8 @@ Every `motion.div`/`AnimatePresence` in the web file maps to `<MotiView>` / `<An
 
 ## 11. Implementation order (for the agent)
 
-1. Create `src/screens/SafetyScreen.tsx` — copy every hook call from the web page verbatim.
-2. Render a stub `<View><Text>Safety</Text></View>` and verify the route works in the navigator.
+1. Create `src/screens/FocusSessionScreen.tsx` — copy every hook call from the web page verbatim.
+2. Render a stub `<View><Text>FocusSession</Text></View>` and verify the route works in the navigator.
 3. Port each connected sub-component listed in §2 — one commit per component.
 4. Assemble the layout top-to-bottom following §4.
 5. Add animations LAST (only once layout is pixel-correct).

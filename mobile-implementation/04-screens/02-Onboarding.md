@@ -1,85 +1,182 @@
 # 02 — Onboarding
 
-> **Web source of truth:** `src/pages/Onboarding.tsx`
-> **RN target:** `src/screens/OnboardingScreen.tsx`
-> **Route name:** `Onboarding`
-> **Auth:** Required (just-signed-up users)
-> **Bottom nav visible:** No
+> **Web source:** `src/pages/Onboarding.tsx`  
+> **RN target:** `src/screens/OnboardingScreen.tsx`  
+> **Route name:** `Onboarding`  
+> **Nav type:** Stack (post-auth gate)  
+> **Auth required:** Yes
 
----
+## 0. One-liner
 
-## 1. Purpose
+7-step interactive profile setup.
 
-7-step interactive onboarding that captures education level, school, goals, study habits, notification preferences, and shows a celebratory finale.
+## 1. Web imports → mobile equivalents
 
-## 2. Data dependencies
+Copy the data layer **verbatim** where possible. Swap UI imports per the table.
 
-Open the web file and copy **every hook call** into the RN screen unchanged. The data layer does not change.
-
-- `useAuth()` for user
-- `supabase.from('profiles').update(...)` to persist answers
-- `useNotifications()` to request permission at step 6
-- AsyncStorage flag `onboarding_complete` (use MMKV)
-
-## 3. Layout (top → bottom)
-
-Full-screen card with progress dots at top, content in middle, primary CTA at bottom. Swipe-left/right gestures advance steps. Each step is a `<View>` switched by `currentStep` state.
-
-## 4. Component tree mapping
-
-| Web element | RN replacement | Notes |
+| Web import | Type | Mobile equivalent |
 |---|---|---|
-| step container | `<View>` with `Animated.View` | crossfade between steps |
-| progress dots | custom row of 7 dots, active = wider w/ spring | |
-| confetti | `react-native-confetti-cannon` | only on step 7 |
-| chip selectors | `<Pressable>` rows with check mark | multi-select for goals |
+| `Button` from `@/components/ui/button` | component | src/components/ui/Button.tsx (RN port — see 05-shared-components/01-ui-primitives.md) |
+| `BookOpen, Brain, Layers, Clock, Trophy, Users, Rocket, ArrowRight, Sparkles` (lucide) | icons | swap import to `lucide-react-native` |
+| `motion, AnimatePresence, PanInfo` (framer-motion) | animation | rewrite with `moti` + `react-native-reanimated` |
+| `useNavigate` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
+
+## 2. Connected sub-components (port these too)
+
+This screen consumes components from the directories below. Every file listed must be ported to the mobile codebase under the same path (`src/components/<dir>/<Name>.tsx`) using RN primitives + NativeWind.
+
+### `src/components/ui/`
+
+- `accordion.tsx`
+- `alert-dialog.tsx`
+- `alert.tsx`
+- `aspect-ratio.tsx`
+- `avatar.tsx`
+- `badge.tsx`
+- `breadcrumb.tsx`
+- `button.tsx`
+- `calendar.tsx`
+- `card.tsx`
+- `carousel.tsx`
+- `chart.tsx`
+- `checkbox.tsx`
+- `collapsible.tsx`
+- `command.tsx`
+- `context-menu.tsx`
+- `dialog.tsx`
+- `drawer.tsx`
+- `dropdown-menu.tsx`
+- `form.tsx`
+- `hover-card.tsx`
+- `input-otp.tsx`
+- `input.tsx`
+- `label.tsx`
+- `markdown-renderer.tsx`
+- `menubar.tsx`
+- `navigation-menu.tsx`
+- `pagination.tsx`
+- `popover.tsx`
+- `progress.tsx`
+- `radio-group.tsx`
+- `resizable.tsx`
+- `scroll-area.tsx`
+- `select.tsx`
+- `separator.tsx`
+- `sheet.tsx`
+- `sidebar.tsx`
+- `skeleton.tsx`
+- `slider.tsx`
+- `sonner.tsx`
+- `switch.tsx`
+- `table.tsx`
+- `tabs.tsx`
+- `textarea.tsx`
+- `toast.tsx`
+- `toaster.tsx`
+- `toggle-group.tsx`
+- `toggle.tsx`
+- `tooltip.tsx`
+
+## 3. Tailwind classNames preserved from web
+
+These exact class strings appear in the web page. **Re-use them verbatim** in the RN `className=` (NativeWind v4 understands the same Tailwind grammar). Anything Tailwind-only-for-web (see `_APPENDIX/C-css-to-style-map.md`) must be swapped, but everything below is portable as-is.
+
+```text
+absolute inset-0 overflow-hidden pointer-events-none
+absolute rounded-full
+w-full px-6 pt-8 pb-4 z-10
+h-1 bg-white/20 rounded-full overflow-hidden mb-4
+h-full bg-white/80 rounded-full
+flex justify-end
+text-sm text-white/70 hover:text-white transition-colors font-medium
+flex-1 flex items-center justify-center w-full max-w-md px-6 z-10
+flex flex-col items-center text-center gap-8 w-full cursor-grab active:cursor-grabbing select-none
+relative
+absolute inset-0 rounded-[2rem] blur-2xl opacity-40
+w-16 h-16 text-white drop-shadow-lg
+absolute -top-2 -right-2
+w-6 h-6 text-white/80
+w-12 h-12 rounded-xl
+space-y-3
+text-3xl sm:text-4xl font-bold text-white drop-shadow-md
+text-white/80 text-base sm:text-lg leading-relaxed max-w-xs mx-auto
+w-full max-w-md px-6 pb-10 z-10 space-y-6
+flex items-center justify-center gap-2
+flex gap-3
+h-12 px-5 text-base text-white/80 hover:text-white hover:bg-white/10 border border-white/20 rounded-2xl
+rounded-2xl flex-1
+w-full h-14 text-lg font-bold bg-white text-purple-700 hover:bg-white/90 rounded-2xl shadow-xl
+w-5 h-5 ml-2
+flex-1 h-12 text-base bg-white/20 hover:bg-white/30 text-white border border-white/20 backdrop-blur-sm rounded-2xl
+```
+
+## 4. Layout (top → bottom)
+
+> Re-read the web JSX in the source file — the structure below is the canonical mobile order.
+
+1. `SafeAreaView` root (`flex-1 bg-background`)
+2. `StatusBar` themed to current colour scheme
+3. Screen header (title + back / settings icons)
+4. Scrollable body — port each section of the web JSX in source order
+5. Floating action buttons / bottom-anchored CTA (if any)
+6. Keyboard-aware wrapper (`KeyboardAvoidingView`) when the screen has inputs
 
 ## 5. Animations
 
-- Step transition: outgoing slides left + fades, incoming slides in from right (PanGestureHandler for swipe)
-- Progress dot grows with `withSpring({damping:14})`
-- Confetti on finale step + haptic notification success
+Every `motion.div`/`AnimatePresence` in the web file maps to `<MotiView>` / `<AnimatePresence>` from `moti`. See `01-design-system/05-animations.md`.
+
+- Mount fade-up: `from={{ opacity: 0, translateY: 8 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 220 }}`
+- Stagger lists: add `delay: index * 60` per item
+- Press feedback: wrap `Pressable` in `Animated.View` with `useAnimatedStyle` scaling 1 → 0.97
+- Page transitions: handled by React Navigation `slide_from_right` (iOS) / `slide_from_bottom` (Android modals)
 
 ## 6. Interactions & navigation
 
-- Next button disabled until required input filled
-- 'Skip' top-right writes minimal defaults
-- Back button (Android hardware) goes to previous step, exits to Auth on step 1 with confirmation
-- On finish: write `onboarded_at = now()`, `navigation.reset` to `Main`
+- Replace every `navigate('/x')` with `navigation.navigate('XScreen', params)`
+- Replace every `<Link to>` with `<Pressable onPress={() => navigation.navigate(...)}>` (or `<TouchableOpacity>`)
+- Hardware back button: handled globally in `useMobileBackNavigation` port — see `03-navigation/03-back-button-handling.md`
+- Add haptic feedback (`expo-haptics`) on every primary tap
 
 ## 7. Edge cases (MUST handle)
 
-- User backgrounds app mid-flow → resume on last step (persist `currentStep` to MMKV)
-- Profile update fails → keep on step, show toast, allow retry
-- Notification permission denied → continue anyway, set `notifications_enabled=false`
+- **Loading**: show skeleton matching final layout (use `moti-skeleton`)
+- **Empty**: friendly illustration + primary CTA
+- **Error / no network**: render cached data from MMKV, banner reads *Showing offline data*
+- **Unauthorised**: redirect to `Auth` screen
+- **Subscription-gated action**: wrap in `<FeatureGate tier="plus">` — see `05-shared-components/03-FeatureGateDialog.md`
+- **Dark mode**: every colour must come from the design tokens, never hard-coded
 
 ## 8. Native enhancements (mobile-only wins)
 
-- Request notification permission at the natural step (not on launch)
-- Schedule the first daily streak reminder right after onboarding
-- Haptic on every Next press
+- Pull-to-refresh on lists (`RefreshControl`)
+- Swipe-back gesture (`gestureEnabled: true`)
+- Share extensions where the web uses `navigator.share`
+- Long-press → context menu via `@react-native-menu/menu`
+- Tab-press scroll-to-top using `navigation.addListener('tabPress')`
 
 ## 9. Performance
 
-- Wrap large lists in `FlashList` (Shopify) instead of `FlatList` when item count > 50.
-- Memoize cards with `React.memo` and stable keys.
-- Hoist `renderItem` out of render; never inline arrow inside `FlatList`.
-- Use `removeClippedSubviews` on long scroll views.
-- Defer offscreen image loads with `expo-image` `priority="low"`.
+- `FlashList` for any list > 50 rows
+- `React.memo` every row component; stable keys
+- Hoist `renderItem` out of the parent render
+- `expo-image` with `cachePolicy='memory-disk'` for all images
+- Defer animations until after first paint with `InteractionManager.runAfterInteractions`
 
 ## 10. Acceptance checklist
 
-- [ ] All 7 steps render and persist correctly
-- [ ] Skip writes a valid profile
-- [ ] Confetti fires once on finale
-- [ ] Resumes mid-flow after app kill
+- [ ] Side-by-side screenshot vs web is visually indistinguishable
+- [ ] All hooks fetch real data from Supabase
+- [ ] Pull-to-refresh re-fetches
+- [ ] Hardware-back behaves correctly
+- [ ] Dark mode passes
+- [ ] No console warnings (key prop, deprecated APIs)
+- [ ] Subscription gates fire for the right tiers
 
 ## 11. Implementation order (for the agent)
 
-1. Create the screen file with hooks copied verbatim from the web page.
-2. Render a bare `<View>` with a `<Text>` of the title — verify route works.
-3. Port the header / hero section.
-4. Port each section top-to-bottom, one commit per section.
-5. Wire animations LAST (only after layout is correct).
-6. Test offline, slow 3G, and dark mode before marking done.
-
+1. Create `src/screens/OnboardingScreen.tsx` — copy every hook call from the web page verbatim.
+2. Render a stub `<View><Text>Onboarding</Text></View>` and verify the route works in the navigator.
+3. Port each connected sub-component listed in §2 — one commit per component.
+4. Assemble the layout top-to-bottom following §4.
+5. Add animations LAST (only once layout is pixel-correct).
+6. Run the §10 acceptance checklist before marking done.

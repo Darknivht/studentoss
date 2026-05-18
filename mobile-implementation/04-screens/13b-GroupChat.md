@@ -1,14 +1,14 @@
-# 17 — Safety
+# 13b — GroupChat
 
-> **Web source:** `src/pages/Safety.tsx`  
-> **RN target:** `src/screens/SafetyScreen.tsx`  
-> **Route name:** `Safety`  
-> **Nav type:** Stack  
+> **Web source:** `src/pages/GroupChat.tsx`  
+> **RN target:** `src/screens/GroupChatScreen.tsx`  
+> **Route name:** `GroupChat`  
+> **Nav type:** Stack — params { groupId }  
 > **Auth required:** Yes
 
 ## 0. One-liner
 
-Parental controls, focus lock, offline mode toggle.
+Group chat room with member list and media.
 
 ## 1. Web imports → mobile equivalents
 
@@ -16,29 +16,42 @@ Copy the data layer **verbatim** where possible. Swap UI imports per the table.
 
 | Web import | Type | Mobile equivalent |
 |---|---|---|
-| `Tabs, TabsContent, TabsList, TabsTrigger` from `@/components/ui/tabs` | component | react-native-tab-view or custom segmented control |
-| `ParentalControls` from `@/components/safety/ParentalControls` | component | port to `src/components/safety/ParentalControls.tsx` (RN) |
-| `ParentDashboard` from `@/components/safety/ParentDashboard` | component | port to `src/components/safety/ParentDashboard.tsx` (RN) |
-| `AppBlockerSettings` from `@/components/settings/AppBlockerSettings` | component | port to `src/components/settings/AppBlockerSettings.tsx` (RN) |
+| `useAuth` from `@/hooks/useAuth` | hook | **keep as-is** (data hooks are platform-agnostic) |
+| `useToast` from `@/hooks/use-toast` | hook | **keep as-is** (data hooks are platform-agnostic) |
+| `useSubscription` from `@/hooks/useSubscription` | hook | **keep as-is** (data hooks are platform-agnostic) |
+| `supabase` from `@/integrations/supabase/client` | lib | **keep as-is** (supabase client / formatters / config) |
 | `Button` from `@/components/ui/button` | component | src/components/ui/Button.tsx (RN port — see 05-shared-components/01-ui-primitives.md) |
-| `Shield, Eye, User, Lock` (lucide) | icons | swap import to `lucide-react-native` |
+| `Tabs, TabsContent, TabsList, TabsTrigger` from `@/components/ui/tabs` | component | react-native-tab-view or custom segmented control |
+| `Card` from `@/components/ui/card` | component | src/components/ui/Card.tsx (RN View + NativeWind) |
+| `Avatar, AvatarFallback, AvatarImage` from `@/components/ui/avatar` | component | expo-image + initials fallback |
+| `ChatRoom` from `@/components/chat/ChatRoom` | component | port to `src/components/chat/ChatRoom.tsx` (RN) |
+| `NoteViewerDialog` from `@/components/notes/NoteViewerDialog` | component | port to `src/components/notes/NoteViewerDialog.tsx` (RN) |
+| `UpgradePrompt` from `@/components/subscription/UpgradePrompt` | component | port to `src/components/subscription/UpgradePrompt.tsx` (RN) |
+| `ArrowLeft, Users, Copy, Check, Share2, FileText, BookOpen, ExternalLink` (lucide) | icons | swap import to `lucide-react-native` |
 | `motion` (framer-motion) | animation | rewrite with `moti` + `react-native-reanimated` |
-| `Link` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
+| `useParams, useNavigate` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
 
 ## 2. Connected sub-components (port these too)
 
 This screen consumes components from the directories below. Every file listed must be ported to the mobile codebase under the same path (`src/components/<dir>/<Name>.tsx`) using RN primitives + NativeWind.
 
-### `src/components/safety/`
+### `src/components/chat/`
 
-- `OfflineMode.tsx`
-- `OfflineSyncIndicator.tsx`
-- `ParentDashboard.tsx`
-- `ParentalControls.tsx`
+- `ChatRoom.tsx`
+- `MediaUpload.tsx`
 
-### `src/components/settings/`
+### `src/components/notes/`
 
-- `AppBlockerSettings.tsx`
+- `AISummaryDialog.tsx`
+- `FileUpload.tsx`
+- `NoteCard.tsx`
+- `NoteViewerDialog.tsx`
+- `SocraticTutor.tsx`
+
+### `src/components/subscription/`
+
+- `FeatureGateDialog.tsx`
+- `UpgradePrompt.tsx`
 
 ### `src/components/ui/`
 
@@ -97,22 +110,42 @@ This screen consumes components from the directories below. Every file listed mu
 These exact class strings appear in the web page. **Re-use them verbatim** in the RN `className=` (NativeWind v4 understands the same Tailwind grammar). Anything Tailwind-only-for-web (see `_APPENDIX/C-css-to-style-map.md`) must be swapped, but everything below is portable as-is.
 
 ```text
-p-6 space-y-6 pb-24
-flex items-center justify-between
-text-2xl font-display font-bold text-foreground
-text-muted-foreground text-sm mt-1
+p-6 space-y-6
+flex items-center gap-3
 w-5 h-5
-w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center gap-3
-w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center
-w-5 h-5 text-amber-500
-flex-1 text-left
+text-xl font-display font-bold text-foreground
+min-h-screen flex items-center justify-center
+w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin
+min-h-screen flex flex-col items-center justify-center gap-4
+text-muted-foreground
+flex flex-col h-[calc(100vh-4rem)]
+flex items-center gap-3 p-4 border-b border-border bg-card
+w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center
+w-5 h-5 text-primary
+flex-1
 font-semibold text-foreground
 text-xs text-muted-foreground
-w-full
-grid w-full grid-cols-2 mb-4
-flex items-center gap-1 text-xs
 w-4 h-4
-space-y-6
+flex-1 flex flex-col overflow-hidden
+mx-4 mt-2
+flex-1 flex flex-col overflow-hidden m-0
+flex-1 overflow-auto p-4 m-0
+space-y-3
+p-8 text-center
+w-12 h-12 mx-auto text-muted-foreground mb-3
+p-4 flex items-center gap-3 cursor-pointer hover:border-primary/50 transition-colors
+font-medium
+text-xs text-muted-foreground capitalize
+w-4 h-4 text-muted-foreground
+p-4 flex items-center gap-3
+h-10 w-10
+text-xs text-primary ml-2
+text-xs text-primary
+text-xs px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-full
+p-4 bg-primary/10 border-t border-primary/20
+flex items-center justify-between
+text-sm font-medium
+font-mono text-primary
 ```
 
 ## 4. Layout (top → bottom)
@@ -179,8 +212,8 @@ Every `motion.div`/`AnimatePresence` in the web file maps to `<MotiView>` / `<An
 
 ## 11. Implementation order (for the agent)
 
-1. Create `src/screens/SafetyScreen.tsx` — copy every hook call from the web page verbatim.
-2. Render a stub `<View><Text>Safety</Text></View>` and verify the route works in the navigator.
+1. Create `src/screens/GroupChatScreen.tsx` — copy every hook call from the web page verbatim.
+2. Render a stub `<View><Text>GroupChat</Text></View>` and verify the route works in the navigator.
 3. Port each connected sub-component listed in §2 — one commit per component.
 4. Assemble the layout top-to-bottom following §4.
 5. Add animations LAST (only once layout is pixel-correct).
