@@ -89,28 +89,58 @@ Estimated total time for one developer: **4–5 weeks** to feature parity, +1 we
 
 ## Phase 5 — Core Screens (2 weeks)
 
-**Goal:** Every web page has a working RN equivalent. Build in this order — earlier screens unblock later ones.
+**Goal:** Every web page in `src/pages/` has a working RN equivalent. The table below references **every screen doc** (29 in total). Build in this order — earlier screens unblock later ones.
+
+Pre-auth screens (Phase 4 actually delivers these, listed here for completeness):
 
 | # | Screen | Doc | Days |
 |---|---|---|---|
-| 1 | Dashboard | [03](./04-screens/03-Dashboard.md) | 1 |
-| 2 | Profile + Settings | [18](./04-screens/18-Profile.md), [21](./04-screens/21-Settings.md) | 0.5 |
-| 3 | Study (hub) | [04](./04-screens/04-Study.md) | 0.5 |
-| 4 | SmartNotes + CoursePage | [05](./04-screens/05-SmartNotes.md), [06](./04-screens/06-CoursePage.md) | 1.5 |
-| 5 | AI Tutor | [07](./04-screens/07-AITutor.md) | 1 |
-| 6 | Flashcards | [08](./04-screens/08-Flashcards.md) | 1 |
-| 7 | Quizzes | [09](./04-screens/09-Quizzes.md) | 0.5 |
-| 8 | ExamPrep flow | [10](./04-screens/10-ExamPrep.md) | 2 |
-| 9 | Plan (Timetable, Pomodoro, Sleep, Lofi) | [11](./04-screens/11-Plan.md) | 1 |
-| 10 | Social (Groups, Friends, Leaderboard) | [12](./04-screens/12-Social.md) | 1 |
-| 11 | Chat + GroupChat | [13](./04-screens/13-Chat-and-GroupChat.md) | 1 |
-| 12 | Store | [14](./04-screens/14-Store.md) | 0.5 |
-| 13 | Career (Resume, Jobs, Internships) | [15](./04-screens/15-Career.md) | 1.5 |
-| 14 | Achievements | [19](./04-screens/19-Achievements.md) | 0.5 |
-| 15 | Upgrade (Paystack) | [20](./04-screens/20-Upgrade.md) | 0.5 |
-| 16 | Misc (Privacy, Terms, NotFound) | [22](./04-screens/22-Misc-Privacy-Terms-NotFound.md) | 0.25 |
+| 1 | Auth | [01](./04-screens/01-Auth.md) | 0.5 |
+| 2 | ResetPassword | [01b](./04-screens/01b-ResetPassword.md) | 0.25 |
+| 3 | Onboarding | [02](./04-screens/02-Onboarding.md) | 1 |
+| 4 | Index (boot router) | [02b](./04-screens/02b-Index.md) | 0.1 |
 
-(Focus + Safety screens are built in Phase 6 because they depend on native modules.)
+Core authenticated screens:
+
+| # | Screen | Doc | Days |
+|---|---|---|---|
+| 5  | Dashboard | [03](./04-screens/03-Dashboard.md) | 1 |
+| 6  | Study (hub) | [04](./04-screens/04-Study.md) | 0.5 |
+| 7  | SmartNotes | [05](./04-screens/05-SmartNotes.md) | 1 |
+| 8  | CoursePage | [06](./04-screens/06-CoursePage.md) | 0.5 |
+| 9  | AI Tutor | [07](./04-screens/07-AITutor.md) | 1 |
+| 10 | Flashcards | [08](./04-screens/08-Flashcards.md) | 1 |
+| 11 | Quizzes | [09](./04-screens/09-Quizzes.md) | 0.5 |
+| 12 | ExamPrep (nested stack) | [10](./04-screens/10-ExamPrep.md) | 2 |
+| 13 | Plan (Timetable, Pomodoro, Sleep, Lofi) | [11](./04-screens/11-Plan.md) | 1 |
+| 14 | Social (Groups, Friends, Leaderboard) | [12](./04-screens/12-Social.md) | 1 |
+| 15 | Chat (1:1) | [13](./04-screens/13-Chat.md) | 0.5 |
+| 16 | GroupChat | [13b](./04-screens/13b-GroupChat.md) | 0.5 |
+| 17 | Store | [14](./04-screens/14-Store.md) | 0.5 |
+| 18 | Career (Resume, Jobs, Internships) | [15](./04-screens/15-Career.md) | 1.5 |
+| 19 | Profile | [18](./04-screens/18-Profile.md) | 0.5 |
+| 20 | Settings | [21](./04-screens/21-Settings.md) | 0.5 |
+| 21 | Achievements | [19](./04-screens/19-Achievements.md) | 0.5 |
+| 22 | Upgrade (Paystack) | [20](./04-screens/20-Upgrade.md) | 0.5 |
+
+Static / fallback screens:
+
+| # | Screen | Doc | Days |
+|---|---|---|---|
+| 23 | Privacy | [22a](./04-screens/22a-Privacy.md) | 0.1 |
+| 24 | Terms | [22b](./04-screens/22b-Terms.md) | 0.1 |
+| 25 | NotFound | [22c](./04-screens/22c-NotFound.md) | 0.1 |
+| 26 | AdminResources (admin-gated, read-only on mobile) | [23](./04-screens/23-AdminResources.md) | 0.5 |
+
+Phase-6 screens (depend on native modules — built after `06-native-features/*`):
+
+| # | Screen | Doc | Days |
+|---|---|---|---|
+| 27 | Focus | [16](./04-screens/16-Focus.md) | 1 |
+| 28 | FocusSession | [16b](./04-screens/16b-FocusSession.md) | 0.5 |
+| 29 | Safety | [17](./04-screens/17-Safety.md) | 1 |
+
+> Every screen doc contains: web→mobile import mapping, full list of connected sub-components (with file paths), the exact Tailwind classNames preserved from web, layout tree, animations, edge cases, and acceptance checklist.
 
 **Acceptance per screen:**
 - [ ] Side-by-side screenshot vs web is visually indistinguishable

@@ -50,3 +50,45 @@ If offline, write file to local FS (`expo-file-system`) and enqueue via offlineS
 - [ ] Offline queue + sync works
 - [ ] Large files chunk-upload without OOM
 
+<!-- STYLES_APPENDIX -->
+
+## Styles & className mapping (NativeWind v4)
+
+These are the **exact Tailwind class strings** used by the web counterpart(s). NativeWind v4 understands the same grammar — copy them straight into your RN component's `className=` and only swap the web-only utilities listed in `_APPENDIX/C-css-to-style-map.md` (e.g. `hover:*`, `backdrop-blur-*`, `transition-*` for non-Reanimated transitions).
+
+
+### From `src/components/notes/FileUpload.tsx`
+
+```text
+space-y-3
+hidden
+w-full p-4 rounded-xl border-2 border-dashed border-border hover:border-primary/50 transition-colors flex flex-col items-center gap-2 text-muted-foreground hover:text-foreground disabled:opacity-50
+w-6 h-6
+text-sm font-medium
+text-xs
+p-3 rounded-xl bg-muted flex items-center gap-3
+w-5 h-5 animate-spin text-primary
+w-5 h-5 text-primary
+flex-1 min-w-0
+text-sm font-medium text-foreground truncate
+text-xs text-muted-foreground
+h-8 w-8
+w-4 h-4
+
+### From `src/components/chat/MediaUpload.tsx`
+
+```text
+shrink-0
+w-5 h-5 animate-spin
+w-5 h-5
+```
+
+### Conversion checklist
+
+- Keep colour utilities (`bg-primary`, `text-foreground`, `border-border/50`) — defined in `01-design-system/01-colors-tokens.md`.
+- Keep spacing, sizing, radius, flex, grid (when supported by NativeWind).
+- Replace `hover:*` → use `Pressable`'s `pressed` state or Reanimated.
+- Replace `backdrop-blur-*` → `expo-blur` `<BlurView>`.
+- Replace `transition-*` / `animate-*` → Moti / Reanimated.
+- Replace `cursor-*`, `select-*`, `pointer-events-*` → not needed on RN.
+- Replace `grid grid-cols-N gap-X` → `<View className="flex-row flex-wrap gap-X">` or `FlashList numColumns={N}`.

@@ -1,14 +1,14 @@
-# 17 — Safety
+# 23 — AdminResources
 
-> **Web source:** `src/pages/Safety.tsx`  
-> **RN target:** `src/screens/SafetyScreen.tsx`  
-> **Route name:** `Safety`  
-> **Nav type:** Stack  
+> **Web source:** `src/pages/AdminResources.tsx`  
+> **RN target:** `src/screens/AdminResourcesScreen.tsx`  
+> **Route name:** `AdminResources`  
+> **Nav type:** Stack (admin only)  
 > **Auth required:** Yes
 
 ## 0. One-liner
 
-Parental controls, focus lock, offline mode toggle.
+Admin-only resource & textbook management (gated; mobile ships read-only).
 
 ## 1. Web imports → mobile equivalents
 
@@ -16,29 +16,25 @@ Copy the data layer **verbatim** where possible. Swap UI imports per the table.
 
 | Web import | Type | Mobile equivalent |
 |---|---|---|
-| `Tabs, TabsContent, TabsList, TabsTrigger` from `@/components/ui/tabs` | component | react-native-tab-view or custom segmented control |
-| `ParentalControls` from `@/components/safety/ParentalControls` | component | port to `src/components/safety/ParentalControls.tsx` (RN) |
-| `ParentDashboard` from `@/components/safety/ParentDashboard` | component | port to `src/components/safety/ParentDashboard.tsx` (RN) |
-| `AppBlockerSettings` from `@/components/settings/AppBlockerSettings` | component | port to `src/components/settings/AppBlockerSettings.tsx` (RN) |
+| `toast` from `@/hooks/use-toast` | hook | **keep as-is** (data hooks are platform-agnostic) |
+| `supabase` from `@/integrations/supabase/client` | lib | **keep as-is** (supabase client / formatters / config) |
+| `Input` from `@/components/ui/input` | component | port to `src/components/ui/input.tsx` (RN) |
 | `Button` from `@/components/ui/button` | component | src/components/ui/Button.tsx (RN port — see 05-shared-components/01-ui-primitives.md) |
-| `Shield, Eye, User, Lock` (lucide) | icons | swap import to `lucide-react-native` |
-| `motion` (framer-motion) | animation | rewrite with `moti` + `react-native-reanimated` |
-| `Link` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
+| `Card, CardContent, CardHeader, CardTitle` from `@/components/ui/card` | component | src/components/ui/Card.tsx (RN View + NativeWind) |
+| `Label` from `@/components/ui/label` | component | port to `src/components/ui/label.tsx` (RN) |
+| `Textarea` from `@/components/ui/textarea` | component | port to `src/components/ui/textarea.tsx` (RN) |
+| `Select, SelectContent, SelectItem, SelectTrigger, SelectValue` from `@/components/ui/select` | component | react-native-picker-select or custom bottom-sheet picker |
+| `Switch` from `@/components/ui/switch` | component | port to `src/components/ui/switch.tsx` (RN) |
+| `Table, TableBody, TableCell, TableHead, TableHeader, TableRow` from `@/components/ui/table` | component | port to `src/components/ui/table.tsx` (RN) |
+| `Badge` from `@/components/ui/badge` | component | port to `src/components/ui/badge.tsx` (RN) |
+| `Tabs, TabsContent, TabsList, TabsTrigger` from `@/components/ui/tabs` | component | react-native-tab-view or custom segmented control |
+| `Dialog, DialogContent, DialogHeader, DialogTitle` from `@/components/ui/dialog` | component | react-native-modal or @gorhom/bottom-sheet |
+| `Lock, Plus, Trash2, Edit, Loader2, LogOut, Megaphone, Trophy, Users, BarChart3, CreditCard, Search, BookOpen, Upload, Eye, Ban, ShieldCheck, RefreshCw` (lucide) | icons | swap import to `lucide-react-native` |
+| `LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend` from `recharts` | other | — |
 
 ## 2. Connected sub-components (port these too)
 
 This screen consumes components from the directories below. Every file listed must be ported to the mobile codebase under the same path (`src/components/<dir>/<Name>.tsx`) using RN primitives + NativeWind.
-
-### `src/components/safety/`
-
-- `OfflineMode.tsx`
-- `OfflineSyncIndicator.tsx`
-- `ParentDashboard.tsx`
-- `ParentalControls.tsx`
-
-### `src/components/settings/`
-
-- `AppBlockerSettings.tsx`
 
 ### `src/components/ui/`
 
@@ -97,22 +93,46 @@ This screen consumes components from the directories below. Every file listed mu
 These exact class strings appear in the web page. **Re-use them verbatim** in the RN `className=` (NativeWind v4 understands the same Tailwind grammar). Anything Tailwind-only-for-web (see `_APPENDIX/C-css-to-style-map.md`) must be swapped, but everything below is portable as-is.
 
 ```text
-p-6 space-y-6 pb-24
-flex items-center justify-between
-text-2xl font-display font-bold text-foreground
-text-muted-foreground text-sm mt-1
-w-5 h-5
-w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center gap-3
-w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center
-w-5 h-5 text-amber-500
-flex-1 text-left
-font-semibold text-foreground
-text-xs text-muted-foreground
+min-h-screen flex items-center justify-center p-4 bg-background
+w-full max-w-sm
+text-center
+w-10 h-10 mx-auto mb-2 text-muted-foreground
+space-y-4
 w-full
-grid w-full grid-cols-2 mb-4
-flex items-center gap-1 text-xs
-w-4 h-4
+w-4 h-4 animate-spin mr-2
+min-h-screen bg-background p-2 sm:p-4 max-w-6xl mx-auto space-y-4
+flex items-center justify-between px-1
+text-lg sm:text-2xl font-bold
+w-4 h-4 mr-1
+overflow-x-auto -mx-2 px-2 pb-1
+inline-flex w-auto min-w-full sm:grid sm:grid-cols-7 gap-0.5
+text-xs whitespace-nowrap px-2 sm:px-3
+w-3 h-3 mr-1 hidden sm:inline
 space-y-6
+flex justify-center py-12
+w-6 h-6 animate-spin
+grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3
+pt-4 pb-3 text-center
+text-2xl mb-0.5
+text-xl font-bold
+text-xs text-muted-foreground
+grid grid-cols-1 md:grid-cols-4 gap-4
+border-primary/30 bg-primary/5
+pb-1
+text-sm
+text-3xl font-bold text-primary
+text-xs text-muted-foreground mt-1
+border-amber-500/30 bg-amber-500/5
+text-3xl font-bold text-amber-600
+md:col-span-2
+text-xs
+space-y-1.5 max-h-[200px] overflow-y-auto
+flex justify-between items-center text-sm
+truncate max-w-[60%]
+flex gap-2
+w-3 h-3 mr-1
+text-lg
+grid grid-cols-1 sm:grid-cols-2 gap-4
 ```
 
 ## 4. Layout (top → bottom)
@@ -179,8 +199,8 @@ Every `motion.div`/`AnimatePresence` in the web file maps to `<MotiView>` / `<An
 
 ## 11. Implementation order (for the agent)
 
-1. Create `src/screens/SafetyScreen.tsx` — copy every hook call from the web page verbatim.
-2. Render a stub `<View><Text>Safety</Text></View>` and verify the route works in the navigator.
+1. Create `src/screens/AdminResourcesScreen.tsx` — copy every hook call from the web page verbatim.
+2. Render a stub `<View><Text>AdminResources</Text></View>` and verify the route works in the navigator.
 3. Port each connected sub-component listed in §2 — one commit per component.
 4. Assemble the layout top-to-bottom following §4.
 5. Add animations LAST (only once layout is pixel-correct).

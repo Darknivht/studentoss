@@ -52,3 +52,48 @@ Pinch-zoom for PDF & images. Swipe down to dismiss in modal mode.
 - [ ] Share sheet integration via `expo-sharing`
 - [ ] No crashes on large files (paginate)
 
+<!-- STYLES_APPENDIX -->
+
+## Styles & className mapping (NativeWind v4)
+
+These are the **exact Tailwind class strings** used by the web counterpart(s). NativeWind v4 understands the same grammar — copy them straight into your RN component's `className=` and only swap the web-only utilities listed in `_APPENDIX/C-css-to-style-map.md` (e.g. `hover:*`, `backdrop-blur-*`, `transition-*` for non-Reanimated transitions).
+
+
+### From `src/components/documents/DocumentViewer.tsx`
+
+```text
+flex items-center justify-center p-8
+w-8 h-8 animate-spin text-primary
+ml-2 text-muted-foreground
+w-12 h-12 mb-2
+text-sm
+
+### From `src/components/documents/PDFViewer.tsx`
+
+```text
+text-destructive mb-4
+gap-2
+w-4 h-4
+flex items-center justify-between p-2 bg-muted rounded-t-lg border border-border
+flex items-center gap-2
+h-8 w-8
+text-sm font-medium
+text-sm font-medium min-w-[50px] text-center
+overflow-auto border border-t-0 border-border rounded-b-lg bg-background max-h-[60vh]
+mx-auto block
+
+### From `src/components/documents/DOCXViewer.tsx`
+
+```text
+docx-container p-4
+```
+
+### Conversion checklist
+
+- Keep colour utilities (`bg-primary`, `text-foreground`, `border-border/50`) — defined in `01-design-system/01-colors-tokens.md`.
+- Keep spacing, sizing, radius, flex, grid (when supported by NativeWind).
+- Replace `hover:*` → use `Pressable`'s `pressed` state or Reanimated.
+- Replace `backdrop-blur-*` → `expo-blur` `<BlurView>`.
+- Replace `transition-*` / `animate-*` → Moti / Reanimated.
+- Replace `cursor-*`, `select-*`, `pointer-events-*` → not needed on RN.
+- Replace `grid grid-cols-N gap-X` → `<View className="flex-row flex-wrap gap-X">` or `FlashList numColumns={N}`.

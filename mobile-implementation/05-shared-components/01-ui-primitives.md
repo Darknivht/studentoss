@@ -52,3 +52,37 @@ export const buttonVariants = cva('rounded-xl items-center justify-center', {
 - [ ] Storybook (optional) renders all variants in light + dark
 - [ ] All primitives respect `disabled` and `loading` states
 
+<!-- STYLES_APPENDIX -->
+
+## Styles & className mapping (NativeWind v4)
+
+These are the **exact Tailwind class strings** used by the web counterpart(s). NativeWind v4 understands the same grammar — copy them straight into your RN component's `className=` and only swap the web-only utilities listed in `_APPENDIX/C-css-to-style-map.md` (e.g. `hover:*`, `backdrop-blur-*`, `transition-*` for non-Reanimated transitions).
+
+
+### From `src/components/ui/dialog.tsx`
+
+```text
+h-4 w-4
+sr-only
+
+### From `src/components/ui/select.tsx`
+
+```text
+h-4 w-4 opacity-50
+absolute left-2 flex h-3.5 w-3.5 items-center justify-center
+
+### From `src/components/ui/progress.tsx`
+
+```text
+h-full w-full flex-1 bg-primary transition-all
+```
+
+### Conversion checklist
+
+- Keep colour utilities (`bg-primary`, `text-foreground`, `border-border/50`) — defined in `01-design-system/01-colors-tokens.md`.
+- Keep spacing, sizing, radius, flex, grid (when supported by NativeWind).
+- Replace `hover:*` → use `Pressable`'s `pressed` state or Reanimated.
+- Replace `backdrop-blur-*` → `expo-blur` `<BlurView>`.
+- Replace `transition-*` / `animate-*` → Moti / Reanimated.
+- Replace `cursor-*`, `select-*`, `pointer-events-*` → not needed on RN.
+- Replace `grid grid-cols-N gap-X` → `<View className="flex-row flex-wrap gap-X">` or `FlashList numColumns={N}`.

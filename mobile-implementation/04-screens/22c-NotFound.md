@@ -1,14 +1,14 @@
-# 17 — Safety
+# 22c — NotFound
 
-> **Web source:** `src/pages/Safety.tsx`  
-> **RN target:** `src/screens/SafetyScreen.tsx`  
-> **Route name:** `Safety`  
-> **Nav type:** Stack  
-> **Auth required:** Yes
+> **Web source:** `src/pages/NotFound.tsx`  
+> **RN target:** `src/screens/NotFoundScreen.tsx`  
+> **Route name:** `NotFound`  
+> **Nav type:** Stack fallback  
+> **Auth required:** No
 
 ## 0. One-liner
 
-Parental controls, focus lock, offline mode toggle.
+404 / route-not-found screen.
 
 ## 1. Web imports → mobile equivalents
 
@@ -16,103 +16,18 @@ Copy the data layer **verbatim** where possible. Swap UI imports per the table.
 
 | Web import | Type | Mobile equivalent |
 |---|---|---|
-| `Tabs, TabsContent, TabsList, TabsTrigger` from `@/components/ui/tabs` | component | react-native-tab-view or custom segmented control |
-| `ParentalControls` from `@/components/safety/ParentalControls` | component | port to `src/components/safety/ParentalControls.tsx` (RN) |
-| `ParentDashboard` from `@/components/safety/ParentDashboard` | component | port to `src/components/safety/ParentDashboard.tsx` (RN) |
-| `AppBlockerSettings` from `@/components/settings/AppBlockerSettings` | component | port to `src/components/settings/AppBlockerSettings.tsx` (RN) |
-| `Button` from `@/components/ui/button` | component | src/components/ui/Button.tsx (RN port — see 05-shared-components/01-ui-primitives.md) |
-| `Shield, Eye, User, Lock` (lucide) | icons | swap import to `lucide-react-native` |
-| `motion` (framer-motion) | animation | rewrite with `moti` + `react-native-reanimated` |
-| `Link` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
-
-## 2. Connected sub-components (port these too)
-
-This screen consumes components from the directories below. Every file listed must be ported to the mobile codebase under the same path (`src/components/<dir>/<Name>.tsx`) using RN primitives + NativeWind.
-
-### `src/components/safety/`
-
-- `OfflineMode.tsx`
-- `OfflineSyncIndicator.tsx`
-- `ParentDashboard.tsx`
-- `ParentalControls.tsx`
-
-### `src/components/settings/`
-
-- `AppBlockerSettings.tsx`
-
-### `src/components/ui/`
-
-- `accordion.tsx`
-- `alert-dialog.tsx`
-- `alert.tsx`
-- `aspect-ratio.tsx`
-- `avatar.tsx`
-- `badge.tsx`
-- `breadcrumb.tsx`
-- `button.tsx`
-- `calendar.tsx`
-- `card.tsx`
-- `carousel.tsx`
-- `chart.tsx`
-- `checkbox.tsx`
-- `collapsible.tsx`
-- `command.tsx`
-- `context-menu.tsx`
-- `dialog.tsx`
-- `drawer.tsx`
-- `dropdown-menu.tsx`
-- `form.tsx`
-- `hover-card.tsx`
-- `input-otp.tsx`
-- `input.tsx`
-- `label.tsx`
-- `markdown-renderer.tsx`
-- `menubar.tsx`
-- `navigation-menu.tsx`
-- `pagination.tsx`
-- `popover.tsx`
-- `progress.tsx`
-- `radio-group.tsx`
-- `resizable.tsx`
-- `scroll-area.tsx`
-- `select.tsx`
-- `separator.tsx`
-- `sheet.tsx`
-- `sidebar.tsx`
-- `skeleton.tsx`
-- `slider.tsx`
-- `sonner.tsx`
-- `switch.tsx`
-- `table.tsx`
-- `tabs.tsx`
-- `textarea.tsx`
-- `toast.tsx`
-- `toaster.tsx`
-- `toggle-group.tsx`
-- `toggle.tsx`
-- `tooltip.tsx`
+| `useLocation` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
 
 ## 3. Tailwind classNames preserved from web
 
 These exact class strings appear in the web page. **Re-use them verbatim** in the RN `className=` (NativeWind v4 understands the same Tailwind grammar). Anything Tailwind-only-for-web (see `_APPENDIX/C-css-to-style-map.md`) must be swapped, but everything below is portable as-is.
 
 ```text
-p-6 space-y-6 pb-24
-flex items-center justify-between
-text-2xl font-display font-bold text-foreground
-text-muted-foreground text-sm mt-1
-w-5 h-5
-w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center gap-3
-w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center
-w-5 h-5 text-amber-500
-flex-1 text-left
-font-semibold text-foreground
-text-xs text-muted-foreground
-w-full
-grid w-full grid-cols-2 mb-4
-flex items-center gap-1 text-xs
-w-4 h-4
-space-y-6
+flex min-h-screen items-center justify-center bg-muted
+text-center
+mb-4 text-4xl font-bold
+mb-4 text-xl text-muted-foreground
+text-primary underline hover:text-primary/90
 ```
 
 ## 4. Layout (top → bottom)
@@ -179,8 +94,8 @@ Every `motion.div`/`AnimatePresence` in the web file maps to `<MotiView>` / `<An
 
 ## 11. Implementation order (for the agent)
 
-1. Create `src/screens/SafetyScreen.tsx` — copy every hook call from the web page verbatim.
-2. Render a stub `<View><Text>Safety</Text></View>` and verify the route works in the navigator.
+1. Create `src/screens/NotFoundScreen.tsx` — copy every hook call from the web page verbatim.
+2. Render a stub `<View><Text>NotFound</Text></View>` and verify the route works in the navigator.
 3. Port each connected sub-component listed in §2 — one commit per component.
 4. Assemble the layout top-to-bottom following §4.
 5. Add animations LAST (only once layout is pixel-correct).

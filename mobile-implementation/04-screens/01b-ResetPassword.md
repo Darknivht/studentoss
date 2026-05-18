@@ -1,14 +1,14 @@
-# 17 — Safety
+# 01b — ResetPassword
 
-> **Web source:** `src/pages/Safety.tsx`  
-> **RN target:** `src/screens/SafetyScreen.tsx`  
-> **Route name:** `Safety`  
-> **Nav type:** Stack  
-> **Auth required:** Yes
+> **Web source:** `src/pages/ResetPassword.tsx`  
+> **RN target:** `src/screens/ResetPasswordScreen.tsx`  
+> **Route name:** `ResetPassword`  
+> **Nav type:** Stack (pre-auth, deep-link target)  
+> **Auth required:** No
 
 ## 0. One-liner
 
-Parental controls, focus lock, offline mode toggle.
+Set a new password from email magic link.
 
 ## 1. Web imports → mobile equivalents
 
@@ -16,29 +16,18 @@ Copy the data layer **verbatim** where possible. Swap UI imports per the table.
 
 | Web import | Type | Mobile equivalent |
 |---|---|---|
-| `Tabs, TabsContent, TabsList, TabsTrigger` from `@/components/ui/tabs` | component | react-native-tab-view or custom segmented control |
-| `ParentalControls` from `@/components/safety/ParentalControls` | component | port to `src/components/safety/ParentalControls.tsx` (RN) |
-| `ParentDashboard` from `@/components/safety/ParentDashboard` | component | port to `src/components/safety/ParentDashboard.tsx` (RN) |
-| `AppBlockerSettings` from `@/components/settings/AppBlockerSettings` | component | port to `src/components/settings/AppBlockerSettings.tsx` (RN) |
+| `useToast` from `@/hooks/use-toast` | hook | **keep as-is** (data hooks are platform-agnostic) |
+| `supabase` from `@/integrations/supabase/client` | lib | **keep as-is** (supabase client / formatters / config) |
 | `Button` from `@/components/ui/button` | component | src/components/ui/Button.tsx (RN port — see 05-shared-components/01-ui-primitives.md) |
-| `Shield, Eye, User, Lock` (lucide) | icons | swap import to `lucide-react-native` |
-| `motion` (framer-motion) | animation | rewrite with `moti` + `react-native-reanimated` |
-| `Link` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
+| `Input` from `@/components/ui/input` | component | port to `src/components/ui/input.tsx` (RN) |
+| `Label` from `@/components/ui/label` | component | port to `src/components/ui/label.tsx` (RN) |
+| `Card, CardContent, CardHeader, CardTitle` from `@/components/ui/card` | component | src/components/ui/Card.tsx (RN View + NativeWind) |
+| `Eye, EyeOff, Loader2, CheckCircle` (lucide) | icons | swap import to `lucide-react-native` |
+| `useNavigate` from `react-router-dom` | other | @react-navigation/native (useNavigation, useRoute) |
 
 ## 2. Connected sub-components (port these too)
 
 This screen consumes components from the directories below. Every file listed must be ported to the mobile codebase under the same path (`src/components/<dir>/<Name>.tsx`) using RN primitives + NativeWind.
-
-### `src/components/safety/`
-
-- `OfflineMode.tsx`
-- `OfflineSyncIndicator.tsx`
-- `ParentDashboard.tsx`
-- `ParentalControls.tsx`
-
-### `src/components/settings/`
-
-- `AppBlockerSettings.tsx`
 
 ### `src/components/ui/`
 
@@ -97,22 +86,21 @@ This screen consumes components from the directories below. Every file listed mu
 These exact class strings appear in the web page. **Re-use them verbatim** in the RN `className=` (NativeWind v4 understands the same Tailwind grammar). Anything Tailwind-only-for-web (see `_APPENDIX/C-css-to-style-map.md`) must be swapped, but everything below is portable as-is.
 
 ```text
-p-6 space-y-6 pb-24
-flex items-center justify-between
-text-2xl font-display font-bold text-foreground
-text-muted-foreground text-sm mt-1
-w-5 h-5
-w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center gap-3
-w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center
-w-5 h-5 text-amber-500
-flex-1 text-left
-font-semibold text-foreground
-text-xs text-muted-foreground
+min-h-screen flex items-center justify-center p-4 bg-background
+w-full max-w-sm text-center
+pt-8 pb-8 space-y-4
+w-16 h-16 mx-auto text-green-500
+text-xl font-bold
+text-sm text-muted-foreground
+w-full max-w-sm
+text-center
+space-y-4
+relative mt-1.5
+pr-10
+absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground
+mt-1.5
 w-full
-grid w-full grid-cols-2 mb-4
-flex items-center gap-1 text-xs
-w-4 h-4
-space-y-6
+w-4 h-4 animate-spin mr-2
 ```
 
 ## 4. Layout (top → bottom)
@@ -179,8 +167,8 @@ Every `motion.div`/`AnimatePresence` in the web file maps to `<MotiView>` / `<An
 
 ## 11. Implementation order (for the agent)
 
-1. Create `src/screens/SafetyScreen.tsx` — copy every hook call from the web page verbatim.
-2. Render a stub `<View><Text>Safety</Text></View>` and verify the route works in the navigator.
+1. Create `src/screens/ResetPasswordScreen.tsx` — copy every hook call from the web page verbatim.
+2. Render a stub `<View><Text>ResetPassword</Text></View>` and verify the route works in the navigator.
 3. Port each connected sub-component listed in §2 — one commit per component.
 4. Assemble the layout top-to-bottom following §4.
 5. Add animations LAST (only once layout is pixel-correct).
