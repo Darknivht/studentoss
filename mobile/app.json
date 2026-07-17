@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "StudentOS",
+    "slug": "studentos",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "studentos",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#7c3aed"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.studentos.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#7c3aed"
+      },
+      "package": "com.studentos.app",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "RECORD_AUDIO",
+        "CAMERA",
+        "PACKAGE_USAGE_STATS",
+        "SYSTEM_ALERT_WINDOW"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-notifications",
+      "expo-camera",
+      "expo-font"
+    ],
+    "extra": {
+      "supabaseUrl": "https://aubastwqendcpwwbusgs.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1YmFzdHdxZW5kY3B3d2J1c2dzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2NjY1MTMsImV4cCI6MjA4MjI0MjUxM30.gXxGJZ-40IBSMjsysUThiHQUB8_00MdmkA1Yc3bFQKc"
+    }
+  }
+}
