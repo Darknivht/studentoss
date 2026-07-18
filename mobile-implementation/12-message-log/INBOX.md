@@ -1,14 +1,14 @@
 # Inbox
 
-Append requests below. I process the topmost `## Next request` block, then delete it.
+**You don't need to write anything here anymore.** The full task list is pre-written in `ROADMAP.md`.
+
+## How to drive the build
+- Type `advance` in chat → I do the next `- [ ]` task in `ROADMAP.md`, mark it `- [x]`, log to `LOG.md`, then stop.
+- Type `advance N` → I do the next N tasks in sequence.
+- Type `redo <task-id>` (e.g. `redo E1`) → I rebuild that task.
+- Type `skip <task-id>` → I mark it `- [x] (skipped)` and move on.
+- Drop a free-form `## Next request` block below only if you need something outside the roadmap.
 
 ---
 
-<!-- EXAMPLE — delete after reading
-
-## Next request
-Screen: Dashboard
-Mentions: @mobile-implementation/09-connections/03-Dashboard-connections.md @src/pages/Dashboard.tsx @src/components/dashboard/
-Notes: Match colors exactly. Use bottom nav from AppLayout. Skip announcement banner for now.
-
--->
+<!-- Free-form requests go here. Leave empty to just follow the roadmap. -->
