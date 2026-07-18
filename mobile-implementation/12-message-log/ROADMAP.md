@@ -22,7 +22,7 @@ If a task fails or needs a decision, I stop early and ask — no auto-skip.
 
 ## Phase A — Foundation copy-over (1 task)
 
-- [ ] **A1. Copy verbatim hooks + lib + supabase types from web**
+- [x] **A1. Copy verbatim hooks + lib + supabase types from web**
   - Mentions: `@mobile-implementation/00-foundation/03-files-to-copy.md` `@mobile-implementation/10-shared-logic/README.md` `@src/lib/` `@src/hooks/useSubscription.ts` `@src/hooks/useAchievements.ts` `@src/hooks/useWeeklyXP.ts` `@src/hooks/useStudyTimeTracker.ts` `@src/hooks/useCourseProgress.ts` `@src/hooks/useActivityTracking.ts` `@src/integrations/supabase/types.ts`
   - Output: files land in `mobile/src/hooks/`, `mobile/src/lib/`, `mobile/src/integrations/supabase/types.ts`. Run tsgo on `/mobile`.
 

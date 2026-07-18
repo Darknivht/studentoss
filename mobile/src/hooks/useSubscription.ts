@@ -1,0 +1,334 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from './useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { SUBSCRIPTION_ENABLED } from '@/lib/subscriptionConfig';
+import { resilientQuery } from '@/lib/resilientFetch';
+
+interface FeatureLimits {
+  aiCallsLimit: number;
+  quizzesLimit: number;
+  flashcardsLimit: number;
+  notesLimit: number;
+  jobSearchesLimit: number;
+  resumeTemplatesLimit: number;
+  examQuestionsLimit: number;
+}
+
+interface LifetimeLimits {
+  totalNotes: number;
+  totalQuizzes: number;
+  totalFlashcardSets: number;
+  totalAIUses: number;
+}
+
+export interface GateResult {
+  allowed: boolean;
+  reason: 'daily' | 'lifetime' | null;
+  currentUsage: number;
+  limit: number;
+  isLifetime: boolean;
+  requiredTier: 'plus' | 'pro';
+}
+
+interface SubscriptionData {
+  tier: 'free' | 'plus' | 'pro' | 'lifetime';
+  isPro: boolean;
+  isPlus: boolean;
+  aiCallsToday: number;
+  quizzesToday: number;
+  flashcardsToday: number;
+  notesToday: number;
+  examQuestionsToday: number;
+  jobSearchesThisMonth: number;
+  jobSearchesResetMonth: string;
+  limits: FeatureLimits;
+  lifetimeLimits: LifetimeLimits;
+  totalNotesCount: number;
+  totalQuizzesCount: number;
+  totalFlashcardSetsCount: number;
+  totalAIUsesCount: number;
+  canUseAI: boolean;
+  canCreateQuiz: boolean;
+  canCreateFlashcard: boolean;
+  canCreateNote: boolean;
+  canUseChat: boolean;
+  canUseGroupChat: boolean;
+  canUseAdvancedTools: boolean;
+  canUseMockExam: boolean;
+  showAds: boolean;
+}
+
+const FREE_LIMITS: FeatureLimits = {
+  aiCallsLimit: 5, quizzesLimit: 5, flashcardsLimit: 15, notesLimit: 5,
+  jobSearchesLimit: 3, resumeTemplatesLimit: 3, examQuestionsLimit: 0,
+};
+const PLUS_LIMITS: FeatureLimits = {
+  aiCallsLimit: 30, quizzesLimit: 15, flashcardsLimit: 50, notesLimit: 15,
+  jobSearchesLimit: 10, resumeTemplatesLimit: 7, examQuestionsLimit: 30,
+};
+const PRO_LIMITS: FeatureLimits = {
+  aiCallsLimit: Infinity, quizzesLimit: Infinity, flashcardsLimit: Infinity, notesLimit: Infinity,
+  jobSearchesLimit: Infinity, resumeTemplatesLimit: 10, examQuestionsLimit: Infinity,
+};
+
+const FREE_LIFETIME: LifetimeLimits = { totalNotes: 15, totalQuizzes: 20, totalFlashcardSets: 10, totalAIUses: 30 };
+const PLUS_LIFETIME: LifetimeLimits = { totalNotes: 100, totalQuizzes: 100, totalFlashcardSets: 50, totalAIUses: 200 };
+const PRO_LIFETIME: LifetimeLimits = { totalNotes: Infinity, totalQuizzes: Infinity, totalFlashcardSets: Infinity, totalAIUses: Infinity };
+
+const FULL_ACCESS: SubscriptionData = {
+  tier: 'pro', isPro: true, isPlus: true,
+  aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0, examQuestionsToday: 0,
+  jobSearchesThisMonth: 0, jobSearchesResetMonth: '',
+  limits: PRO_LIMITS, lifetimeLimits: PRO_LIFETIME,
+  totalNotesCount: 0, totalQuizzesCount: 0, totalFlashcardSetsCount: 0, totalAIUsesCount: 0,
+  canUseAI: true, canCreateQuiz: true, canCreateFlashcard: true, canCreateNote: true,
+  canUseChat: true, canUseGroupChat: true, canUseAdvancedTools: true, canUseMockExam: true, showAds: false,
+};
+
+const DEFAULT_FREE: SubscriptionData = {
+  tier: 'free', isPro: false, isPlus: false,
+  aiCallsToday: 0, quizzesToday: 0, flashcardsToday: 0, notesToday: 0, examQuestionsToday: 0,
+  jobSearchesThisMonth: 0, jobSearchesResetMonth: '',
+  limits: FREE_LIMITS, lifetimeLimits: FREE_LIFETIME,
+  totalNotesCount: 0, totalQuizzesCount: 0, totalFlashcardSetsCount: 0, totalAIUsesCount: 0,
+  canUseAI: true, canCreateQuiz: true, canCreateFlashcard: true, canCreateNote: true,
+  canUseChat: true, canUseGroupChat: false, canUseAdvancedTools: false, canUseMockExam: false, showAds: true,
+};
+
+export const useSubscription = () => {
+  const { user, authReady } = useAuth();
+  const [subscription, setSubscription] = useState<SubscriptionData>(DEFAULT_FREE);
+  const [loading, setLoading] = useState(true);
+  const lastFetchRef = useRef<number>(0);
+  const hasFetchedRef = useRef(false);
+
+  const fetchSubscription = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    if (!SUBSCRIPTION_ENABLED) {
+      setSubscription(FULL_ACCESS);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const [profileRes, notesCountRes, quizzesCountRes, flashcardsCountRes, aiCountRes, examAttemptsCountRes] = await Promise.all([
+        supabase.from('profiles')
+          .select('subscription_tier, subscription_expires_at, ai_calls_today, ai_calls_reset_at, quizzes_today, flashcards_generated_today, notes_today, job_searches_this_month, job_searches_reset_month')
+          .eq('user_id', user.id).single(),
+        supabase.from('notes').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('quiz_attempts').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('flashcards').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('chat_messages').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('role', 'user'),
+        supabase.from('exam_attempts').select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .gte('created_at', new Date().toISOString().split('T')[0]),
+      ]);
+
+      if (profileRes.error) {
+        console.error('[Subscription] Profile fetch error:', profileRes.error);
+        // Don't overwrite last good state on transient errors
+        if (hasFetchedRef.current) {
+          setLoading(false);
+          return;
+        }
+        throw profileRes.error;
+      }
+
+      const data = profileRes.data;
+      const today = new Date().toISOString().split('T')[0];
+
+      if (data?.ai_calls_reset_at !== today) {
+        // Fire-and-forget daily reset
+        supabase.from('profiles').update({
+          ai_calls_today: 0, quizzes_today: 0, flashcards_generated_today: 0, notes_today: 0, ai_calls_reset_at: today
+        }).eq('user_id', user.id).then(() => {});
+      }
+
+      // Normalize tier safely
+      const tierRaw = (data?.subscription_tier || 'free').trim().toLowerCase();
+      const expiresAt = data?.subscription_expires_at;
+      const isActive = !expiresAt || new Date(expiresAt) > new Date();
+      const isLifetime = tierRaw === 'lifetime' && isActive;
+      const isPro = (tierRaw === 'pro' || isLifetime) && isActive;
+      const isPlus = tierRaw === 'plus' && isActive;
+      const tier: 'free' | 'plus' | 'pro' = isPro ? 'pro' : isPlus ? 'plus' : 'free';
+
+      console.log('[Subscription] Raw tier:', tierRaw, '| Expires:', expiresAt, '| isActive:', isActive, '| isLifetime:', isLifetime, '| Resolved tier:', tier);
+
+      const limits = isPro ? PRO_LIMITS : isPlus ? PLUS_LIMITS : FREE_LIMITS;
+      const lifetimeLimits = isPro ? PRO_LIFETIME : isPlus ? PLUS_LIFETIME : FREE_LIFETIME;
+
+      const aiCallsToday = data?.ai_calls_reset_at === today ? (data?.ai_calls_today || 0) : 0;
+      const quizzesToday = data?.ai_calls_reset_at === today ? (data?.quizzes_today || 0) : 0;
+      const flashcardsToday = data?.ai_calls_reset_at === today ? (data?.flashcards_generated_today || 0) : 0;
+      const notesToday = data?.ai_calls_reset_at === today ? (data?.notes_today || 0) : 0;
+      const examQuestionsToday = examAttemptsCountRes.count || 0;
+
+      const totalNotesCount = notesCountRes.count || 0;
+      const totalQuizzesCount = quizzesCountRes.count || 0;
+      const totalFlashcardSetsCount = flashcardsCountRes.count || 0;
+      const totalAIUsesCount = aiCountRes.count || 0;
+
+      const jobSearchesThisMonth = (data as any)?.job_searches_this_month || 0;
+      const jobSearchesResetMonth = (data as any)?.job_searches_reset_month || '';
+
+      setSubscription({
+        tier, isPro, isPlus,
+        aiCallsToday, quizzesToday, flashcardsToday, notesToday, examQuestionsToday,
+        jobSearchesThisMonth, jobSearchesResetMonth,
+        limits, lifetimeLimits,
+        totalNotesCount, totalQuizzesCount, totalFlashcardSetsCount, totalAIUsesCount,
+        canUseAI: isPro || isPlus || (aiCallsToday < limits.aiCallsLimit && totalAIUsesCount < lifetimeLimits.totalAIUses),
+        canCreateQuiz: isPro || isPlus || (quizzesToday < limits.quizzesLimit && totalQuizzesCount < lifetimeLimits.totalQuizzes),
+        canCreateFlashcard: isPro || isPlus || (flashcardsToday < limits.flashcardsLimit && totalFlashcardSetsCount < lifetimeLimits.totalFlashcardSets),
+        canCreateNote: isPro || isPlus || (notesToday < limits.notesLimit && totalNotesCount < lifetimeLimits.totalNotes),
+        canUseChat: true,
+        canUseGroupChat: isPro || isPlus,
+        canUseAdvancedTools: isPro,
+        canUseMockExam: isPro || isPlus,
+        showAds: tier === 'free',
+      });
+      hasFetchedRef.current = true;
+      lastFetchRef.current = Date.now();
+    } catch (error) {
+      console.error('Error fetching subscription:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Only fetch when authReady AND user exists
+  useEffect(() => {
+    if (!authReady) return;
+    if (user) {
+      fetchSubscription();
+    } else {
+      setLoading(false);
+    }
+  }, [user, authReady, fetchSubscription]);
+
+  useEffect(() => {
+    const handler = () => { fetchSubscription(); };
+    window.addEventListener('subscription-updated', handler);
+    return () => window.removeEventListener('subscription-updated', handler);
+  }, [fetchSubscription]);
+
+  // Auto-refresh if stale (>5 min)
+  useEffect(() => {
+    if (!user || !SUBSCRIPTION_ENABLED || !authReady) return;
+    const staleMs = 5 * 60 * 1000;
+    if (lastFetchRef.current > 0 && Date.now() - lastFetchRef.current > staleMs) {
+      fetchSubscription();
+    }
+  });
+
+  const gateFeature = useCallback((type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch' | 'examQuestion'): GateResult => {
+    if (!SUBSCRIPTION_ENABLED) return { allowed: true, reason: null, currentUsage: 0, limit: Infinity, isLifetime: false, requiredTier: 'plus' };
+    if (subscription.isPro) return { allowed: true, reason: null, currentUsage: 0, limit: Infinity, isLifetime: false, requiredTier: 'plus' };
+
+    if (type === 'jobSearch') {
+      const monthlyLimit = subscription.isPlus ? 10 : 2;
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const usage = subscription.jobSearchesResetMonth === currentMonth ? subscription.jobSearchesThisMonth : 0;
+      if (usage >= monthlyLimit) return { allowed: false, reason: 'daily', currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
+      return { allowed: true, reason: null, currentUsage: usage, limit: monthlyLimit, isLifetime: false, requiredTier: 'plus' };
+    }
+
+    if (type === 'examQuestion') {
+      const limit = subscription.limits.examQuestionsLimit;
+      const usage = subscription.examQuestionsToday;
+      if (usage >= limit) return { allowed: false, reason: 'daily', currentUsage: usage, limit, isLifetime: false, requiredTier: 'plus' };
+      return { allowed: true, reason: null, currentUsage: usage, limit, isLifetime: false, requiredTier: 'plus' };
+    }
+
+    const lifetimeMap = {
+      ai: { current: subscription.totalAIUsesCount, limit: subscription.lifetimeLimits.totalAIUses },
+      quiz: { current: subscription.totalQuizzesCount, limit: subscription.lifetimeLimits.totalQuizzes },
+      flashcard: { current: subscription.totalFlashcardSetsCount, limit: subscription.lifetimeLimits.totalFlashcardSets },
+      note: { current: subscription.totalNotesCount, limit: subscription.lifetimeLimits.totalNotes },
+    };
+
+    const lifetime = lifetimeMap[type as keyof typeof lifetimeMap];
+    if (lifetime && lifetime.current >= lifetime.limit) {
+      return { allowed: false, reason: 'lifetime', currentUsage: lifetime.current, limit: lifetime.limit, isLifetime: true, requiredTier: 'plus' };
+    }
+
+    const dailyMap = {
+      ai: { current: subscription.aiCallsToday, limit: subscription.limits.aiCallsLimit },
+      quiz: { current: subscription.quizzesToday, limit: subscription.limits.quizzesLimit },
+      flashcard: { current: subscription.flashcardsToday, limit: subscription.limits.flashcardsLimit },
+      note: { current: subscription.notesToday, limit: subscription.limits.notesLimit },
+    };
+
+    const daily = dailyMap[type as keyof typeof dailyMap];
+    if (daily && daily.current >= daily.limit) {
+      return { allowed: false, reason: 'daily', currentUsage: daily.current, limit: daily.limit, isLifetime: false, requiredTier: 'plus' };
+    }
+
+    return { allowed: true, reason: null, currentUsage: daily?.current ?? 0, limit: daily?.limit ?? Infinity, isLifetime: false, requiredTier: 'plus' };
+  }, [subscription]);
+
+  const incrementUsage = async (type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'jobSearch' | 'examQuestion') => {
+    if (!user) return false;
+    if (!SUBSCRIPTION_ENABLED) return true;
+
+    if (type === 'examQuestion') {
+      setSubscription(prev => ({ ...prev, examQuestionsToday: prev.examQuestionsToday + 1 }));
+      return true;
+    }
+
+    if (type === 'jobSearch') {
+      try {
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const { data } = await supabase.from('profiles').select('job_searches_this_month, job_searches_reset_month').eq('user_id', user.id).single();
+        const resetMonth = (data as any)?.job_searches_reset_month || '';
+        const current = resetMonth === currentMonth ? ((data as any)?.job_searches_this_month || 0) : 0;
+        const newCount = current + 1;
+        await supabase.from('profiles').update({ job_searches_this_month: newCount, job_searches_reset_month: currentMonth } as any).eq('user_id', user.id);
+        setSubscription(prev => ({ ...prev, jobSearchesThisMonth: newCount, jobSearchesResetMonth: currentMonth }));
+        return true;
+      } catch (error) {
+        console.error('Error incrementing job search usage:', error);
+        return false;
+      }
+    }
+
+    const fieldMap = { ai: 'ai_calls_today', quiz: 'quizzes_today', flashcard: 'flashcards_generated_today', note: 'notes_today' };
+    const field = fieldMap[type as keyof typeof fieldMap];
+
+    try {
+      const { data } = await supabase.from('profiles').select(field).eq('user_id', user.id).single();
+      const currentCount = (data as any)?.[field] || 0;
+      const newCount = currentCount + 1;
+      await supabase.from('profiles').update({ [field]: newCount }).eq('user_id', user.id);
+
+      setSubscription(prev => {
+        const stateKey = { ai: 'aiCallsToday', quiz: 'quizzesToday', flashcard: 'flashcardsToday', note: 'notesToday' }[type as keyof typeof fieldMap] as keyof SubscriptionData;
+        return { ...prev, [stateKey]: newCount };
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error incrementing usage:', error);
+      return false;
+    }
+  };
+
+  const checkLimit = (type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'examQuestion'): boolean => {
+    return gateFeature(type).allowed;
+  };
+
+  const getRemainingUses = (type: 'ai' | 'quiz' | 'flashcard' | 'note' | 'examQuestion'): number => {
+    if (!SUBSCRIPTION_ENABLED || subscription.isPro) return Infinity;
+    const gate = gateFeature(type);
+    return Math.max(0, gate.limit - gate.currentUsage);
+  };
+
+  return {
+    subscription, loading, incrementUsage, checkLimit, getRemainingUses, gateFeature,
+    refetch: fetchSubscription,
+  };
+};
