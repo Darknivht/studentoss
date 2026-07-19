@@ -28,6 +28,7 @@ export const linking: LinkingOptions<any> = {
       Terms: 'terms',
       AdminResources: 'admin-resources',
       MainTabs: {
+        path: '',
         screens: {
           Dashboard: '',
           Study: 'study',
