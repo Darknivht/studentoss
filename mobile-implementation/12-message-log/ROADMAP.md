@@ -36,7 +36,7 @@ If a task fails or needs a decision, I stop early and ask — no auto-skip.
   - Mentions: `@mobile-implementation/02-infrastructure/03-deep-linking.md` `@mobile/app.json`
   - Output: `mobile/src/lib/linking.ts`, updated `app.json` scheme, OAuth handler.
 
-- [ ] **B3. Theme provider + dark mode toggle**
+- [x] **B3. Theme provider + dark mode toggle**
   - Mentions: `@mobile-implementation/01-design-system/01-colors-tokens.md` `@mobile/global.css` `@mobile/tailwind.config.js`
   - Output: `mobile/src/context/ThemeContext.tsx`, hook `useTheme`, wired in `App.tsx`.
 
