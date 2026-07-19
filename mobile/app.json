@@ -16,7 +16,8 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.studentos.app"
+      "bundleIdentifier": "com.studentos.app",
+      "associatedDomains": ["applinks:studentoss.lovable.app"]
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +32,14 @@
         "CAMERA",
         "PACKAGE_USAGE_STATS",
         "SYSTEM_ALERT_WINDOW"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "studentoss.lovable.app" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "plugins": [
