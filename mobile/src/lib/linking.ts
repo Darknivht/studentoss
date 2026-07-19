@@ -27,7 +27,7 @@ export const linking: LinkingOptions<any> = {
       Privacy: 'privacy',
       Terms: 'terms',
       AdminResources: 'admin-resources',
-      MainTabs: {
+      Tabs: {
         path: '',
         screens: {
           Dashboard: '',
