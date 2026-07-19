@@ -28,11 +28,11 @@ If a task fails or needs a decision, I stop early and ask — no auto-skip.
 
 ## Phase B — Core infrastructure (4 tasks)
 
-- [ ] **B1. Auth provider + useAuth hook (RN adaptation)**
+- [x] **B1. Auth provider + useAuth hook (RN adaptation)**
   - Mentions: `@mobile-implementation/02-infrastructure/02-auth-flow.md` `@src/hooks/useAuth.tsx` `@mobile/src/integrations/supabase/client.ts`
   - Output: `mobile/src/hooks/useAuth.tsx`, wire `<AuthProvider>` in `mobile/App.tsx`.
 
-- [ ] **B2. Deep linking + OAuth callback**
+- [x] **B2. Deep linking + OAuth callback**
   - Mentions: `@mobile-implementation/02-infrastructure/03-deep-linking.md` `@mobile/app.json`
   - Output: `mobile/src/lib/linking.ts`, updated `app.json` scheme, OAuth handler.
 
