@@ -4,6 +4,14 @@ Append-only. Newest at top.
 
 ---
 
+## [B3] Theme provider + dark mode toggle
+- Wrote `mobile/src/context/ThemeContext.tsx` with `light | dark | system` preference, persisted to AsyncStorage under `studentos.theme`. Listens to `Appearance` for OS-level changes and syncs `nativewind`'s `setColorScheme` so `.dark` variant classes flip live.
+- Exposed `useTheme()` returning `{ theme, resolved, setTheme, toggle }`.
+- Wrapped `<ThemeProvider>` around the whole app in `App.tsx` and added a `ThemedStatusBar` that flips light/dark based on resolved theme. Tailwind `darkMode: "class"` + global.css `.dark:root` tokens already in place from setup.
+- Next: `advance` for B4 (Providers wrapper + toast).
+
+---
+
 ## [B2] Deep linking + OAuth callback
 - Wrote `mobile/src/lib/linking.ts` with React Navigation `linking` config covering all 29 routes + `handleOAuthCallback(url)` helper that handles both implicit (access_token/refresh_token) and PKCE (code) Supabase flows.
 - Updated `mobile/app.json`: added iOS `associatedDomains` for `studentoss.lovable.app` and Android `intentFilters` with `autoVerify` for universal links. Scheme `studentos` already set.
