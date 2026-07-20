@@ -41,3 +41,10 @@ Append-only. Newest at top.
 - Message-log workflow live at `mobile-implementation/12-message-log/`
 
 Next: drop your first `## Next request` in `INBOX.md`.
+
+## B4 — React Query + toast + AppProviders wrapper
+- Created `mobile/src/providers/AppProviders.tsx` centralizing GestureHandler → SafeArea → Theme → QueryClient → Auth → NavigationContainer → StatusBar + Toaster.
+- QueryClient tuned: retry 1, staleTime 30s, no refetchOnWindowFocus (mobile-friendly).
+- Toast layer: `sonner-native` (mirrors web `sonner` API 1:1). Theme follows resolved dark/light. Added `mobile/src/lib/toast.ts` re-export so screens import `{ toast }` identically to web.
+- Slimmed `mobile/App.tsx` to just `<AppProviders><RootNavigator/></AppProviders>`.
+- Added `sonner-native@^0.16.0` to `mobile/package.json`.
