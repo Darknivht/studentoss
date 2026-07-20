@@ -40,7 +40,7 @@ If a task fails or needs a decision, I stop early and ask — no auto-skip.
   - Mentions: `@mobile-implementation/01-design-system/01-colors-tokens.md` `@mobile/global.css` `@mobile/tailwind.config.js`
   - Output: `mobile/src/context/ThemeContext.tsx`, hook `useTheme`, wired in `App.tsx`.
 
-- [ ] **B4. React Query + toast + shared providers wrapper**
+- [x] **B4. React Query + toast + shared providers wrapper**
   - Mentions: `@mobile-implementation/05-shared-components/09-Toasts-and-Modals.md` `@src/App.tsx`
   - Output: `mobile/src/providers/AppProviders.tsx` (QueryClient, Theme, Auth, Toast), replace tree in `App.tsx`.
 
