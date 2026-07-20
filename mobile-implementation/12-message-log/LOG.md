@@ -48,3 +48,19 @@ Next: drop your first `## Next request` in `INBOX.md`.
 - Toast layer: `sonner-native` (mirrors web `sonner` API 1:1). Theme follows resolved dark/light. Added `mobile/src/lib/toast.ts` re-export so screens import `{ toast }` identically to web.
 - Slimmed `mobile/App.tsx` to just `<AppProviders><RootNavigator/></AppProviders>`.
 - Added `sonner-native@^0.16.0` to `mobile/package.json`.
+
+## C1 — UI primitives ✅
+Created `mobile/src/components/ui/`:
+- `Button.tsx` (CVA variants: default/destructive/outline/secondary/ghost/link/gradient; sizes sm/default/lg/icon; haptics; loading; gradient uses `expo-linear-gradient`)
+- `Input.tsx`, `Textarea.tsx` (label + error support, forwardRef)
+- `Card.tsx` (+ Header/Title/Description/Content/Footer)
+- `Badge.tsx` (default/secondary/destructive/outline/success/warning)
+- `Skeleton.tsx` (Moti pulse loop)
+- `Progress.tsx` (animated width via Moti)
+- `Separator.tsx`, `Avatar.tsx` (image + initials fallback)
+- `Dialog.tsx` (RN `Modal` + backdrop dismiss, Header/Footer/Title/Description)
+- `Sheet.tsx` (`Modal` + Moti slide from bottom/top/left/right)
+- `index.ts` barrel export
+
+Added deps to `mobile/package.json`: `clsx`, `tailwind-merge`, `class-variance-authority`.
+All tokens use semantic classes (`bg-primary`, `text-foreground`, `border-border`) — theme-aware via NativeWind v4.
