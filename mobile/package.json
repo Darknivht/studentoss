@@ -42,7 +42,10 @@
     "lucide-react-native": "^0.454.0",
     "moti": "^0.29.0",
     "zustand": "^5.0.0",
-    "sonner-native": "^0.16.0"
+    "sonner-native": "^0.16.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.4",
+    "class-variance-authority": "^0.7.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",

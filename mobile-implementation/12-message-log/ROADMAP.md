@@ -46,7 +46,7 @@ If a task fails or needs a decision, I stop early and ask — no auto-skip.
 
 ## Phase C — Shared UI primitives (3 tasks)
 
-- [ ] **C1. UI primitives (Button, Card, Input, Badge, Skeleton, Progress, Dialog, Sheet)**
+- [x] **C1. UI primitives (Button, Card, Input, Badge, Skeleton, Progress, Dialog, Sheet)** ✅
   - Mentions: `@mobile-implementation/05-shared-components/01-ui-primitives.md` `@src/components/ui/`
   - Output: `mobile/src/components/ui/*` NativeWind versions.
 
