@@ -50,11 +50,11 @@ If a task fails or needs a decision, I stop early and ask — no auto-skip.
   - Mentions: `@mobile-implementation/05-shared-components/01-ui-primitives.md` `@src/components/ui/`
   - Output: `mobile/src/components/ui/*` NativeWind versions.
 
-- [ ] **C2. AppLayout + BottomNav (real, styled)**
+- [x] **C2. AppLayout + BottomNav (real, styled)** ✅
   - Mentions: `@mobile-implementation/05-shared-components/02-AppLayout-and-BottomNav.md` `@src/components/AppLayout.tsx` `@mobile/src/navigation/BottomTabs.tsx`
   - Output: styled bottom tabs matching web colors + gradient.
 
-- [ ] **C3. FeatureGateDialog + AnnouncementBanner**
+- [x] **C3. FeatureGateDialog + AnnouncementBanner** ✅
   - Mentions: `@mobile-implementation/05-shared-components/03-FeatureGateDialog.md` `@mobile-implementation/05-shared-components/04-AnnouncementBanner.md` `@src/components/FeatureGateDialog.tsx`
   - Output: `mobile/src/components/FeatureGateDialog.tsx`, `AnnouncementBanner.tsx`.
 

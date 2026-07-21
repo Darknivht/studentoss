@@ -64,3 +64,12 @@ Created `mobile/src/components/ui/`:
 
 Added deps to `mobile/package.json`: `clsx`, `tailwind-merge`, `class-variance-authority`.
 All tokens use semantic classes (`bg-primary`, `text-foreground`, `border-border`) — theme-aware via NativeWind v4.
+
+## C2 — AppLayout + styled BottomTabs
+- Created `mobile/src/components/layout/AppLayout.tsx` (SafeArea + KeyboardAvoiding + optional header w/ back + pull-to-refresh).
+- Rewrote `mobile/src/navigation/BottomTabs.tsx` with custom `tabBar`: BlurView, Reanimated pill + dot, haptics, 6 tabs matching web (Home, Study, Store, Plan, Social, Career).
+
+## C3 — FeatureGateDialog + AnnouncementBanner
+- Created `mobile/src/components/subscription/FeatureGateDialog.tsx` (SVG progress ring, Moti lock spin, 3-tier grid, gradient CTA → Upgrade screen).
+- Created `mobile/src/components/dashboard/AnnouncementBanner.tsx` (Supabase fetch, AsyncStorage dismissal persistence, action_url deep-link/Linking).
+- Added `expo-blur` to `mobile/package.json`.
